@@ -17,7 +17,3 @@ describe('parseServerMessage', () => {
     expect(parseServerMessage('{"type":"other"}')).toBeNull();
   });
 });
-
-it('CI 실패 감지 확인용 (곧 되돌림)', () => {
-  expect(1).toBe(2);
-});
