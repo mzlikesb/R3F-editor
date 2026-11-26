@@ -54,11 +54,27 @@ OUTPOST(`docs/content-plan.md`)를 만들기 전에, 실제 팀처럼 PR 단위�
 - `--bare`는 API 키 과금이라 쓰지 않는다
 
 ## 인수인계 형식 (전부 md)
-- `docs/plans/NNN-*.md` — 플랜 (`docs/templates/plan.md`)
-- `docs/plans/NNN-tasks.md` — 작업 목록·담당·완료 조건 (`docs/templates/tasks.md`)
-- 테스트 파일 — 완료 조건의 실행 가능한 형태
-- `docs/playtests/NNN-<persona>.md` — 플레이테스트 리포트 (`docs/templates/playtest.md`)
-- `.github/pull_request_template.md` — 등급·플랜 링크·검증 결과·플레이테스트 요약
+템플릿은 `docs/templates/`, GitHub 쪽은 `.github/`에 둔다.
+
+| 산출물 | 위치 | 템플릿 | 쓰는 쪽 |
+|---|---|---|---|
+| 플랜 | `docs/plans/NNN-*.md` | `plan.md` — 등급·관련 이슈·마일스톤·Context·만들 것·하지 않는 것·Verification | 기획 |
+| 작업 목록 | `docs/plans/NNN-tasks.md` | `tasks.md` — 작업별 담당·완료 조건·연결 테스트·상태 | 개발 리드 |
+| QA 리포트 | `docs/plans/NNN-qa.md` | `qa-report.md` — 판정(통과/반려), 플랜 항목별 확인 결과, 반려 사유와 재현 방법 | QA |
+| 플레이테스트 | `docs/playtests/NNN-<persona>.md` | `playtest.md` — 콘텐츠 루프 단계별 "알아봤나·손맛·헷갈린 점", 스크린샷, 한 줄 총평 | 플레이어 |
+| 품질 감사 | `docs/audits/YYYY-MM-DD.md` | `audit.md` — 항목별 점수, 리팩토링 후보(파일·이유·예상 효과), 마감 후 PR화할 것 | 품질 감사 |
+| 회고 | `docs/retro.md` | 한 줄 형식: `날짜 · PR · 문제 · 원인 · 규칙화 여부` | 기획 |
+| 페르소나 | `docs/personas/*.md` | `persona.md` — 사람 설명만(게임 정보 금지) | 기획 |
+| PR 본문 | — | `.github/pull_request_template.md` — 등급·관련 이슈·마일스톤·플랜 링크·변경 요약·검증 결과·성능 예산·QA/플레이테스트 요약 | 모두 |
+| 이슈 | — | `.github/ISSUE_TEMPLATE/` — `bug.yml`(재현·기대·실제·환경), `playtest.yml`(페르소나·장면·지적), `art-ux.yml`(스크린샷·지적·제안), `quality.yml`(파일·문제·제안), `config.yml`(빈 이슈 금지) | QA·플레이어·neon·품질 감사 |
+
+**리뷰 템플릿** (리뷰어마다 출력 형식을 고정해서 사용자가 비교하기 쉽게)
+- 공통 형식: `판정(승인/수정 요청)` → `막는 문제`(반드시 고칠 것) → `제안`(선택) → `질문`. 항목마다 근거 위치(파일·줄 또는 플랜 절)
+- Codex: `AGENTS.md`의 `## Review guidelines`에 이 형식과 중점을 적는다
+- neon: `.claude/prompts/neon-plan-review.md`, `neon-art-critique.md`에 같은 형식 + 각자 관점(플랜: 다른 관점·빠진 것·과한 것 / 아트: 구성·색·가독성·연출)
+- QA·개발 리드의 "의도대로 구현됐나" 판단도 `qa-report.md`로 같은 판정 체계를 쓴다
+- 사용자용 체크리스트는 PR 템플릿 맨 아래 접힌 칸(`<details>`)에 둔다: 플랜과 일치·범위 이탈 없음·테스트 있음·플레이테스트 확인
+
 - 에이전트끼리 대화는 공유하지 않는다. 위 파일만이 인수인계 수단이다.
 
 ## 규칙 (`AGENTS.md`에 들어갈 내용)
@@ -137,7 +153,8 @@ OUTPOST(`docs/content-plan.md`)를 만들기 전에, 실제 팀처럼 PR 단위�
    - `.claude/agents/`: `planner.md` `dev-lead.md` `dev.md` `qa.md` `player.md` `quality-auditor.md` (모델·도구 권한 지정). 각 파일은 공통 규칙을 반복하지 않고 역할별 읽을 문서와 산출물만 적는다. `player.md`만 예외로 레포 문서를 읽지 않는다
    - `.claude/prompts/`: `neon-plan-review.md`, `neon-art-critique.md`
    - `.mcp.json`: Playwright MCP (플레이어·QA용)
-   - `docs/templates/`: plan, tasks, playtest
+   - `docs/templates/`: plan, tasks, qa-report, playtest, audit, persona (위 인수인계 표)
+   - `.github/pull_request_template.md`, `.github/ISSUE_TEMPLATE/`
    - `docs/personas/`: 페르소나 3종, `scripts/playtest.sh`
 4. **GitHub**
    - `.github/workflows/ci.yml`: lint · typecheck · test · build (PR·main). Node 버전은 `.nvmrc`로 로컬과 맞춘다
