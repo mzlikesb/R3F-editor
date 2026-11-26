@@ -15,7 +15,7 @@
     "test:worker": "vitest run --project worker",
     "deploy": "npm run build && wrangler deploy",
     "deploy:preview": "npm run build && wrangler preview",
-    "test:hooks": "bash scripts/hooks/guard-bash.test.sh && bash scripts/hooks/neon-trigger.test.sh && bash scripts/watch-pr.test.sh && bash scripts/pr-stats.test.sh && bash scripts/hooks/guard-write.test.sh"
+    "test:hooks": "bash scripts/hooks/guard-bash.test.sh && bash scripts/hooks/neon-trigger.test.sh && bash scripts/watch-pr.test.sh && bash scripts/pr-stats.test.sh && bash scripts/pr-stages.test.sh && bash scripts/hooks/guard-write.test.sh"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.9",
