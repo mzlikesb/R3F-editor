@@ -27,8 +27,9 @@ emit() { # emit <id> <kind> <login> <url> <body>
   grep -qx "$id" "$seen" && return
   echo "$id" >>"$seen"
   grep -q '<!-- agent -->' <<<"$body" && return
-  # Replying to an inline comment creates an empty review; the reply itself is reported separately.
-  [ -n "${body// /}" ] || return
+  # Replying to an inline comment creates an empty COMMENTED review; the reply itself is
+  # reported separately. Empty APPROVED / CHANGES_REQUESTED reviews still carry a verdict.
+  [ "$kind" = review:COMMENTED ] && [ -z "${body// /}" ] && return
   # Codex's status summary edits itself; only its receipts and findings matter.
   grep -q 'codex-pull-request-review-summary' <<<"$body" && return
   local first
