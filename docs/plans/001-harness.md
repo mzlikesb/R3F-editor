@@ -15,17 +15,22 @@ OUTPOST(`docs/content-plan.md`)를 만들기 전에, 실제 팀처럼 PR 단위�
 ## 워크플로우 (이 PR이 문서화·자동화할 대상)
 ```
 브랜치 생성 → docs/plans/NNN-*.md 작성 → draft PR
-  → 플랜 리뷰: Codex(웹) → 사용자   (최대 3턴, 결론은 사용자가 냄)
+  → 플랜 리뷰: Codex(웹) + neon(Gemini) → 사용자   (최대 3턴, 결론은 사용자가 냄)
   → 승인(plan-approved 라벨)
   → 개발 리드(Opus): 작업 분할(tasks.md) + 테스트 먼저 작성 (서버 로직·UI 로직만)
   → 개발(Sonnet): 구현
   → QA(Opus): 명세 대비 검증, 실패 시 개발로 반려
-  → staging 배포 → 플레이어 페르소나 에이전트들이 플레이테스트
+  → staging 배포 → 플레이어 페르소나 에이전트들이 플레이테스트 + neon이 스크린샷으로 아트/UX 크리틱
   → PR ready → 코드 리뷰: Codex(웹, PR 생성 시 + `@codex review`) → 사용자
   → 사용자 "리뷰 끝났어" → 반영 → CI 통과
   → small: 자동 머지 / large: 사용자 머지 → main 머지 시 production 자동 배포
 ```
-Gemini는 과금 문제로 리뷰 체인에서 일단 뺀다. 넣을 자리는 따로 정한다(아래 미결 사항).
+**neon(Gemini)** 은 로컬 Gemini CLI를 구글 계정 로그인(무료 한도)으로 쓴다. 과금되는 API 키나 GitHub Action은 쓰지 않는다.
+기획 에이전트가 정해진 단계에서 `gemini -p`로 비대화식 호출하고, 결과를 PR에 `neon review` 코멘트로 단다.
+- 플랜 리뷰: draft PR을 올리거나 플랜을 고칠 때마다 플랜 문서를 넘긴다
+- 아트/UX 크리틱: 플레이테스트 스크린샷을 넘겨 화면 구성·색·가독성·연출을 평가한다
+- 프롬프트는 `.claude/prompts/neon-plan-review.md`, `.claude/prompts/neon-art-critique.md`로 고정한다
+- 무료 한도를 넘기거나 CLI가 실패하면 그 단계는 건너뛰고 PR에 건너뛰었다고 남긴다(체인을 막지 않는다)
 
 ## 역할
 | 역할 | 모델 | 하는 일 | 사용자와 |
@@ -75,6 +80,7 @@ Gemini는 과금 문제로 리뷰 체인에서 일단 뺀다. 넣을 자리는 �
 ## 사용자가 해야 할 것 (그때 알림)
 - Cloudflare API 토큰 발급 → GitHub 시크릿 `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`
 - 로컬 `npx wrangler login`
+- Gemini CLI 설치 후 `gemini`를 한 번 실행해 구글 계정으로 로그인
 - 레포에 Codex 웹 리뷰 연결
 - 브랜치 보호 설정 확인(gh로 제가 걸 수 있으면 걸고, 결과를 보여줌)
 
@@ -82,13 +88,12 @@ Gemini는 과금 문제로 리뷰 체인에서 일단 뺀다. 넣을 자리는 �
 - Worker Previews(2026-09)가 DO를 PR별로 분리해 주는지 → 되면 PR별 staging, 안 되면 `staging` 환경 1개
 - herdr 알림을 에이전트 턴 종료와 연결할 수 있는지
 - 최신 스택(React 19.3 / R3F 9.8 / drei 10.7 / three 0.187 / Vite 8 / TS 7)과 추가 패키지 호환
+- Gemini CLI 구글 로그인 무료 한도가 지금도 있는지, 비대화식(`-p`)에서 이미지 입력이 되는지
 
 ## 하지 않는 것
 - 콘텐츠 기능 구현(다음 PR부터)
-- 품질 감사 예약 실행, Gemini 연결
+- 품질 감사 예약 실행
 
-## 미결 사항
-- Gemini를 어디에 둘지. 후보: 로컬 Gemini CLI 무료 티어를 기획 단계에서 Claude가 `gemini -p`로 자동 호출(붙여넣기 없음) → 아트/UX 같은 특정 관점 리뷰에만 사용
 
 ## Verification
 - `npm run lint && npm run typecheck && npm test && npm run build` 로컬 통과
@@ -96,4 +101,5 @@ Gemini는 과금 문제로 리뷰 체인에서 일단 뺀다. 넣을 자리는 �
 - 이 PR에서 CI 녹색, staging 배포 URL이 열리고 WS 에코 동작
 - main 머지 후 production URL 동작
 - 테스트용 `size:small` 더미 PR로 auto-merge 동작 확인 후 닫기
+- `gemini -p`로 이 플랜을 리뷰시켜 PR에 `neon review` 코멘트가 달린다
 - Claude Code에서 `.claude/agents/*` 6종이 인식되고, Playwright MCP로 staging URL 스크린샷 1장 확보
