@@ -142,8 +142,10 @@ OUTPOST(`docs/content-plan.md`)를 만들기 전에, 실제 팀처럼 PR 단위�
 4. **GitHub**
    - `.github/workflows/ci.yml`: lint · typecheck · test · build (PR·main). Node 버전은 `.nvmrc`로 로컬과 맞춘다
    - `.github/workflows/deploy.yml`: PR → staging, main 머지 → production
-   - 라벨: 등급 `size:small` `size:large` / 단계 `stage:plan-review` `stage:dev` `stage:qa` `stage:playtest` `stage:code-review` / 승인 `plan-approved` / 이슈 `bug` `playtest` `art-ux`. 단계 라벨은 에이전트가 단계 넘어갈 때 바꾼다 → GitHub만 봐도 누구 차례인지 보인다
-   - `.github/workflows/pr-check.yml`: PR 본문 `관련 이슈` 칸 검사(`Closes/Refs #N` 또는 `없음`)
+   - 라벨: 등급 `size:small` `size:large` / 단계 `stage:plan-review` `stage:dev` `stage:qa` `stage:playtest` `stage:code-review` / 승인 `plan-approved` / 이슈 `bug` `playtest` `art-ux` `quality`. 단계 라벨은 에이전트가 단계 넘어갈 때 바꾼다 → GitHub만 봐도 누구 차례인지 보인다
+   - 마일스톤: `docs/content-plan.md` 일정과 맞춘다 — M0 하네스(11/27) · M1 첫 이정표(11/28) · M2 기지와 상호작용(11/29) · M3 공유 기지(12/1) · M4 성능(12/2) · M5 출시(12/4)
+   - **모든 PR·이슈에 라벨과 마일스톤을 단다.** PR은 `size:*` 1개 + `stage:*` 1개 + 마일스톤 필수 → pr-check에서 강제
+   - `.github/workflows/pr-check.yml`: PR 본문 `관련 이슈` 칸 검사(`Closes/Refs #N` 또는 `없음`), `size:*`·`stage:*` 라벨과 마일스톤 유무 검사
    - 브랜치 보호(main): CI·pr-check 필수 + 사용자 승인 필수, auto-merge 허용 → `size:small`이면 auto-merge 켜는 워크플로우
    - Codex 웹 리뷰 연결: 사용자가 기존 방식대로 설정
 5. **훅으로 규칙 강제** (`.claude/settings.json`, 커밋되는 프로젝트 설정)
@@ -184,6 +186,7 @@ OUTPOST(`docs/content-plan.md`)를 만들기 전에, 실제 팀처럼 PR 단위�
 - 훅 확인: main에서 커밋 시도, 메인 체크아웃에서 브랜치 전환 시도, `.dev.vars` 커밋 시도가 각각 막힌다
 - 포맷·린트 위반 코드를 넣은 커밋에서 CI가 실패한다
 - PR 본문 `관련 이슈` 칸을 비우면 pr-check가 실패하고, `Closes #N`이나 `없음`을 쓰면 통과한다
+- `size:*` 라벨이나 마일스톤을 빼면 pr-check가 실패한다
 - `scripts/playtest.sh`로 띄운 플레이어에게 "이 게임 이름과 계획을 아는 대로 말해봐"라고 물으면 모른다고 답한다(정보 차단 확인), 두 번째 실행에서도 첫 실행 내용을 모른다
 - 세 도구에서 "이 프로젝트 규칙과 먼저 읽을 문서가 뭐야?"라고 물으면 같은 답이 나온다
 - `gemini -p`로 이 플랜을 리뷰시켜 PR에 `neon review` 코멘트가 달린다
