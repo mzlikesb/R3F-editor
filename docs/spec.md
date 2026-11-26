@@ -1,7 +1,7 @@
 # R3F 웹 3D 데모 — 들어가야 할 기술
 
 목표: 브라우저에서 바로 열리는 R3F 웹 3D 콘텐츠 하나에 아래 기술을 담는다.
-저장소: github.com/mzlikesb/R3F-editor
+저장소: github.com/mzlikesb/outpost
 마감: **2026-12-04(금)**.
 
 ## 필수
