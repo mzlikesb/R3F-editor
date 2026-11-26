@@ -8,7 +8,7 @@ export const MAX_RECONNECT_DELAY_MS = 10_000;
  * `MAX_RECONNECT_DELAY_MS`. `rand` ([0, 1)) may add jitter.
  */
 export function reconnectDelayMs(attempt: number, rand: () => number = Math.random): number {
-  void attempt;
-  void rand;
-  throw new Error('not implemented: reconnectDelayMs (task C)');
+  const base = Math.min(MAX_RECONNECT_DELAY_MS, 500 * 2 ** Math.min(Math.max(attempt, 0), 30));
+  // Jitter keeps clients from reconnecting in lockstep: 75%..100% of the step.
+  return Math.round(base * (0.75 + 0.25 * rand()));
 }

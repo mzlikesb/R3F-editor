@@ -32,16 +32,40 @@ export const initialSync: SyncState = { base: null, presence: 0, wsSynced: false
  * Returns `state` itself when nothing changes.
  */
 export function applyServerMessage(state: SyncState, msg: ServerMessage): SyncState {
-  void state;
-  void msg;
-  throw new Error('not implemented: applyServerMessage (task C)');
+  switch (msg.type) {
+    case 'presence':
+      return msg.count === state.presence ? state : { ...state, presence: msg.count };
+    case 'snapshot': {
+      const stale = state.base !== null && msg.version < state.base.version;
+      return {
+        base: stale
+          ? state.base
+          : { fault: msg.fault, repairs: msg.repairs, version: msg.version, instanceId: msg.instanceId },
+        presence: msg.presence,
+        wsSynced: true,
+      };
+    }
+    case 'fault': {
+      // The first message of a connection is always a snapshot, so there is no base to build on yet.
+      if (!state.base || msg.version < state.base.version) return state;
+      return { ...state, base: { ...state.base, fault: msg.fault, version: msg.version } };
+    }
+    case 'repaired': {
+      if (!state.base || msg.version < state.base.version) return state;
+      return { ...state, base: { ...state.base, fault: null, repairs: msg.repairs, version: msg.version } };
+    }
+  }
 }
 
 /** Applies the `GET /api/base` response, unless a WS snapshot already arrived or its version is lower. */
 export function applyRestSnapshot(state: SyncState, snap: SnapshotMessage): SyncState {
-  void state;
-  void snap;
-  throw new Error('not implemented: applyRestSnapshot (task C)');
+  if (state.wsSynced) return state;
+  if (state.base && snap.version < state.base.version) return state;
+  return {
+    ...state,
+    base: { fault: snap.fault, repairs: snap.repairs, version: snap.version, instanceId: snap.instanceId },
+    presence: snap.presence,
+  };
 }
 
 /**
@@ -49,7 +73,5 @@ export function applyRestSnapshot(state: SyncState, snap: SnapshotMessage): Sync
  * snapshot of that connection is applied), a WS snapshot was applied, and there is a fault.
  */
 export function canRepair(state: SyncState, connection: ConnectionStatus): boolean {
-  void state;
-  void connection;
-  throw new Error('not implemented: canRepair (task C)');
+  return connection === 'open' && state.wsSynced && state.base?.fault != null;
 }
