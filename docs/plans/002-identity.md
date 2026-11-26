@@ -46,7 +46,7 @@
 - small을 large로 바꾸면 에이전트가 예약을 해제한다. `pr-check`가 `size:large` + 예약 켜짐을 실패로 보고, 트리거에 `auto_merge_enabled`·`auto_merge_disabled`를 넣어 예약 상태가 바뀔 때마다 다시 돈다
 - **사용자는 에이전트 PR 브랜치에 직접 push하지 않는다**(웹의 "Update branch"·"Apply suggestion" 포함). "마지막 push도 승인 필요" 때문에 마지막 push가 `mzlikesb`면 아무도 Approve할 수 없게 된다. 실수로 그랬다면 에이전트가 브랜치를 다시 push(빈 커밋 등)해 마지막 pusher를 에이전트 계정으로 되돌린다
 - small을 large로 바꿀 때는 **auto-merge 예약을 먼저 해제한 뒤** 라벨을 바꾼다(라벨 변경 직후 새 `pr-check`가 등록되기 전에 Approve가 들어오면 예약이 그대로 발동할 수 있다)
-- **모든 PR은 에이전트 계정으로 연다.** 사용자가 직접 연 PR은 본인 Approve가 안 되므로, 긴급할 때만 사용자가 브랜치 보호를 잠시 끄고 머지한 뒤 다시 켠다(절차를 `AGENTS.md`에 둔다)
+- **모든 PR은 에이전트 계정으로 연다.** 사용자가 직접 연 PR은 본인 Approve가 안 되므로, 긴급할 때만 사용자가 **`enforce_admins`만** 잠시 끄고 관리자 권한으로 머지한 뒤 다시 켠다. 브랜치 보호 전체를 끄지 않는다(다시 켤 때 옵션을 빠뜨리지 않게). 절차를 `AGENTS.md`에 둔다
 
 ## 걷어낼 것
 - `pr-check.yml`의 `user-approval`·`auto-merge` 잡, 브랜치 보호의 `user-approval` 필수 체크
@@ -58,12 +58,16 @@
 1. `pr-check.yml`: `pr-check` 잡만 남김. 트리거에 `auto_merge_enabled`·`auto_merge_disabled` 추가, `size:large`인데 auto-merge가 켜져 있으면 실패
 2. `AGENTS.md`·`CLAUDE.md`: 신원 표, 승인·머지 규칙 교체, 긴급 머지 절차, 라벨 승인 관련 문장 삭제, 신뢰 목록 설명 갱신, `settings.local.json` 예시
 3. `scripts/watch-pr.sh`: 위 분류(`user`·`neon`·`agent`·`codex`·`ci`·`untrusted`), 표식 처리 삭제
-4. `scripts/neon-review.sh`: 토큰 주입 대신 현재 gh 계정으로 게시. `chillingdaisy-worker1`이 아니면 실패
+4. `scripts/neon-review.sh`: 토큰 주입 대신 현재 gh 계정으로 게시. `chillingdaisy-worker1`이 아니면 실패. 게시 전에 본문의 `@` 멘션을 무력화한다(neon 2턴 리뷰 본문 속 `@codex review`가 Codex를 실제로 불러냈다)
 5. 훅
    - `lib.sh`: 구간 앞의 환경변수 대입(`VAR=x cmd`)을 벗기고 해석 → `GH_CONFIG_DIR=… gh pr create`, `VAR=x git push`도 인식
    - `guard-bash.sh`: `user-approved` 규칙 삭제. neon 규칙은 **게시**(`gh pr comment`·`gh pr review`·`gh api` POST)만 막고 읽기는 허용. 계정 전환 시도 차단: `GH_CONFIG_DIR`·`GIT_CONFIG_*` 해제·덮어쓰기, `gh auth switch`·`gh auth login`·`gh auth token`, `GH_TOKEN`·`GITHUB_TOKEN` 직접 지정. 단 사용자가 직접 실행하는 명령은 훅을 타지 않는다
+   - **fail-closed:** 에이전트 세션에서 쓰기 명령(`git push`, `gh pr create|edit|comment|review|merge|ready`, 쓰기 `gh api`)을 실행할 때 `GH_CONFIG_DIR`가 에이전트 폴더를 가리키지 않으면 막는다. 개인 설정 파일이 빠진 새 worktree·새 클론에서 `mzlikesb`로 조용히 넘어가지 않게 한다
+   - `gh api` 쓰기 판정: `-X POST|PATCH|PUT|DELETE`뿐 아니라 `-f`·`-F`·`--field`·`--raw-field`·`--input`이 붙으면 POST로 본다
+   - `git -c credential.*`도 계정 전환 시도로 막는다(`GIT_CONFIG_*`보다 우선하므로)
+   - 머지: 에이전트의 `gh pr merge`는 `--auto`(small만, 훅이 PR 라벨을 조회해 확인)와 `--disable-auto`만 허용. large는 사용자가 직접 머지
    - 테스트 갱신
-6. `scripts/agent-env.sh`: 에이전트 세션 점검 — gh 계정, remote가 HTTPS인지, `git credential fill`이 돌려주는 사용자 이름이 `chillingdaisy-worker1`인지
+6. `scripts/agent-env.sh`: 에이전트 세션 점검 — gh 계정, remote가 HTTPS인지, `git credential fill`이 돌려주는 사용자 이름이 `chillingdaisy-worker1`인지. **SessionStart 훅으로 세션마다 자동 실행**해서 실패하면 경고를 띄운다(쓰기 차단은 위 fail-closed 훅이 한다)
 7. 브랜치 보호 변경: **머지 직전**에 새 규칙으로 바꾸고 사용자가 이 PR을 Approve해 머지한다(이 PR은 에이전트 계정이 열었으므로 Approve 가능)
 8. 워커 계정의 Codex 연결 — 완료(사용자). 워커가 단 `@codex review`에 Codex가 응답하는 것을 이 PR 2턴에서 확인
 
@@ -74,11 +78,16 @@
 
 ## 전환 순서
 1. 이 PR에서 구현·리뷰를 마친다(옛 `user-approval` 잡은 삭제된 상태)
-2. 머지 직전, `mzlikesb`가 열어 둔 진행 중 PR이 없는지 확인한다(있으면 새 규칙에서 Approve할 수 없다). 사용자 확인 후 브랜치 보호를 새 규칙으로 바꾼다(`user-approval` 필수 체크 제거, Approve 필수 켬)
+2. 머지 직전, `mzlikesb`가 열어 둔 진행 중 PR이 없는지 확인한다(있으면 새 규칙에서 Approve할 수 없다). **브랜치 보호 변경은 사용자 계정으로 한다**(워커는 write라 바꿀 수 없다). 체크리스트:
+   - [ ] 필수 체크: `ci`, `pr-check` (`user-approval` 제거)
+   - [ ] Approve 1개 필수
+   - [ ] 새 커밋 시 기존 Approve 해제(dismiss stale reviews)
+   - [ ] 마지막 push도 승인 필요(require last push approval)
+   - [ ] `enforce_admins` 켬 유지, force push·삭제 금지 유지
 3. 사용자가 이 PR을 Approve → 직접 머지
 4. 첫 small PR로 새 흐름 검증 → `user-approved` 라벨·`AUTOMERGE_TOKEN` 삭제
 
-**롤백(새 흐름에 문제가 있을 때):** 브랜치 보호를 옛 규칙(`user-approval` 필수, Approve 필수 끔)으로 되돌린 뒤 `pr-check.yml`을 revert한다. 라벨과 시크릿이 남아 있어 바로 옛 흐름으로 돌아간다
+**롤백(새 흐름에 문제가 있을 때):** 브랜치 보호를 옛 규칙(`user-approval` 필수, Approve 필수 끔)으로 되돌린 뒤 **이 PR 전체를 revert**한다(`pr-check.yml`만 되돌리면 훅의 `user-approved` 부착 차단이 빠진 채 남는다). 라벨과 시크릿이 남아 있어 바로 옛 흐름으로 돌아간다
 
 ## Verification
 ### 이 PR 안에서
@@ -86,6 +95,7 @@
 - `scripts/agent-env.sh`가 에이전트 세션에서 gh·git push 모두 `chillingdaisy-worker1`, remote HTTPS를 보고한다
 - 이 PR 자체가 `chillingdaisy-worker1`이 연 첫 PR이다(작성자 확인)
 - `pr-check`: `size:large` + auto-merge 예약 → 실패, 예약 해제 → 다시 돌아 통과
+- 훅: 에이전트 폴더가 아닌 `GH_CONFIG_DIR`(또는 미설정)로 `git push`·`gh pr create` → 차단(fail-closed). 에이전트 계정의 `gh pr merge`(옵션 없음)·large PR의 `--auto` → 차단
 - 훅: 환경변수 접두사가 붙은 명령(`FOO=bar gh pr create`)도 인식해 neon 자동 실행. `GH_CONFIG_DIR=… gh …`·`unset GH_CONFIG_DIR`·`GIT_CONFIG_COUNT=… git push`·`gh auth switch` 차단. neon 코멘트 읽기는 통과
 - 워커 계정이 `@codex review`를 달면 Codex가 응답한다(2턴에서 확인됨)
 - `pr-check`의 `size:large` + 예약 검증은 Approve 전에 한다
