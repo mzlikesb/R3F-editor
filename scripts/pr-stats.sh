@@ -35,14 +35,14 @@ done
 stage_cell() { # stage_cell <json> <stage>
   jq -r --arg s "$2" '.stages[$s] | if . == null then "—" else "\(.min)분 (커밋 \(.commits))" end' <<<"$1"
 }
-printf '\n| PR | plan-review | dev | qa | code-review | 플랜 승인 대기(분) | Approve 대기(분) |\n'
-printf '|---|---|---|---|---|---|---|\n'
+printf '\n| PR | plan-review | dev | qa | playtest | code-review | 플랜 승인 대기(분) | Approve 대기(분) |\n'
+printf '|---|---|---|---|---|---|---|---|\n'
 for n in "$@"; do
   row=$(jq -n \
     --argjson pr "$(gh api "repos/$repo/pulls/$n")" \
     --argjson timeline "$(gh api --paginate --slurp "repos/$repo/issues/$n/timeline" | jq 'add // []')" \
     '{pr: $pr, timeline: $timeline}' | jq -c -f pr-stages.jq)
-  printf '| #%s | %s | %s | %s | %s | %s | %s |\n' "$n" \
-    "$(stage_cell "$row" plan-review)" "$(stage_cell "$row" dev)" "$(stage_cell "$row" qa)" "$(stage_cell "$row" code-review)" \
+  printf '| #%s | %s | %s | %s | %s | %s | %s | %s |\n' "$n" \
+    "$(stage_cell "$row" plan-review)" "$(stage_cell "$row" dev)" "$(stage_cell "$row" qa)" "$(stage_cell "$row" playtest)" "$(stage_cell "$row" code-review)" \
     "$(jq -r '.wait_plan_min // "—"' <<<"$row")" "$(jq -r '.wait_approve_min // "—"' <<<"$row")"
 done
