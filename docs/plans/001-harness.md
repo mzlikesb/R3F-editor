@@ -157,6 +157,20 @@ OUTPOST(`docs/content-plan.md`)를 만들기 전에, 실제 팀처럼 PR 단위�
 7. **나머지 파일**: `CREDITS.md`, `.dev.vars.example`, `docs/retro.md`
 8. **품질 감사 에이전트**: 역할 정의와 규칙만. 예약 실행은 첫 이정표 뒤에.
 
+9. **프로젝트 스킬** (`.claude/skills/`) — 규칙을 문서 대신 절차로 실행한다
+   - `start-task`: 브랜치·worktree 생성 → 플랜 템플릿 → draft PR(관련 이슈 칸 포함) → `size:*`·`stage:plan-review` 라벨·마일스톤 → neon 플랜 리뷰 호출
+   - `playtest`: `player-sandbox`에서 페르소나 3종 실행 → `docs/playtests/` 저장 → neon 아트/UX 크리틱 → 지적 사항 이슈 등록(라벨·마일스톤·PR 링크)
+   - `retro`: 머지 후 `docs/retro.md`에 한 줄, 같은 문제 반복 여부 확인 → 규칙 승격 제안
+10. **역할에 기존 스킬 연결** (`.claude/agents/*`와 `AGENTS.md`에 명시)
+    - 개발(Sonnet): 서브에이전트 worktree 격리(`isolation: worktree`)로 실행 → 병렬 작업이 서로 안 엉킨다
+    - 기획/디자인: HUD·패널 작업 시 `minimal-ui`
+    - QA: 명세 검증 + `/code-review medium`
+    - 품질 감사: `/simplify` 기준으로 평가하되 **리포트만**(마감 전), 예약 실행은 `/schedule`(첫 이정표 뒤 등록)
+    - 마일스톤마다 `doc-lint`로 문서와 실제 상태 대조
+11. **세션 시작·상태 표시**
+    - SessionStart 훅: 열린 PR, 각 PR의 `stage:*` 라벨·마일스톤, 지금 사용자 차례인 PR을 요약해 보여준다(`gh` 조회, 실패해도 세션은 뜬다)
+    - 상태줄: 현재 브랜치 · PR 번호와 단계 · 마일스톤. `gh` 호출은 캐시해 상태줄이 느려지지 않게 한다
+
 ## 사용자가 해야 할 것 (그때 알림)
 - Cloudflare API 토큰 발급 → GitHub 시크릿 `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`
 - 로컬 `npx wrangler login`
@@ -174,6 +188,7 @@ OUTPOST(`docs/content-plan.md`)를 만들기 전에, 실제 팀처럼 PR 단위�
 - 콘텐츠 기능 구현(다음 PR부터)
 - 품질 감사 예약 실행
 - 일정 확인, 비용·한도 관리(사용자가 직접)
+- Workflow(다중 에이전트 오케스트레이션) 도입 — 첫 기능 PR에서 시도 여부를 정한다(사용자가 해보고 싶어 함)
 - 멈춘 뒤의 대체 경로(사용자가 나중에 결정)
 
 
@@ -183,6 +198,8 @@ OUTPOST(`docs/content-plan.md`)를 만들기 전에, 실제 팀처럼 PR 단위�
 - 이 PR에서 CI 녹색, staging 배포 URL이 열리고 WS 에코 동작
 - main 머지 후 production URL 동작
 - 테스트용 `size:small` 더미 PR로 auto-merge 동작 확인 후 닫기
+- `start-task`로 더미 작업을 만들면 브랜치·worktree·draft PR·라벨·마일스톤이 한 번에 생긴다(확인 후 닫기)
+- 새 세션을 열면 SessionStart 요약이 뜨고, 상태줄에 브랜치·PR 단계·마일스톤이 보인다
 - 훅 확인: main에서 커밋 시도, 메인 체크아웃에서 브랜치 전환 시도, `.dev.vars` 커밋 시도가 각각 막힌다
 - 포맷·린트 위반 코드를 넣은 커밋에서 CI가 실패한다
 - PR 본문 `관련 이슈` 칸을 비우면 pr-check가 실패하고, `Closes #N`이나 `없음`을 쓰면 통과한다
