@@ -4,4 +4,132 @@ body,
   margin: 0;
   height: 100%;
   background: #101216;
+  color: #e8eaed;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Noto Sans KR',
+    sans-serif;
+}
+
+body {
+  overscroll-behavior: none;
+}
+
+.hud {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(16, 18, 22, 0.8);
+  font-size: 14px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.ok {
+  color: #6fcf8f;
+}
+
+.warn {
+  color: #ff7a7a;
+}
+
+.panel {
+  position: fixed;
+  right: 16px;
+  top: 64px;
+  width: 240px;
+  padding: 16px;
+  border-radius: 12px;
+  background: rgba(24, 27, 33, 0.92);
+  /* Long-press defenses: no text selection, callout, or browser gestures while holding. */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.panel h2 {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+
+.status {
+  margin: 0 0 12px;
+  font-weight: 600;
+}
+
+.repair {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  min-height: 52px;
+  border: 0;
+  border-radius: 10px;
+  background: #2a2f38;
+  color: inherit;
+  font: inherit;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  cursor: pointer;
+}
+
+.repair:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.repair .fill {
+  position: absolute;
+  inset: 0;
+  background: #3f8f5a;
+  transform: scaleX(0);
+  transform-origin: left;
+}
+
+.repair .label {
+  position: relative;
+}
+
+.hint,
+.notice {
+  margin: 8px 0 0;
+  min-height: 1.2em;
+  font-size: 13px;
+  color: #aeb4bd;
+}
+
+.notice {
+  color: #6fcf8f;
+}
+
+.badge {
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(16, 18, 22, 0.85);
+  font-size: 13px;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+}
+
+.badge-fault {
+  color: #ff7a7a;
+}
+
+@media (max-width: 600px) {
+  .panel {
+    right: 0;
+    left: 0;
+    top: auto;
+    bottom: 0;
+    width: auto;
+    border-radius: 12px 12px 0 0;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  }
 }

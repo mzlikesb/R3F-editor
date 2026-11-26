@@ -56,14 +56,50 @@ export interface HoldResult {
 }
 
 export function reduceHold(ui: RepairUi, event: HoldEvent): HoldResult {
-  void ui;
-  void event;
-  throw new Error('not implemented: reduceHold (task C)');
+  const { hold, notice } = ui;
+  const keep: HoldResult = { ui, send: null };
+  switch (event.type) {
+    case 'press':
+      return hold.kind === 'idle'
+        ? { ui: { ...ui, hold: { kind: 'holding', faultId: event.faultId, startedAt: event.now } }, send: null }
+        : keep;
+    case 'release':
+    case 'cancel':
+    case 'disconnect':
+      return hold.kind === 'holding' ? { ui: { ...ui, hold: { kind: 'idle' } }, send: null } : keep;
+    case 'repaired': {
+      if (hold.kind === 'holding' && hold.faultId === event.faultId) {
+        return { ui: { hold: { kind: 'idle' }, notice: { kind: 'beaten', until: event.now + NOTICE_MS } }, send: null };
+      }
+      if (hold.kind === 'pending' && hold.faultId === event.faultId) {
+        return {
+          ui: { hold: { kind: 'idle' }, notice: { kind: 'success', until: event.now + NOTICE_MS } },
+          send: null,
+        };
+      }
+      return keep;
+    }
+    case 'snapshot':
+      return hold.kind === 'pending' ? { ui: { ...ui, hold: { kind: 'idle' } }, send: null } : keep;
+    case 'tick': {
+      if (hold.kind === 'holding' && event.now - hold.startedAt >= HOLD_MS) {
+        return {
+          ui: { ...ui, hold: { kind: 'pending', faultId: hold.faultId, sentAt: event.now } },
+          send: { type: 'repair', faultId: hold.faultId },
+        };
+      }
+      if (hold.kind === 'pending' && event.now - hold.sentAt >= PENDING_TIMEOUT_MS) {
+        return { ui: { ...ui, hold: { kind: 'idle' } }, send: null };
+      }
+      if (notice && event.now >= notice.until) return { ui: { ...ui, notice: null }, send: null };
+      return keep;
+    }
+  }
 }
 
 /** 0..1 fill for the button: elapsed/HOLD_MS while holding, 1 while pending, 0 when idle. */
 export function holdProgress(hold: HoldState, now: number): number {
-  void hold;
-  void now;
-  throw new Error('not implemented: holdProgress (task C)');
+  if (hold.kind === 'idle') return 0;
+  if (hold.kind === 'pending') return 1;
+  return Math.min(1, Math.max(0, (now - hold.startedAt) / HOLD_MS));
 }
