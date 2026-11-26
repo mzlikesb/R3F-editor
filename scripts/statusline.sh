@@ -32,7 +32,7 @@ cached_prs() {
   key=$(printf '%s\n%s' "$dir" "$branch" | cksum | cut -d' ' -f1)
   f="${TMPDIR:-/tmp}/outpost-statusline-${key}.json"
   now=$(date +%s)
-  mtime=$(stat -f %m "$f" 2>/dev/null || stat -c %Y "$f" 2>/dev/null || echo 0)
+  mtime=$(stat -c %Y "$f" 2>/dev/null || stat -f %m "$f" 2>/dev/null || echo 0)
   if [ -f "$f" ] && [ $((now - mtime)) -lt "$ttl" ]; then cat "$f"; return; fi
   out=$(cd "$dir" 2>/dev/null && gh pr list --head "$branch" --state open --json number,labels --limit 1 2>/dev/null) || out=""
   [ -n "$out" ] || out="[]"
