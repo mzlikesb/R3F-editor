@@ -29,3 +29,13 @@ jobs:
       - run: npm test
       - run: npm run test:hooks
       - run: npm run build
+
+  actionlint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: actionlint
+        uses: docker://rhysd/actionlint:1.7.7
+        with:
+          args: -color

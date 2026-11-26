@@ -2,6 +2,18 @@
 
 행성에 기지가 하나 있고, 접속한 사람 전원이 같은 기지를 본다. 서버에서 모듈이 고장 나고 누군가 수리하면 모든 화면에 바로 반영된다. 기지는 사람들이 함께 살려두는 한 계속 가동된다. React Three Fiber / TypeScript / Vite 클라이언트, Cloudflare Worker + Durable Object 서버(단일 Worker 배포). 이 파일이 모든 에이전트(Claude Code, Codex, Gemini CLI)의 단일 규칙 원본이다.
 
+## 경험 원칙
+
+애매할 때 무엇을 고를지 정하는 기준이다. 충돌하면 위가 이긴다.
+
+1. **다른 사람이 있다는 게 보인다.** 혼자 하는 것처럼 보이면 실패다
+2. **기지는 계속 살아 있다.** 내가 없어도 시간은 흐르고, 돌아오면 무언가 달라져 있다
+3. **들어오자마자 알 수 있다.** 고장이 있으면 첫 화면에 보이고 설명 없이 눌러볼 수 있다. 잘 굴러갈 때도 기지가 지금 어떤지, 누가 다녀갔는지 보인다
+4. **깊이는 얇게, 손맛은 진하게.** 기능을 하나 더 넣을지, 있는 수리를 더 기분 좋게 만들지 고민되면 후자를 고른다
+5. **폰이 기준 화면이다.** 폰에서 어색하면 PC에서 좋아 보여도 고친다
+
+원칙은 플레이어 경험만 말한다. 플레이테스트 페르소나 에이전트에게는 주지 않는다(원칙 1·3이 설명 없이 느껴지는지가 그 테스트의 확인 대상이다).
+
 ## 명령어
 
 - `npm run dev` — Vite 개발 서버
@@ -36,7 +48,7 @@ README·UI·커밋 메시지는 작품 자체로 설명한다.
   → 개발 리드(Opus): 작업 분할(tasks.md) + 테스트 먼저 작성 (서버 로직·UI 로직만)
   → 개발(Sonnet): 구현
   → QA(Opus): 명세 대비 검증, 실패 시 개발로 반려
-  → Preview/staging 배포 → 플레이테스트 (기능 PR부터)
+  → Preview 배포 → 플레이테스트 (기능 PR부터. 페르소나 자동 플레이테스트는 미구현·004 예정, 지금은 사용자가 Preview를 폰·PC로 확인)
   → PR ready → 최종 SHA에 코드 리뷰: Codex(웹) → 사용자
   → 사용자 "리뷰 끝났어" → 반영 → CI 통과
   → 사용자가 최종 커밋 확인 후 Approve
@@ -46,7 +58,8 @@ README·UI·커밋 메시지는 작품 자체로 설명한다.
 - PR 등급: **small**(CI·pr-check·Codex 리뷰·사용자 승인 후 auto-merge), **large**(플랜 승인·QA·사용자 머지). 등급은 `size:small` / `size:large` 라벨과 PR 본문에 적는다
 - **small은 플랜 문서·`tasks.md`·QA 리포트를 생략**하고 `stage:code-review`로 시작한다. 변경 이유와 검증 결과는 PR 본문에 쓴다. 쓰다가 커지면 large로 바꾸고 플랜부터 쓴다
 - 머지는 등급과 관계없이 **squash**로 한다(검증용 임시 커밋이 main에 남지 않는다)
-- 훅(`scripts/hooks/guard-bash.sh`)은 실수 방지 장치다. 같은 사용자 계정을 쓰므로 보안 경계가 아니다. 우회하지 않는다
+- 훅(`scripts/hooks/guard-bash.sh`)은 실수 방지 장치다. 같은 사용자 계정을 쓰므로 보안 경계가 아니다. 우회하지 않는다. **훅 규칙은 더 늘리지 않는다**(정규식 파싱의 한계). 진짜 잠금은 서버 쪽(브랜치 보호, Approve 필수)이다
+- 메인 체크아웃 안의 파일은 Write·Edit 도구로도 고칠 수 없다(`scripts/hooks/guard-write.sh`). 하네스 파일(`.claude/`, `scripts/hooks/`, `.github/`, `AGENTS.md`)을 바꾸려면 worktree에서 PR로 바꾸고 사용자 Approve를 받는다
 - 훅은 명령 문장 전체가 아니라 **해석한 명령 구간**(`&&`·`;`·`|`로 나눈 뒤 앞의 `VAR=값`·괄호를 벗긴 것)만 검사한다. 따옴표 안의 구분자까지 해석하지는 않으므로, 커밋 메시지에 `; GH_TOKEN=x` 같은 글자를 넣으면 막힐 수 있다(그럴 땐 메시지를 파일로 넘긴다)
 - 리뷰는 최대 **3턴**. 3턴을 넘으면 멈추고 사용자를 부른다
 - **TDD는 서버 로직과 UI 로직만.** 개발 리드가 테스트를 먼저 쓰고 개발이 통과시킨다. 그 외(렌더링·연출)는 테스트를 강제하지 않는다
@@ -155,8 +168,8 @@ README·UI·커밋 메시지는 작품 자체로 설명한다.
 ### 완료 기준 (Definition of Done)
 
 - **small**: CI + pr-check 통과, Codex 리뷰, 사용자 Approve → auto-merge
-- **large**: 위 + 플랜 승인 + QA 통과 + (플레이 가능한 기능이 있는 PR이면) staging 플레이테스트 + 사용자 머지
-- 플레이테스트·아트 평가는 수리가 가능한 첫 기능 PR부터 적용한다. 그 전 PR은 화면이 뜨고 연결되는지만 검증한다
+- **large**: 위 + 플랜 승인 + QA 통과 + (플레이 가능한 기능이 있는 PR이면) Preview 확인 + 사용자 머지
+- Preview 확인은 지금 **사용자가 폰·PC로 직접** 한다. 페르소나 에이전트 플레이테스트와 neon 아트/UX 크리틱은 **미구현(004 예정)**이다
 - 공통: 테스트 대상(서버 로직·UI 로직)은 테스트가 있다, 성능 예산 확인 결과를 PR 본문에 적는다, 리뷰 기록 표가 채워져 있다
 
 ### 외부 입력 (공개 레포)
@@ -170,17 +183,19 @@ README·UI·커밋 메시지는 작품 자체로 설명한다.
 - QA 버그·플레이테스트 지적은 GitHub Issues로 올린다. 기획 에이전트가 묶고 우선순위를 제안하고, 처리 여부는 사용자가 정한다
 - **이슈를 처리하는 PR은 본문에 이슈를 링크한다**: `- 관련 이슈: Closes #N` / `Refs #N`. 없으면 `없음`. pr-check가 강제
 - **모든 PR·이슈에 라벨과 마일스톤.** PR은 `size:*` 1개 + `stage:*` 1개 + 마일스톤 필수. pr-check가 강제. 단계 라벨은 에이전트가 단계를 넘길 때 바꾼다
-- 라벨: `size:small` `size:large` `stage:plan-review` `stage:dev` `stage:qa` `stage:playtest` `stage:code-review` `plan-approved` `bug` `playtest` `art-ux` `quality`. `user-approved`는 새 흐름 검증 후 삭제 예정(롤백용으로 남김)
+- 라벨: `size:small` `size:large` `stage:plan-review` `stage:dev` `stage:qa` `stage:playtest` `stage:code-review` `plan-approved` `bug` `playtest` `art-ux` `quality`.
 - 마일스톤: M0 하네스 ~ M5 출시
 
 ### 시크릿·환경변수
 
 - 로컬은 `.dev.vars`(gitignore), 필요한 키 목록은 `.dev.vars.example`
-- CI는 GitHub Secrets(`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`). `AUTOMERGE_TOKEN`은 새 흐름 검증 후 삭제 예정(롤백용으로 남김). 시크릿 값은 문서·로그·PR에 남기지 않는다
+- CI는 GitHub Secrets(`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`). 시크릿 값은 문서·로그·PR에 남기지 않는다
 
 ### 배포·롤백
 
-- PR Preview 또는 단일 `staging`. 단일 `staging`이면 `deploy.yml`의 `concurrency` 그룹으로 동시 배포를 막고, `stage:playtest` PR은 한 번에 하나만
+- PR마다 Worker Preview(`pr-N`, DO 저장소도 PR마다 분리). PR이 닫히면 지운다
+- Cloudflare 토큰은 wrangler를 실행하는 step에만 넘긴다(`npm ci` 같은 다른 step에는 노출하지 않는다). 토큰 권한은 "Edit Cloudflare Workers" 범위
+- production에는 승인자를 두지 않는다. 머지 자체가 사용자 Approve를 거치기 때문이다
 - main 머지 시 production 자동 배포
 - 프로덕션 문제 시 `npx wrangler rollback`(사용자 승인 후). DO 스키마 변경이 낀 배포는 롤백 전 사용자와 확인
 
@@ -222,5 +237,6 @@ Codex 웹 리뷰가 이 절을 읽는다. 모든 리뷰어 공통 출력 형식:
 - **서버 상태 멱등성**: 같은 `faultId` 수리가 한 번만 반영되는가, alarm 재시도·재연결·중복 메시지에도 상태가 깨지지 않는가
 - **테스트 유무**: 서버 로직·UI 로직 변경에 테스트가 있는가
 - **범위 이탈**: 플랜에 없는 기능·의존성·파일이 들어왔는가
+- **경험 원칙**: `## 경험 원칙`을 깨는 변경이 있는가
 - **모바일 성능**: `useFrame` 안 할당, 드로우콜, 번들 크기, 후처리 비용
 - **이슈 링크·라벨·마일스톤**: 본문 `관련 이슈`, `size:*`·`stage:*` 라벨, 마일스톤이 있는가
