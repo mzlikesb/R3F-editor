@@ -45,7 +45,8 @@ OUTPOST(`docs/content-plan.md`)를 만들기 전에, 실제 팀처럼 PR 단위�
 플레이어 페르소나(초안): ① 출퇴근길 폰으로 링크 하나 눌러본 캐주얼 게이머 ② 3D/웹에 관심 있는 PC 개발자 ③ 게임 거의 안 하는 첫 방문자.
 플레이어 에이전트는 레포·플랜을 **읽지 않는다**. staging URL과 페르소나 설명만 받는다.
 서브에이전트로 띄우면 `CLAUDE.md`를 통해 정보가 샐 수 있어서, 별도 프로세스로 띄운다(`scripts/playtest.sh`):
-- 레포 밖 빈 임시 폴더에서 `claude -p` 실행 → 프로젝트 `CLAUDE.md`·`AGENTS.md`·프로젝트 메모리가 없다
+- 레포 밖 전용 빈 폴더 `~/projects/money/player-sandbox/`에서 `claude -p` 실행 → 프로젝트 `CLAUDE.md`·`AGENTS.md`가 없다. 이 폴더에는 아무 파일도 두지 않는다
+- 실행 전마다 이 폴더 몫의 Claude 프로젝트 메모리(`~/.claude/projects/<이 폴더>/memory/`)를 비운다 → 이전 플레이테스트 기억이 다음 플레이어에게 넘어가지 않는다
 - `--tools ""`(파일·셸 도구 없음) + `--strict-mcp-config --mcp-config`로 **Playwright MCP만** → 브라우저 말고는 아무것도 못 본다
 - Playwright는 `--isolated` 프로필 → 쿠키·기록 없는 첫 방문 브라우저
 - `--append-system-prompt-file`로 페르소나만 주입(`docs/personas/*.md`, 사람 설명만 쓰고 게임 정보는 쓰지 않는다)
@@ -117,7 +118,7 @@ OUTPOST(`docs/content-plan.md`)를 만들기 전에, 실제 팀처럼 PR 단위�
 - 이 PR에서 CI 녹색, staging 배포 URL이 열리고 WS 에코 동작
 - main 머지 후 production URL 동작
 - 테스트용 `size:small` 더미 PR로 auto-merge 동작 확인 후 닫기
-- `scripts/playtest.sh`로 띄운 플레이어에게 "이 게임 이름과 계획을 아는 대로 말해봐"라고 물으면 모른다고 답한다(정보 차단 확인)
+- `scripts/playtest.sh`로 띄운 플레이어에게 "이 게임 이름과 계획을 아는 대로 말해봐"라고 물으면 모른다고 답한다(정보 차단 확인), 두 번째 실행에서도 첫 실행 내용을 모른다
 - 세 도구에서 "이 프로젝트 규칙과 먼저 읽을 문서가 뭐야?"라고 물으면 같은 답이 나온다
 - `gemini -p`로 이 플랜을 리뷰시켜 PR에 `neon review` 코멘트가 달린다
 - Claude Code에서 `.claude/agents/*` 6종이 인식되고, Playwright MCP로 staging URL 스크린샷 1장 확보
