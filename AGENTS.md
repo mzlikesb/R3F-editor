@@ -181,9 +181,12 @@ README·UI·커밋 메시지는 작품 자체로 설명한다.
 ### 이슈·라벨·마일스톤
 
 - QA 버그·플레이테스트 지적은 GitHub Issues로 올린다. 기획 에이전트가 묶고 우선순위를 제안하고, 처리 여부는 사용자가 정한다
+- **사용자가 정할 것이 있는 이슈는 본문 맨 위에 `결정할 것` 줄**을 둔다(없으면 `결정할 것: 없음`). 에이전트·외부 리뷰어 모두 지킨다. 본문의 제안 문구는 초안이지 확정본이 아니다
+- **`needs-decision` 라벨이 붙은 이슈는 사용자가 라벨을 떼기 전까지 PR을 열지 않는다**
+- 닫힌 이슈에 할 일을 남기지 않는다. 후속 작업은 새 이슈로 올리고 원래 이슈를 `Refs #N`로 건다
 - **이슈를 처리하는 PR은 본문에 이슈를 링크한다**: `- 관련 이슈: Closes #N` / `Refs #N`. 없으면 `없음`. pr-check가 강제
 - **모든 PR·이슈에 라벨과 마일스톤.** PR은 `size:*` 1개 + `stage:*` 1개 + 마일스톤 필수. pr-check가 강제. 단계 라벨은 에이전트가 단계를 넘길 때 바꾼다
-- 라벨: `size:small` `size:large` `stage:plan-review` `stage:dev` `stage:qa` `stage:playtest` `stage:code-review` `plan-approved` `bug` `playtest` `art-ux` `quality`.
+- 라벨: `size:small` `size:large` `stage:plan-review` `stage:dev` `stage:qa` `stage:playtest` `stage:code-review` `plan-approved` `bug` `playtest` `art-ux` `quality` `needs-decision`.
 - 마일스톤: M0 하네스 ~ M5 출시
 
 ### 시크릿·환경변수
