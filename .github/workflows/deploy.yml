@@ -51,6 +51,8 @@ jobs:
         run: |
           set -euo pipefail
           marker='<!-- preview-url -->'
+          # The backticks are Markdown code marks, not command substitution.
+          # shellcheck disable=SC2016
           body=$(printf '%s\n**Preview:** %s\n대상 커밋: `%s`' "$marker" "$URL" "${SHA:0:7}")
           id=$(gh api "repos/$REPO/issues/$PR/comments" --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | head -1)
           if [ -n "$id" ]; then
