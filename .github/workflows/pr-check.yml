@@ -1,0 +1,157 @@
+name: pr-check
+
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
+      - labeled
+      - unlabeled
+      - milestoned
+      - demilestoned
+      - ready_for_review
+      - converted_to_draft
+
+permissions:
+  pull-requests: write
+  issues: write
+  contents: read
+
+# No concurrency group on purpose: cancelling or replacing a queued `synchronize`
+# run with a later event (e.g. `edited`) would skip the approval revoke.
+
+jobs:
+  pr-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Validate PR body, labels, milestone
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          # Re-read the current PR; the event payload may be stale.
+          gh api "repos/$REPO/pulls/$PR" > pr.json
+          errors=()
+
+          # 1) "- 관련 이슈:" line
+          line=$(jq -r '.body // ""' pr.json | tr -d '\r' | grep -m1 -E '^- 관련 이슈:' || true)
+          if [ -z "$line" ]; then
+            errors+=("PR 본문에 '- 관련 이슈:' 줄이 없습니다.")
+          else
+            value="${line#- 관련 이슈:}"
+            value="$(echo "$value" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+            if [ "$value" = "없음" ]; then
+              :
+            elif echo "$value" | grep -qE '(Closes|Refs|Fixes) #[0-9]+'; then
+              :
+            else
+              errors+=("'관련 이슈' 값은 '없음' 이거나 'Closes #N' / 'Refs #N' / 'Fixes #N' 이어야 합니다. (현재: ${value:-빈 값})")
+            fi
+          fi
+
+          # 2) exactly one size:* and one stage:* label
+          size_count=$(jq '[.labels[].name | select(startswith("size:"))] | length' pr.json)
+          stage_count=$(jq '[.labels[].name | select(startswith("stage:"))] | length' pr.json)
+          [ "$size_count" -eq 1 ] || errors+=("size:* 라벨이 정확히 1개여야 합니다. (현재 ${size_count}개; size:small 또는 size:large)")
+          [ "$stage_count" -eq 1 ] || errors+=("stage:* 라벨이 정확히 1개여야 합니다. (현재 ${stage_count}개)")
+
+          # 3) milestone
+          if [ "$(jq '.milestone == null' pr.json)" = "true" ]; then
+            errors+=("마일스톤이 설정되어 있지 않습니다.")
+          fi
+
+          if [ "${#errors[@]}" -gt 0 ]; then
+            for e in "${errors[@]}"; do
+              echo "::error::$e"
+            done
+            exit 1
+          fi
+          echo "pr-check passed"
+
+  # No job-level `if:` on purpose: a skipped required check counts as passing.
+  user-approval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Revoke approval on new commit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          ACTION: ${{ github.event.action }}
+        run: |
+          set -euo pipefail
+          if [ "$ACTION" != "synchronize" ]; then
+            echo "action=$ACTION, nothing to revoke"
+            exit 0
+          fi
+          labels=$(gh api "repos/$REPO/issues/$PR" --jq '[.labels[].name]')
+          if echo "$labels" | jq -e 'index("user-approved")' >/dev/null; then
+            gh api -X DELETE "repos/$REPO/issues/$PR/labels/user-approved" >/dev/null
+            gh pr comment "$PR" --repo "$REPO" --body "새 커밋이 올라와 \`user-approved\` 승인이 해제되었습니다. 최종 커밋을 다시 확인한 뒤 승인 라벨을 다시 달아 주세요."
+            echo "::error::새 커밋으로 user-approved 라벨이 제거되었습니다. 최종 커밋을 다시 확인하세요."
+            exit 1
+          fi
+          echo "synchronize without user-approved label"
+
+      # Reached on non-synchronize events, or on synchronize without the label.
+      - name: Require user-approved label
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          labels=$(gh api "repos/$REPO/issues/$PR" --jq '[.labels[].name]')
+          if ! echo "$labels" | jq -e 'index("user-approved")' >/dev/null; then
+            echo "::error::user-approved 라벨이 없습니다. 사용자가 최종 커밋을 확인한 뒤 달아야 합니다."
+            exit 1
+          fi
+          echo "user-approved present"
+
+  auto-merge:
+    needs: [user-approval]
+    # Same-repo PRs only: fork PRs get no secrets.
+    if: always() && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Enable or disable auto-merge
+        env:
+          GH_TOKEN: ${{ secrets.AUTOMERGE_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          ACTION: ${{ github.event.action }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::warning::AUTOMERGE_TOKEN is not configured; skipping auto-merge handling."
+            exit 0
+          fi
+          gh pr view "$PR" --repo "$REPO" --json state,isDraft,labels,autoMergeRequest > pr.json
+
+          approved=$(jq '[.labels[].name] | index("user-approved") != null' pr.json)
+          small=$(jq '[.labels[].name] | index("size:small") != null' pr.json)
+          open=$(jq '.state == "OPEN"' pr.json)
+          ready=$(jq '.isDraft | not' pr.json)
+          auto_on=$(jq '.autoMergeRequest != null' pr.json)
+
+          # A new commit always means approval is revoked.
+          if [ "$ACTION" = "synchronize" ]; then
+            approved=false
+          fi
+
+          if [ "$small" = true ] && [ "$approved" = true ] && [ "$ready" = true ] && [ "$open" = true ]; then
+            echo "conditions met; enabling auto-merge"
+            gh pr merge "$PR" --repo "$REPO" --auto --squash
+          elif [ "$auto_on" = true ]; then
+            echo "conditions broken (small=$small approved=$approved ready=$ready open=$open); disabling auto-merge"
+            gh pr merge "$PR" --repo "$REPO" --disable-auto
+          else
+            echo "conditions not met and auto-merge is off; nothing to do"
+          fi
