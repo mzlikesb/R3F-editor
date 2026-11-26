@@ -4,7 +4,7 @@
 - 등급: large
 - 관련 이슈: 없음
 - 마일스톤: M1 첫 이정표
-- 상태: 플랜 승인(사용자, 2026-11-26) — 구현 중
+- 상태: 머지됨(PR #9, 2026-11-26)
 
 ## Context
 콘텐츠 계획(`docs/content-plan.md`)의 첫 이정표다. **배포 URL에서 폰으로 발전기를 수리하면 PC에서도 경고등이 꺼진다.**
@@ -70,7 +70,7 @@
 - 렌더링·연출은 테스트하지 않는다
 
 ## 하지 않는 것
-- 플레이어 페르소나 자동 플레이테스트: 하네스 자동화(004)에서 만든다. 이번에는 **사용자가 Preview를 폰과 PC로 열어 확인**한다
+- 플레이어 페르소나 자동 플레이테스트: #23에서 만든다. 이번에는 **사용자가 Preview를 폰과 PC로 열어 확인**한다
 
 ## Verification
 - `npm run format:check && npm run lint && npm run typecheck && npm test && npm run build && npm run test:hooks`
