@@ -63,10 +63,18 @@ OUTPOST(`docs/content-plan.md`)를 만들기 전에, 실제 팀처럼 PR 단위�
    - `worker/index.ts` + `worker/BaseRoom.ts`: `/ws` 에코만 (Hibernation API)
    - `@cloudflare/vitest-pool-workers`로 DO 테스트 1개(에코)
 3. **하네스 문서**
-   - `CLAUDE.md`: 프로젝트 소개, 명령어, 범위 고정 사항(`docs/content-plan.md` 기준), 위 워크플로우, 브랜치·플랜 우선 규칙, PR 등급별 머지 규칙, 리뷰 최대 3턴, TDD 범위, 큰 변경(DO 스키마·배포 설정) 사용자 승인, 품질 감사 리포트 전용 규칙, 인수인계 형식
+   세 도구가 이 폴더에서 처음 읽는 파일이 다르다: Claude Code는 `CLAUDE.md`, Codex는 `AGENTS.md`, Gemini CLI는 `GEMINI.md`.
+   규칙이 세 군데로 갈라지지 않도록 **`AGENTS.md` 하나를 원본**으로 두고 나머지는 그걸 가리킨다.
+   - `AGENTS.md` (원본, 모든 에이전트 공통)
+     - 프로젝트 한 단락 소개, 명령어
+     - **먼저 읽을 문서** 목록과 언제 읽는지: `docs/content-plan.md`(콘텐츠·범위, 작업 전 항상), `docs/spec.md`(기술 목록), 진행 중인 `docs/plans/NNN-*.md`·`NNN-tasks.md`(맡은 작업), `docs/templates/`(산출물 쓸 때)
+     - 범위 고정 사항, 워크플로우, 브랜치·플랜 우선 규칙, PR 등급별 머지 규칙, 리뷰 최대 3턴, TDD 범위, 큰 변경(DO 스키마·배포 설정) 사용자 승인, 품질 감사 리포트 전용 규칙, 인수인계 형식
      - **병렬 세션 규칙**: 메인 체크아웃 읽기 전용, 브랜치 작업은 전용 worktree, 착수 전 브랜치 push로 클레임, 남의 브랜치·미커밋 변경 불가침, 인터페이스 기준 분할
-   - `AGENTS.md`: Codex 리뷰 가이드라인(무엇을 중점으로 볼지)
-   - `.claude/agents/`: `planner.md` `dev-lead.md` `dev.md` `qa.md` `player.md` `quality-auditor.md` (모델·도구 권한 지정)
+     - `## Review guidelines`: Codex 웹 리뷰가 읽는 절. 중점(서버 상태 멱등성, 테스트 유무, 범위 이탈, 모바일 성능)
+   - `CLAUDE.md`: `@AGENTS.md` 임포트 + Claude 전용 내용만(서브에이전트 구성, 역할별로 어떤 에이전트를 쓰는지, neon 호출 절차)
+   - `GEMINI.md`: `@AGENTS.md` 임포트 + neon 역할 한 단락(리뷰어로서 무엇을 보는지, 코드 수정 금지). 임포트가 안 되면 `.gemini/settings.json`에서 컨텍스트 파일을 `AGENTS.md`로 지정
+   - `.claude/agents/`: `planner.md` `dev-lead.md` `dev.md` `qa.md` `player.md` `quality-auditor.md` (모델·도구 권한 지정). 각 파일은 공통 규칙을 반복하지 않고 역할별 읽을 문서와 산출물만 적는다. `player.md`만 예외로 레포 문서를 읽지 않는다
+   - `.claude/prompts/`: `neon-plan-review.md`, `neon-art-critique.md`
    - `.mcp.json`: Playwright MCP (플레이어·QA용)
    - `docs/templates/`: plan, tasks, playtest
 4. **GitHub**
@@ -88,7 +96,7 @@ OUTPOST(`docs/content-plan.md`)를 만들기 전에, 실제 팀처럼 PR 단위�
 - Worker Previews(2026-09)가 DO를 PR별로 분리해 주는지 → 되면 PR별 staging, 안 되면 `staging` 환경 1개
 - herdr 알림을 에이전트 턴 종료와 연결할 수 있는지
 - 최신 스택(React 19.3 / R3F 9.8 / drei 10.7 / three 0.187 / Vite 8 / TS 7)과 추가 패키지 호환
-- Gemini CLI 구글 로그인 무료 한도가 지금도 있는지, 비대화식(`-p`)에서 이미지 입력이 되는지
+- Gemini CLI가 `GEMINI.md`의 `@` 임포트를 지원하는지, 구글 로그인 무료 한도가 지금도 있는지, 비대화식(`-p`)에서 이미지 입력이 되는지
 
 ## 하지 않는 것
 - 콘텐츠 기능 구현(다음 PR부터)
@@ -101,5 +109,6 @@ OUTPOST(`docs/content-plan.md`)를 만들기 전에, 실제 팀처럼 PR 단위�
 - 이 PR에서 CI 녹색, staging 배포 URL이 열리고 WS 에코 동작
 - main 머지 후 production URL 동작
 - 테스트용 `size:small` 더미 PR로 auto-merge 동작 확인 후 닫기
+- 세 도구에서 "이 프로젝트 규칙과 먼저 읽을 문서가 뭐야?"라고 물으면 같은 답이 나온다
 - `gemini -p`로 이 플랜을 리뷰시켜 PR에 `neon review` 코멘트가 달린다
 - Claude Code에서 `.claude/agents/*` 6종이 인식되고, Playwright MCP로 staging URL 스크린샷 1장 확보
