@@ -44,6 +44,11 @@ if git show-ref --verify -q refs/heads/main && ! git worktree list | grep -q '\[
   expect 2 "$wt" "git push"
   expect 0 "$wt" "git switch -c feat/y"
   expect 0 "$wt" "git checkout feat/y"
+  # The real directory is followed through `cd X &&` and `git -C X`.
+  expect 0 "$main_dir" "cd $wt && git switch -c feat/z"
+  expect 2 "$main_dir" "cd $wt && git commit -m x"
+  expect 2 "$main_dir" "git -C $wt commit -m x"
+  expect 2 "$wt" "cd $main_dir && git switch main"
   git worktree remove --force "$wt"
 else
   echo "skip worktree cases (main is checked out elsewhere)"

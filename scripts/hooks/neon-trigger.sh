@@ -4,6 +4,8 @@
 # last neon review. Never blocks or fails the session.
 # NEON_TRIGGER_DRY_RUN=1 prints the decision instead of starting the review.
 set -uo pipefail
+# shellcheck source=scripts/hooks/lib.sh
+source "$(dirname "$0")/lib.sh"
 
 input=$(cat)
 cmd=$(jq -r '.tool_input.command // ""' <<<"$input")
@@ -12,8 +14,10 @@ cwd=${cwd:-$PWD}
 
 say() { [ "${NEON_TRIGGER_DRY_RUN:-}" = 1 ] && echo "neon-trigger: $*"; return 0; }
 
-grep -qE '\bgh\s+pr\s+create\b|\bgit\s+push\b' <<<"$cmd" || exit 0
-cd "$cwd" 2>/dev/null || exit 0
+# The directory the push/PR command actually ran in (follows `cd X &&` and `git -C X`).
+dir=$(dir_for "$cwd" "$cmd" '^\s*(git(\s+-C\s+\S+)?\s+push\b|gh\s+pr\s+create\b)')
+[ -n "$dir" ] || exit 0
+cd "$dir" 2>/dev/null || exit 0
 root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
 cd "$root" || exit 0
 branch=$(git symbolic-ref --short -q HEAD) || exit 0
@@ -35,6 +39,11 @@ head=$(git rev-parse HEAD)
 base=$(cat "$state_file" 2>/dev/null || git merge-base origin/main HEAD 2>/dev/null || echo "")
 [ -n "$base" ] || exit 0
 [ "$base" != "$head" ] || { say "already reviewed $head"; exit 0; }
+running="$state_file.running"
+if [ -f "$running" ] && [ "$(cat "$running")" = "$head" ]; then
+  say "review of ${head:0:7} already running"
+  exit 0
+fi
 
 plan=$(git diff --name-only "$base" "$head" -- 'docs/plans/' |
   grep -E '^docs/plans/[0-9]{3}-[^/]+\.md$' | grep -vE -- '-(tasks|qa)\.md$' | head -1 || true)
@@ -45,14 +54,17 @@ if [ "${NEON_TRIGGER_DRY_RUN:-}" = 1 ]; then
   exit 0
 fi
 
-echo "$head" >"$state_file"
+echo "$head" >"$running"
 log="$state_dir/${branch//\//_}.log"
 (
+  # Mark the commit reviewed only after the review (or its skipped notice) was posted.
   if scripts/neon-review.sh "$pr" "$plan" >"$log" 2>&1; then
+    echo "$head" >"$state_file"
     title="OUTPOST · neon 리뷰 완료"
   else
-    title="OUTPOST · neon 리뷰 실패"
+    title="OUTPOST · neon 리뷰 실패 (다음 push 때 다시 시도)"
   fi
+  rm -f "$running"
   command -v herdr >/dev/null 2>&1 &&
     herdr notification show "$title" --body "PR #$pr · $(tail -1 "$log")" --sound done >/dev/null 2>&1
 ) </dev/null >/dev/null 2>&1 &

@@ -38,6 +38,17 @@ expect "" "git status"
 expect "would review PR #99 with docs/plans/" "git push -q"
 expect "would review PR #99 with docs/plans/" "gh pr create --draft --title x"
 
+# Run from elsewhere: the hook follows `cd` / `git -C` into the repo.
+here=$PWD
+expect_from() { # expect_from <cwd> <substring> <command>
+  local d=$1 want=$2 cmd=$3 out
+  out=$(jq -n --arg c "$cmd" --arg d "$d" '{tool_input:{command:$c},cwd:$d}' |
+    PATH="$stub:$PATH" NEON_TRIGGER_DRY_RUN=1 "$here/$hook" 2>&1)
+  if grep -qF "$want" <<<"$out"; then echo "ok   ($d) $cmd → $out"; else echo "FAIL ($d) $cmd → ${out:-(nothing)}"; fail=1; fi
+}
+expect_from /tmp "would review PR #99" "cd $here && git push -q"
+expect_from /tmp "would review PR #99" "git -C $here push -q"
+
 stub_gh '["size:large","stage:code-review"]'
 expect "not in stage:plan-review" "git push -q"
 
