@@ -174,7 +174,7 @@ Codex는 `AGENTS.md`의 `## Review guidelines`, neon은 프롬프트 파일, QA�
    - `deploy.yml`: PR → Preview(또는 staging, `concurrency` 그룹), main → production
    - 라벨(만들어 둠): `size:*` `stage:*` `plan-approved` `bug` `playtest` `art-ux` `quality` + **`user-approved` 추가**
    - 마일스톤(만들어 둠): M0 하네스 ~ M5 출시
-   - 브랜치 보호: 필수 체크 `ci` `pr-check` `user-approval`, Approve 필수 끔, auto-merge 허용
+   - 브랜치 보호: 필수 체크 `ci` `pr-check` `user-approval`, Approve 필수 끔, auto-merge 허용, `enforce_admins` 켬(머지 후 이슈 #2에서 추가), squash 머지만 허용
 5. **핵심 훅** (`.claude/settings.json`)
    - main에서 커밋·push, force push 차단
    - 메인 체크아웃에서 브랜치 전환 차단: `git rev-parse --git-dir`과 `--git-common-dir`이 같을 때(=메인 체크아웃)만 막는다. worktree 안에서는 허용

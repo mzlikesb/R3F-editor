@@ -12,8 +12,11 @@ expect() { # expect <exit> <cwd> <command>
   if [ "$got" = "$want" ]; then echo "ok   [$got] $cmd"; else echo "FAIL [$got≠$want] $cmd ($dir)"; fail=1; fi
 }
 
-main_dir=$PWD
+# The main checkout, even when this test runs from a worktree.
+main_dir=$(cd "$(git rev-parse --git-common-dir)/.." && pwd -P)
 expect 0 "$main_dir" "git status"
+expect 0 "$main_dir" "git switch main"
+expect 0 "$main_dir" "git checkout main"
 expect 2 "$main_dir" "git push --force"
 expect 2 "$main_dir" "git push origin main"
 expect 2 "$main_dir" "git push -uf origin feat/x"
@@ -22,8 +25,12 @@ expect 0 "$main_dir" "git push origin main-xyz"
 expect 0 "$main_dir" "git push --follow-tags origin feat/x"
 expect 0 "$main_dir" "git commit -m 'catch -uf pushes to main' && git push -q"
 expect 2 "$main_dir" "git add . && git push -f"
-expect 2 "$main_dir" "git switch main"
-expect 2 "$main_dir" "git checkout main"
+expect 2 "$main_dir" "git push origin HEAD:refs/heads/main"
+expect 2 "$main_dir" "gh pr merge 1 --admin --squash"
+expect 0 "$main_dir" "gh pr merge 1 --squash --auto"
+expect 2 "$main_dir" "git switch feat/x"
+expect 2 "$main_dir" "git checkout feat/x"
+expect 2 "$main_dir" "git checkout -b feat/x"
 expect 0 "$main_dir" "git checkout -- src/App.tsx"
 expect 2 "$main_dir" "gh pr edit 1 --add-label user-approved"
 expect 2 "$main_dir" "gh pr edit 1 --add-label size:small,user-approved"
@@ -48,7 +55,7 @@ if git show-ref --verify -q refs/heads/main && ! git worktree list | grep -q '\[
   expect 0 "$main_dir" "cd $wt && git switch -c feat/z"
   expect 2 "$main_dir" "cd $wt && git commit -m x"
   expect 2 "$main_dir" "git -C $wt commit -m x"
-  expect 2 "$wt" "cd $main_dir && git switch main"
+  expect 2 "$wt" "cd $main_dir && git switch feat/x"
   git worktree remove --force "$wt"
 else
   echo "skip worktree cases (main is checked out elsewhere)"
