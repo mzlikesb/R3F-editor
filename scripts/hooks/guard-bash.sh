@@ -15,9 +15,10 @@ block() {
 # Only look at git/gh commands.
 grep -qE '(^|[;&|(]|\s)(git|gh)\s' <<<"$cmd" || exit 0
 
-# Agents never touch the user's approval label.
-if grep -qE '\bgh\b' <<<"$cmd" && grep -q 'user-approved' <<<"$cmd"; then
-  block "'user-approved' 라벨은 사용자만 다룬다."
+# Agents never add the user's approval label. Mentioning it in text (comments, docs) is fine.
+if grep -qE -- '--add-label[ =]+["'\'']?[^ ]*user-approved' <<<"$cmd" ||
+  { grep -qE '\bgh\s+api\b' <<<"$cmd" && grep -qE '/labels\b' <<<"$cmd" && grep -q 'user-approved' <<<"$cmd" && ! grep -qE -- '-X\s*DELETE' <<<"$cmd"; }; then
+  block "'user-approved' 라벨은 사용자만 단다."
 fi
 
 in_repo=$(git -C "$cwd" rev-parse --is-inside-work-tree 2>/dev/null || echo false)
