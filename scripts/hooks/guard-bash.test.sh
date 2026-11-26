@@ -14,11 +14,17 @@ printf 'github.com:\n    users:\n        chillingdaisy-worker1:\n    user: chill
 printf 'github.com:\n    users:\n        mzlikesb:\n    user: mzlikesb\n' >"$tmp/gh-user/hosts.yml"
 cat >"$tmp/bin/gh" <<'EOF'
 #!/usr/bin/env bash
-# `gh pr view <n> --json labels -q ...`: PR 2 is large, anything else small.
+# `gh pr view <n> --json labels -q ...`: PR 2 is large, anything else small. Without a
+# number, the PR of the current directory: a directory named "large" holds a large PR.
 if [ "$1 $2" = "pr view" ]; then
-  case "${3:-}" in 2) echo "size:large,stage:dev" ;; *) echo "size:small,stage:code-review" ;; esac
+  case "${3:-}" in
+    2) echo "size:large,stage:dev" ;;
+    --json) case "$(basename "$PWD")" in large) echo "size:large,stage:dev" ;; *) echo "size:small,stage:code-review" ;; esac ;;
+    *) echo "size:small,stage:code-review" ;;
+  esac
 fi
 EOF
+mkdir -p "$tmp/small" "$tmp/large"
 chmod +x "$tmp/bin/gh"
 agent_env=(GH_CONFIG_DIR="$agent_cfg" GIT_CONFIG_COUNT=2
   GIT_CONFIG_KEY_0=credential.https://github.com.helper GIT_CONFIG_VALUE_0=
@@ -80,7 +86,15 @@ expect 0 "$main_dir" "gh api repos/o/r/pulls/1" bare
 expect 2 "$main_dir" "gh pr review 4 --approve" agent-token
 expect 2 "$main_dir" "git push -u origin feat/x" agent-token
 expect 2 "$main_dir" "gh pr comment 1 --body hi" agent-ghtoken
-expect 0 "$main_dir" "gh pr view 4" agent-token
+# With an inherited token no gh command runs at all, reads included.
+expect 2 "$main_dir" "gh pr view 4" agent-token
+expect 2 "$main_dir" "gh -R mzlikesb/outpost pr review 4 --approve" agent-token
+expect 0 "$main_dir" "git status" agent-token
+# Inherited flags before the subcommand do not hide a write.
+expect 2 "$main_dir" "gh -R mzlikesb/outpost pr review 4 --approve" bare
+expect 2 "$main_dir" "gh --repo=mzlikesb/outpost pr comment 4 --body hi" bare
+expect 0 "$main_dir" "gh -R mzlikesb/outpost pr review 4 --approve"
+expect 0 "$main_dir" "gh -R mzlikesb/outpost pr view 4" bare
 # Write shapes the detector must still see (QA 002).
 expect 2 "$main_dir" "gh api --method=DELETE repos/o/r/issues/comments/1" bare
 expect 2 "$main_dir" "gh api -fbody=hi repos/o/r/issues/1/comments" bare
@@ -123,6 +137,11 @@ expect 0 "$main_dir" "gh pr merge 2 --disable-auto"
 expect 2 "$main_dir" "gh pr merge 1 --squash"
 expect 2 "$main_dir" "gh pr merge 1 --admin --squash"
 expect 2 "$main_dir" "gh pr merge 1 --auto && gh pr merge 2 --auto"
+# Each merge is checked in its own directory.
+expect 0 "$tmp/small" "gh pr merge --auto --squash"
+expect 2 "$tmp/large" "gh pr merge --auto --squash"
+expect 2 "$tmp/small" "gh pr merge --auto --squash && cd $tmp/large && gh pr merge --auto --squash"
+expect 0 "$tmp/large" "cd $tmp/small && gh pr merge --auto --squash"
 expect 2 "$main_dir" "git -c core.x=y push --force"
 
 # Push shape.

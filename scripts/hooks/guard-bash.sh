@@ -46,9 +46,15 @@ grep -qE "$gh_write" <<<"$segs" && is_gh_write=true
 # `-f` with `-X GET` sends query parameters, not a write.
 if grep -E "$gh_api_write" <<<"$segs" | grep -qvE "$gh_api_get"; then is_gh_write=true; fi
 
+# An inherited token beats the stored login for every gh call, so with one present no gh
+# command or push runs at all (no need to classify which ones write).
+if ! agent_no_token_override &&
+  { grep -qE '^[[:space:]]*gh([[:space:]]|$)' <<<"$segs" || [ "$is_push" = true ]; }; then
+  block "GH_TOKEN·GITHUB_TOKEN이 세션 환경에 있다. 저장된 에이전트 로그인보다 먼저 쓰여 다른 계정으로 나갈 수 있다. 세션 환경에서 지운다."
+fi
+
 # Fail closed: without the agent session settings, writes would silently go out as the user.
 if [ "$is_gh_write" = true ] || [ "$is_push" = true ]; then
-  agent_no_token_override || block "GH_TOKEN·GITHUB_TOKEN이 세션 환경에 있다. 저장된 에이전트 로그인보다 먼저 쓰여 다른 계정으로 나갈 수 있다. 세션 환경에서 지운다."
   agent_gh_ok || block "에이전트 gh 설정이 없다(GH_CONFIG_DIR → ${AGENT_LOGIN}). .claude/settings.local.json의 env를 확인하고 'scripts/agent-env.sh'로 점검한다."
 fi
 if [ "$is_push" = true ]; then
@@ -62,21 +68,22 @@ if [ "$is_gh_write" = true ] && grep -qF '## neon review' <<<"$cmd" && ! grep -q
 fi
 
 # --- Merges: agents only queue small PRs for auto-merge --------------------------------
-while IFS= read -r merge_seg; do
-  [ -n "$merge_seg" ] || continue
+# Each merge is checked in the directory it runs in: without an argument, gh picks the PR of
+# that directory's current branch.
+while IFS=$'\t' read -r merge_dir merge_seg; do
+  grep -qE '^[[:space:]]*gh[[:space:]]+pr[[:space:]]+merge\b' <<<"$merge_seg" || continue
   if grep -qE -- '--admin\b' <<<"$merge_seg"; then
     block "'gh pr merge --admin' 금지. 필수 체크와 승인을 거쳐 머지한다."
   elif grep -qE -- '--disable-auto\b' <<<"$merge_seg"; then
     :
   elif grep -qE -- '--auto\b' <<<"$merge_seg"; then
     target=$(sed -E 's/^[[:space:]]*gh[[:space:]]+pr[[:space:]]+merge[[:space:]]*//' <<<"$merge_seg" | tr ' ' '\n' | grep -vE '^-|^$' | head -1 || true)
-    d=$(dir_for "$cwd" "$cmd" '^[[:space:]]*gh[[:space:]]+pr[[:space:]]+merge\b')
-    labels=$(cd "${d:-$cwd}" 2>/dev/null && gh pr view ${target:+"$target"} --json labels -q '[.labels[].name]|join(",")' 2>/dev/null || echo "?")
+    labels=$(cd "$merge_dir" 2>/dev/null && gh pr view ${target:+"$target"} --json labels -q '[.labels[].name]|join(",")' 2>/dev/null || echo "?")
     grep -q 'size:small' <<<"$labels" || block "auto-merge 예약은 size:small PR만. large는 사용자가 직접 머지한다(PR ${target:-현재 브랜치} 라벨: ${labels})."
   else
     block "에이전트는 PR을 직접 머지하지 않는다. small은 'gh pr merge --auto --squash'로 예약, large는 사용자가 머지한다."
   fi
-done < <(grep -E '^[[:space:]]*gh[[:space:]]+pr[[:space:]]+merge\b' <<<"$segs" || true)
+done < <(segment_dirs "$cwd" "$cmd")
 
 # --- Branches -------------------------------------------------------------------------
 repo_info() { # repo_info <dir>: sets branch and main_checkout; returns 1 outside a repo

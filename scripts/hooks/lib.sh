@@ -7,7 +7,31 @@ assign_re='^[[:space:]]*(env[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*=("[^"]*"|'"'"'
 # split_segments <command>: one shell segment per line (split on && || ; |), with leading
 # environment assignments stripped so `FOO=1 git push` reads as `git push`.
 split_segments() {
-  sed -E 's/(&&|\|\||;|\|)/\n/g' <<<"$1" | sed -E 's/^[[:space:]]*[({][[:space:]]*//' | sed -E "s/${assign_re}//"
+  sed -E 's/(&&|\|\||;|\|)/\n/g' <<<"$1" | sed -E 's/^[[:space:]]*[({][[:space:]]*//' | sed -E "s/${assign_re}//" |
+    sed -E "s/${gh_global_re}/\\1/"
+}
+
+# gh's inherited flags may come before the subcommand (`gh -R o/r pr review …`); drop them so
+# the subcommand is what follows `gh`.
+gh_global_re='^([[:space:]]*gh)([[:space:]]+(-R|--repo|--hostname)([[:space:]]+|=)[^[:space:]]+)+'
+
+# segment_dirs <cwd> <command>: "<dir>\t<segment>" per segment, where <dir> is where that
+# segment runs (following earlier `cd X` segments and its own `git -C X`).
+segment_dirs() {
+  local dir=$1 cmd=$2 seg target here
+  while IFS= read -r seg; do
+    if [[ $seg =~ ^[[:space:]]*cd[[:space:]]+([^[:space:]]+) ]]; then
+      target=$(resolve_dir "$dir" "${BASH_REMATCH[1]}")
+      [ -n "$target" ] && dir=$target
+      continue
+    fi
+    here=$dir
+    if [[ $seg =~ git[[:space:]]+-C[[:space:]]+([^[:space:]]+) ]]; then
+      target=$(resolve_dir "$dir" "${BASH_REMATCH[1]}")
+      [ -n "$target" ] && here=$target
+    fi
+    printf '%s\t%s\n' "$here" "$seg"
+  done < <(split_segments "$cmd")
 }
 
 # git followed by global options (-C dir, -c key=val, --no-pager, --git-dir=…) before the subcommand.
