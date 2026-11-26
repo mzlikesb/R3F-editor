@@ -32,7 +32,13 @@ export const useStore = create<Store>((set, get) => ({
   applyMessage: (msg) => set((s) => ({ sync: applyServerMessage(s.sync, msg) })),
   applyRest: (snap) => set((s) => ({ sync: applyRestSnapshot(s.sync, snap) })),
   setConnection: (connection) => set({ connection }),
-  select: (selected) => set({ selected }),
+  select: (selected) => {
+    // The repair button lives in the panel of the selected module. If selection moves away
+    // mid-hold (e.g. a second finger taps the canvas), the button unmounts without a
+    // pointerup, so cancel the hold here or it would complete on its own.
+    if (selected !== get().selected) get().dispatchHold({ type: 'cancel', now: performance.now() });
+    set({ selected });
+  },
   dispatchHold: (event) => {
     const { ui, send } = reduceHold(get().repair, event);
     if (ui !== get().repair) set({ repair: ui });
