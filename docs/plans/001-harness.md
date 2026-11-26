@@ -11,7 +11,6 @@ OUTPOST(`docs/content-plan.md`)를 만들기 전에, 실제 팀처럼 PR 단위�
 
 **부트스트랩 예외:** 이 PR은 리뷰 자동화가 들어가기 전이라 정식 체인을 다 타지 못한다.
 플랜 리뷰는 로컬 Codex CLI(`codex exec`)와 사용자 리뷰로 하고, 코드 리뷰는 웹 Codex(`@codex review`)와 사용자 리뷰로 한다.
-또 이 PR은 메인 체크아웃에서 진행한다(세션 하나뿐이고 worktree 규칙이 아직 없다). 다음 PR부터 worktree 규칙을 따른다.
 
 ## 워크플로우 (이 PR이 문서화·자동화할 대상)
 ```
