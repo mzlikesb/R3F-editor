@@ -11,7 +11,18 @@ export interface SocketLike {
  * (a throwing `close` is swallowed too) and the rest still receive. Returns how many sends succeeded.
  */
 export function broadcast(sockets: Iterable<SocketLike>, data: string): number {
-  void sockets;
-  void data;
-  throw new Error('not implemented: broadcast (task S)');
+  let sent = 0;
+  for (const socket of sockets) {
+    try {
+      socket.send(data);
+      sent++;
+    } catch {
+      try {
+        socket.close(1011, 'send failed');
+      } catch {
+        // already gone
+      }
+    }
+  }
+  return sent;
 }
