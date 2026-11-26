@@ -34,7 +34,9 @@ jobs:
         id: upload
         run: |
           set -euo pipefail
-          npx wrangler preview --name "$PREVIEW_NAME" --json > preview.json
+          npx wrangler preview --name "$PREVIEW_NAME" --json > preview.out
+          # Wrangler prints upload progress before the JSON document.
+          sed -n '/^{/,$p' preview.out > preview.json
           url=$(jq -er '.preview.urls[0]' preview.json)
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "Preview: $url" >> "$GITHUB_STEP_SUMMARY"
