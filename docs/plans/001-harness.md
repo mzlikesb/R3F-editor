@@ -61,6 +61,57 @@ OUTPOST(`docs/content-plan.md`)를 만들기 전에, 실제 팀처럼 PR 단위�
 - `.github/pull_request_template.md` — 등급·플랜 링크·검증 결과·플레이테스트 요약
 - 에이전트끼리 대화는 공유하지 않는다. 위 파일만이 인수인계 수단이다.
 
+## 규칙 (`AGENTS.md`에 들어갈 내용)
+
+### 코드 컨벤션
+- **기준: [Google TypeScript Style Guide](https://google.github.io/styleguide/tsguide.html).** TS 전용으로 쓰여 있고 구글이 계속 관리한다. Airbnb 가이드가 더 널리 알려져 있지만 JS 시절 문서라 TS 규칙은 따로 보충해야 하고 분량도 길다
+- 가이드 전문을 옮기지 않는다. `AGENTS.md`에는 링크와 **이 프로젝트에서 다르게 하는 점**만 적는다
+- 도구로 강제할 수 있는 건 도구로: 포맷(Prettier), 린트(oxlint, typescript·react 규칙), `tsconfig` strict. CI에서 실패시킨다
+- React·R3F는 가이드가 다루지 않으므로 몇 줄 보충: 컴포넌트는 함수형+named export, 훅 규칙, `useFrame` 안에서 setState·객체 생성 금지, 지오메트리·머티리얼 재사용
+- 브랜치 `feat|fix|chore/NNN-이름`, 커밋은 Conventional Commits
+
+### 구조·소유권
+- `scene/`은 그리기, `net/`은 통신, `ui/`는 패널. 메시지 타입은 `shared/protocol.ts` 한 곳
+- 기지 상태의 주인은 서버(DO). 클라이언트는 상태를 직접 바꾸지 않고 요청만 보낸다
+- 플랜에 없는 의존성은 추가하지 않는다
+
+### 성능 예산 (유연하게)
+- 처음엔 **잠정치**로 시작한다: 데스크톱 60fps, 중급 폰 30fps 이상, 드로우콜 100 이하, 초기 JS 번들 gzip 600KB 이하
+- 첫 이정표 뒤 실측 기준선을 재고 그걸 바탕으로 확정한다. 확정 전까지 CI는 **경고만**, 확정 후 번들 크기는 CI에서 실패 처리
+- 예산을 넘기는 PR은 이유를 PR 본문에 적으면 통과 가능(사용자 판단)
+
+### 에셋
+- CC0 등 출처가 분명한 것만. 출처·라이선스는 `CREDITS.md`
+- GLB는 Draco 압축 필수(`scripts/compress.sh`), 원본은 커밋하지 않는다
+
+### 멈추고 사용자를 부르는 조건
+아래 중 하나면 작업을 멈추고 PR 코멘트 + herdr 알림으로 사용자를 부른다. 멈춘 뒤 어떻게 할지(대체 경로 등)는 사용자가 정한다.
+- 같은 테스트를 세 번 고쳐도 실패
+- 작업 중 범위가 플랜 밖으로 넓어짐
+- 리뷰어 의견 충돌, 리뷰 3턴 초과
+- 시크릿·배포 설정·DO 스키마·결제 관련 변경
+- 되돌릴 수 없는 작업(데이터 삭제, force push, 프로덕션 롤백 등)
+
+### 완료 기준 (Definition of Done)
+- **small**: CI 통과 + Codex 리뷰 + 사용자 리뷰 → 자동 머지
+- **large**: 위 + 플랜 승인 + QA 통과 + staging 플레이테스트(페르소나 3종 + neon 아트/UX) + 사용자 머지
+- 공통: 테스트 대상(서버 로직·UI 로직)은 테스트가 있다, 성능 예산 확인 결과를 PR 본문에 적는다
+
+### 발견한 문제 쌓기
+- QA 버그·플레이테스트 지적은 GitHub Issues로 올린다. 라벨 `bug` `playtest` `art-ux` + 출처 페르소나
+- 기획 에이전트가 묶고 우선순위 제안, 처리 여부는 사용자가 정한다
+
+### 시크릿·환경변수
+- 로컬은 `.dev.vars`(gitignore), 필요한 키 목록은 `.dev.vars.example`
+- CI는 GitHub Secrets. 시크릿 값은 문서·로그·PR에 남기지 않는다
+
+### 배포 롤백
+- 프로덕션 문제 시 `npx wrangler rollback`으로 직전 버전 복구(사용자 승인 후). DO 스키마 변경이 낀 배포는 롤백 전 사용자와 확인
+
+### 회고
+- PR 머지 때마다 기획 에이전트가 `docs/retro.md`에 "이번에 터진 문제" 한 줄을 남긴다
+- 같은 문제가 두 번 나오면 규칙으로 올리자고 제안하고, 사용자가 승인하면 `AGENTS.md`에 추가한다. 예외 처리 규칙은 이렇게만 늘린다
+
 ## 만들 것
 1. **앱 스캐폴드 (새로)**
    - Vite + React + TypeScript + R3F + drei, oxlint, Vitest
@@ -89,10 +140,17 @@ OUTPOST(`docs/content-plan.md`)를 만들기 전에, 실제 팀처럼 PR 단위�
 4. **GitHub**
    - `.github/workflows/ci.yml`: lint · typecheck · test · build (PR·main). Node 버전은 `.nvmrc`로 로컬과 맞춘다
    - `.github/workflows/deploy.yml`: PR → staging, main 머지 → production
-   - 라벨: `size:small` `size:large` `plan-approved`
+   - 라벨: 등급 `size:small` `size:large` / 단계 `stage:plan-review` `stage:dev` `stage:qa` `stage:playtest` `stage:code-review` / 승인 `plan-approved` / 이슈 `bug` `playtest` `art-ux`. 단계 라벨은 에이전트가 단계 넘어갈 때 바꾼다 → GitHub만 봐도 누구 차례인지 보인다
    - 브랜치 보호(main): CI 필수 + 사용자 승인 필수, auto-merge 허용 → `size:small`이면 auto-merge 켜는 워크플로우
    - Codex 웹 리뷰 연결: 사용자가 기존 방식대로 설정
-5. **품질 감사 에이전트**: 역할 정의와 규칙만. 예약 실행은 첫 이정표 뒤에.
+5. **훅으로 규칙 강제** (`.claude/settings.json`, 커밋되는 프로젝트 설정)
+   - main 브랜치에서 커밋·push, force push 차단
+   - 메인 체크아웃에서 브랜치 전환 차단(worktree 규칙)
+   - `.dev.vars`·시크릿 파일 커밋 차단
+   - 에이전트 턴 종료·사용자 호출 시 herdr 알림
+6. **포맷·린트 설정**: Prettier, oxlint(typescript·react), `tsconfig` strict, `.nvmrc`
+7. **나머지 파일**: `CREDITS.md`, `.dev.vars.example`, `docs/retro.md`
+8. **품질 감사 에이전트**: 역할 정의와 규칙만. 예약 실행은 첫 이정표 뒤에.
 
 ## 사용자가 해야 할 것 (그때 알림)
 - Cloudflare API 토큰 발급 → GitHub 시크릿 `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`
@@ -110,6 +168,8 @@ OUTPOST(`docs/content-plan.md`)를 만들기 전에, 실제 팀처럼 PR 단위�
 ## 하지 않는 것
 - 콘텐츠 기능 구현(다음 PR부터)
 - 품질 감사 예약 실행
+- 일정 확인, 비용·한도 관리(사용자가 직접)
+- 멈춘 뒤의 대체 경로(사용자가 나중에 결정)
 
 
 ## Verification
@@ -118,6 +178,8 @@ OUTPOST(`docs/content-plan.md`)를 만들기 전에, 실제 팀처럼 PR 단위�
 - 이 PR에서 CI 녹색, staging 배포 URL이 열리고 WS 에코 동작
 - main 머지 후 production URL 동작
 - 테스트용 `size:small` 더미 PR로 auto-merge 동작 확인 후 닫기
+- 훅 확인: main에서 커밋 시도, 메인 체크아웃에서 브랜치 전환 시도, `.dev.vars` 커밋 시도가 각각 막힌다
+- 포맷·린트 위반 코드를 넣은 커밋에서 CI가 실패한다
 - `scripts/playtest.sh`로 띄운 플레이어에게 "이 게임 이름과 계획을 아는 대로 말해봐"라고 물으면 모른다고 답한다(정보 차단 확인), 두 번째 실행에서도 첫 실행 내용을 모른다
 - 세 도구에서 "이 프로젝트 규칙과 먼저 읽을 문서가 뭐야?"라고 물으면 같은 답이 나온다
 - `gemini -p`로 이 플랜을 리뷰시켜 PR에 `neon review` 코멘트가 달린다
