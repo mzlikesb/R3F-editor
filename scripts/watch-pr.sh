@@ -15,10 +15,10 @@ trap 'rm -f "$seen"' EXIT
 
 role() { # role <login>. Anyone not listed is untrusted (public repo).
   case "$1" in
-    chatgpt-codex-connector*) echo codex ;;
+    'chatgpt-codex-connector[bot]') echo codex ;;
     chillingdaisy-worker1) echo ai-reviewer ;;
     mzlikesb) echo user ;;
-    github-actions\[bot\]) echo ci ;;
+    'github-actions[bot]') echo ci ;;
     *) echo untrusted ;;
   esac
 }

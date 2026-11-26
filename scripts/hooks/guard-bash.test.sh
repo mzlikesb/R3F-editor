@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# Checks guard-bash.sh against the main checkout and a temporary worktree on main.
+# Checks guard-bash.sh against a throwaway repo with explicit branch state, so the result
+# does not depend on what this checkout (or CI) has checked out.
 set -uo pipefail
-cd "$(dirname "$0")/../.."
-guard=scripts/hooks/guard-bash.sh
+guard="$(cd "$(dirname "$0")" && pwd -P)/guard-bash.sh"
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
 fail=0
 
 expect() { # expect <exit> <cwd> <command>
@@ -12,8 +14,17 @@ expect() { # expect <exit> <cwd> <command>
   if [ "$got" = "$want" ]; then echo "ok   [$got] $cmd"; else echo "FAIL [$got≠$want] $cmd ($dir)"; fail=1; fi
 }
 
-# The main checkout, even when this test runs from a worktree.
-main_dir=$(cd "$(git rev-parse --git-common-dir)/.." && pwd -P)
+# Main checkout on a feature branch, plus a worktree on main.
+main_dir="$tmp/main"
+git init -q -b main "$main_dir"
+git -C "$main_dir" -c user.email=t@t -c user.name=t commit -q --allow-empty -m base
+git -C "$main_dir" switch -q -c feat/x
+wt="$tmp/wt"
+git -C "$main_dir" worktree add -q "$wt" main
+main_dir=$(cd "$main_dir" && pwd -P)
+wt=$(cd "$wt" && pwd -P)
+
+# Main checkout (on feat/x).
 expect 0 "$main_dir" "git status"
 expect 0 "$main_dir" "git switch main"
 expect 0 "$main_dir" "git checkout main"
@@ -28,9 +39,9 @@ expect 2 "$main_dir" "git add . && git push -f"
 expect 2 "$main_dir" "git push origin HEAD:refs/heads/main"
 expect 2 "$main_dir" "gh pr merge 1 --admin --squash"
 expect 0 "$main_dir" "gh pr merge 1 --squash --auto"
-expect 2 "$main_dir" "git switch feat/x"
-expect 2 "$main_dir" "git checkout feat/x"
-expect 2 "$main_dir" "git checkout -b feat/x"
+expect 2 "$main_dir" "git switch feat/y"
+expect 2 "$main_dir" "git checkout feat/y"
+expect 2 "$main_dir" "git checkout -b feat/y"
 expect 0 "$main_dir" "git checkout -- src/App.tsx"
 expect 2 "$main_dir" "gh pr edit 1 --add-label user-approved"
 expect 2 "$main_dir" "gh pr edit 1 --add-label size:small,user-approved"
@@ -43,22 +54,22 @@ expect 0 "$main_dir" "git add .dev.vars.example"
 expect 0 "$main_dir" "git worktree add ../outpost-x -b feat/x origin/main"
 expect 0 "$main_dir" "git push -u origin feat/x"
 
-# A worktree on main: branch switching is allowed there, committing on main is not.
-if git show-ref --verify -q refs/heads/main && ! git worktree list | grep -q '\[main\]'; then
-  wt=$(mktemp -d)/wt
-  git worktree add -q "$wt" main
-  expect 2 "$wt" "git commit -m x"
-  expect 2 "$wt" "git push"
-  expect 0 "$wt" "git switch -c feat/y"
-  expect 0 "$wt" "git checkout feat/y"
-  # The real directory is followed through `cd X &&` and `git -C X`.
-  expect 0 "$main_dir" "cd $wt && git switch -c feat/z"
-  expect 2 "$main_dir" "cd $wt && git commit -m x"
-  expect 2 "$main_dir" "git -C $wt commit -m x"
-  expect 2 "$wt" "cd $main_dir && git switch feat/x"
-  git worktree remove --force "$wt"
-else
-  echo "skip worktree cases (main is checked out elsewhere)"
-fi
+# Worktree on main: switching is allowed there, committing/pushing on main is not.
+expect 2 "$wt" "git commit -m x"
+expect 2 "$wt" "git push"
+expect 0 "$wt" "git switch -c feat/y"
+expect 0 "$wt" "git checkout feat/y"
+
+# The real directory is followed through `cd X &&` and `git -C X`.
+expect 0 "$main_dir" "cd $wt && git switch -c feat/z"
+expect 2 "$main_dir" "cd $wt && git commit -m x"
+expect 2 "$main_dir" "git -C $wt commit -m x"
+expect 2 "$wt" "cd $main_dir && git switch feat/y"
+
+# Staged secrets block a commit in the directory the commit runs in.
+touch "$main_dir/.dev.vars"
+git -C "$main_dir" add -f .dev.vars
+expect 2 "$main_dir" "git commit -m x"
+expect 2 "$wt" "cd $main_dir && git commit -m x"
 
 exit $fail
