@@ -36,6 +36,7 @@ def neon: who == "chillingdaisy-worker1" and (body | startswith("## neon review"
         | $commits[] | select(. >= $from and . < $i.end)] | length)
     }
   }) | from_entries) as $stages
+# `intervals` (epoch seconds) are exposed for scripts/pr-tokens.jq.
 # Final user Approve and what it waited on.
 | ([$ev[] | select(.event == "reviewed" and who == "mzlikesb" and .state == "approved") | ts] | last) as $approve
 | (if $approve == null then null else
@@ -52,6 +53,7 @@ def neon: who == "chillingdaisy-worker1" and (body | startswith("## neon review"
     number: $d.pr.number,
     title: $d.pr.title,
     stages: $stages,
+    intervals: [$iv[] | {stage, start, end}],
     wait_plan_min: $wait_plan,
     wait_approve_min: $wait_approve
   }
