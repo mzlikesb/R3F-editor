@@ -58,16 +58,14 @@ Gemini는 과금 문제로 리뷰 체인에서 일단 뺀다. 넣을 자리는 �
    - `worker/index.ts` + `worker/BaseRoom.ts`: `/ws` 에코만 (Hibernation API)
    - `@cloudflare/vitest-pool-workers`로 DO 테스트 1개(에코)
 3. **하네스 문서**
-   - `CLAUDE.md`: GymCheck에서 옮겨온 초안을 바탕으로 고친다.
-     - 유지: 범위 고정 사항, main 직접 커밋 금지, **병렬 세션 규칙**(메인 체크아웃 읽기 전용, 브랜치 작업은 전용 worktree, 착수 전 브랜치 push로 클레임, 남의 브랜치·미커밋 변경 불가침, 인터페이스 기준 분할). 개발 에이전트가 동시에 돌 때 그대로 필요하다
-     - 수정: 계획서 위치를 `docs/content-plan.md`로, "머지는 사용자" → PR 등급별 머지 규칙, 명령어 절을 실제 스크립트로
-     - 추가: 위 워크플로우, 브랜치·플랜 우선 규칙, 리뷰 최대 3턴, TDD 범위, 큰 변경(DO 스키마·배포 설정) 사용자 승인, 품질 감사 리포트 전용 규칙, 인수인계 형식
+   - `CLAUDE.md`: 프로젝트 소개, 명령어, 범위 고정 사항(`docs/content-plan.md` 기준), 위 워크플로우, 브랜치·플랜 우선 규칙, PR 등급별 머지 규칙, 리뷰 최대 3턴, TDD 범위, 큰 변경(DO 스키마·배포 설정) 사용자 승인, 품질 감사 리포트 전용 규칙, 인수인계 형식
+     - **병렬 세션 규칙**: 메인 체크아웃 읽기 전용, 브랜치 작업은 전용 worktree, 착수 전 브랜치 push로 클레임, 남의 브랜치·미커밋 변경 불가침, 인터페이스 기준 분할
    - `AGENTS.md`: Codex 리뷰 가이드라인(무엇을 중점으로 볼지)
    - `.claude/agents/`: `planner.md` `dev-lead.md` `dev.md` `qa.md` `player.md` `quality-auditor.md` (모델·도구 권한 지정)
    - `.mcp.json`: Playwright MCP (플레이어·QA용)
    - `docs/templates/`: plan, tasks, playtest
 4. **GitHub**
-   - `.github/workflows/ci.yml`: 옮겨온 초안 기반. 스캐폴드가 생기므로 `package-lock.json` 유무 검사 단계는 뺀다. lint · typecheck · **test 추가** · build (PR·main). Node 버전은 로컬과 맞춘다(`.nvmrc`)
+   - `.github/workflows/ci.yml`: lint · typecheck · test · build (PR·main). Node 버전은 `.nvmrc`로 로컬과 맞춘다
    - `.github/workflows/deploy.yml`: PR → staging, main 머지 → production
    - 라벨: `size:small` `size:large` `plan-approved`
    - 브랜치 보호(main): CI 필수 + 사용자 승인 필수, auto-merge 허용 → `size:small`이면 auto-merge 켜는 워크플로우
