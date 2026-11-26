@@ -25,7 +25,7 @@ remote=$(git remote get-url origin 2>/dev/null || echo "")
 case "$remote" in https://github.com/*) r=0 ;; *) r=1 ;; esac
 check $r "origin: ${remote:-없음}" "HTTPS가 아니면 push 자격 증명 설정이 적용되지 않는다"
 
-cred=$(printf 'protocol=https\nhost=github.com\n\n' | git credential fill 2>/dev/null | sed -n 's/^username=//p')
+cred=$(printf 'protocol=https\nhost=github.com\n\n' | GIT_TERMINAL_PROMPT=0 git credential fill 2>/dev/null | sed -n 's/^username=//p')
 [ "$cred" = "$AGENT_LOGIN" ] || [ "$cred" = "x-access-token" ] && [ -n "$cred" ]
 r=$?
 # `gh auth git-credential` may report the token user as the login or as x-access-token;

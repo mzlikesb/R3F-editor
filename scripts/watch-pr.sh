@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Polls a PR and prints one line per new review comment, review, or conversation comment.
 # Meant to run under Claude Code's Monitor tool: each stdout line is an event.
-# Skips comments carrying the <!-- agent --> marker (posted by our own agents).
+# Skips the agent account's own comments; neon reviews (fixed header) are reported.
 # Exits when the PR is merged or closed.
 # Usage: scripts/watch-pr.sh <pr-number> [interval-seconds]
 set -uo pipefail

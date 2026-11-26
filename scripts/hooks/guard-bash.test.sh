@@ -32,6 +32,9 @@ run() { # run <env-mode> <cwd> <command>
     agent) env -u GH_CONFIG_DIR -u GIT_CONFIG_COUNT "${agent_env[@]}" "$guard" <<<"$input" >/dev/null 2>&1 ;;
     bare) env -u GH_CONFIG_DIR -u GIT_CONFIG_COUNT PATH="$tmp/bin:$PATH" "$guard" <<<"$input" >/dev/null 2>&1 ;;
     user) env -u GIT_CONFIG_COUNT GH_CONFIG_DIR="$tmp/gh-user" PATH="$tmp/bin:$PATH" "$guard" <<<"$input" >/dev/null 2>&1 ;;
+    # Agent settings, but a token inherited from the parent environment.
+    agent-token) env -u GH_CONFIG_DIR -u GIT_CONFIG_COUNT "${agent_env[@]}" GH_TOKEN=inherited "$guard" <<<"$input" >/dev/null 2>&1 ;;
+    agent-ghtoken) env -u GH_CONFIG_DIR -u GIT_CONFIG_COUNT "${agent_env[@]}" GITHUB_TOKEN=inherited "$guard" <<<"$input" >/dev/null 2>&1 ;;
   esac
 }
 expect() { # expect <exit> <cwd> <command> [env-mode=agent]
@@ -73,6 +76,19 @@ expect 2 "$main_dir" "gh pr comment 1 --body hi" user
 expect 2 "$main_dir" "gh api repos/o/r/issues/1/comments -f body=hi" bare
 expect 2 "$main_dir" "gh api -X PATCH repos/o/r/issues/1 -F state=closed" bare
 expect 0 "$main_dir" "gh api repos/o/r/pulls/1" bare
+# An inherited token overrides the stored login, so writes are blocked even with agent settings.
+expect 2 "$main_dir" "gh pr review 4 --approve" agent-token
+expect 2 "$main_dir" "git push -u origin feat/x" agent-token
+expect 2 "$main_dir" "gh pr comment 1 --body hi" agent-ghtoken
+expect 0 "$main_dir" "gh pr view 4" agent-token
+# Write shapes the detector must still see (QA 002).
+expect 2 "$main_dir" "gh api --method=DELETE repos/o/r/issues/comments/1" bare
+expect 2 "$main_dir" "gh api -fbody=hi repos/o/r/issues/1/comments" bare
+expect 0 "$main_dir" "gh api -X GET repos/o/r/issues -f state=open" bare
+expect 2 "$main_dir" "git -c core.x=y push" bare
+expect 2 "$main_dir" "git --no-pager push" bare
+expect 2 "$main_dir" "(gh pr create --title x)" bare
+expect 2 "$main_dir" "{ gh pr create --title x; }" bare
 
 # Identity: no switching accounts or overriding the variables that pick them.
 expect 2 "$main_dir" "GH_CONFIG_DIR=/tmp/x gh pr create --title x"
@@ -84,6 +100,11 @@ expect 2 "$main_dir" "env -u GH_CONFIG_DIR gh pr comment 1 --body hi"
 expect 2 "$main_dir" "gh auth switch --user mzlikesb"
 expect 2 "$main_dir" "gh auth token"
 expect 2 "$main_dir" "git -c credential.helper= push"
+expect 2 "$main_dir" "export A=1 GH_CONFIG_DIR=/tmp/x"
+expect 2 "$main_dir" "declare -x GH_CONFIG_DIR=/tmp/x"
+expect 2 "$main_dir" "FOO=\"a b\" GH_TOKEN=x gh pr create --title x"
+expect 2 "$main_dir" "gh auth status --show-token"
+expect 2 "$main_dir" "gh auth git-credential get"
 # Other leading assignments are fine and the command behind them is still recognized.
 expect 0 "$main_dir" "FOO=bar gh pr create --title x"
 expect 2 "$main_dir" "FOO=bar git push --force"
@@ -93,6 +114,7 @@ expect 2 "$main_dir" "gh pr comment 1 --body '## neon review · abc'"
 expect 2 "$main_dir" "gh api repos/o/r/issues/1/comments -f body='## neon review'"
 expect 0 "$main_dir" "scripts/neon-review.sh 1 docs/plans/002-identity.md"
 expect 0 "$main_dir" "git commit -m 'apply neon review' && git push -q"
+expect 0 "$main_dir" "gh pr comment 1 --body 'neon review 지적을 반영했습니다'"
 
 # Merges: agents only queue small PRs.
 expect 0 "$main_dir" "gh pr merge 1 --auto --squash"
@@ -100,6 +122,8 @@ expect 2 "$main_dir" "gh pr merge 2 --auto --squash"
 expect 0 "$main_dir" "gh pr merge 2 --disable-auto"
 expect 2 "$main_dir" "gh pr merge 1 --squash"
 expect 2 "$main_dir" "gh pr merge 1 --admin --squash"
+expect 2 "$main_dir" "gh pr merge 1 --auto && gh pr merge 2 --auto"
+expect 2 "$main_dir" "git -c core.x=y push --force"
 
 # Push shape.
 expect 2 "$main_dir" "git push --force"

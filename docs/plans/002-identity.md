@@ -85,7 +85,8 @@
    - [ ] 마지막 push도 승인 필요(require last push approval)
    - [ ] `enforce_admins` 켬 유지, force push·삭제 금지 유지
 3. 사용자가 이 PR을 Approve → 직접 머지
-4. 첫 small PR로 새 흐름 검증 → `user-approved` 라벨·`AUTOMERGE_TOKEN` 삭제
+4. 메인 체크아웃을 main에 맞춘다(`git switch main && git pull --ff-only`). 훅은 메인 체크아웃 버전이 돌므로, 이걸 안 하면 옛 훅이 계속 돈다. 에이전트 세션을 새로 연다(`settings.local.json`의 `env` 적용)
+5. 첫 small PR로 새 흐름 검증 → `user-approved` 라벨·`AUTOMERGE_TOKEN` 삭제
 
 **롤백(새 흐름에 문제가 있을 때):** 브랜치 보호를 옛 규칙(`user-approval` 필수, Approve 필수 끔)으로 되돌린 뒤 **이 PR 전체를 revert**한다(`pr-check.yml`만 되돌리면 훅의 `user-approved` 부착 차단이 빠진 채 남는다). 라벨과 시크릿이 남아 있어 바로 옛 흐름으로 돌아간다
 

@@ -7,8 +7,11 @@ assign_re='^[[:space:]]*(env[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*=("[^"]*"|'"'"'
 # split_segments <command>: one shell segment per line (split on && || ; |), with leading
 # environment assignments stripped so `FOO=1 git push` reads as `git push`.
 split_segments() {
-  sed -E 's/(&&|\|\||;|\|)/\n/g' <<<"$1" | sed -E "s/${assign_re}//"
+  sed -E 's/(&&|\|\||;|\|)/\n/g' <<<"$1" | sed -E 's/^[[:space:]]*[({][[:space:]]*//' | sed -E "s/${assign_re}//"
 }
+
+# git followed by global options (-C dir, -c key=val, --no-pager, --git-dir=…) before the subcommand.
+git_cmd='git([[:space:]]+(-C[[:space:]]+[^[:space:]]+|-c[[:space:]]*[^[:space:]]+|--[a-z-]+(=[^[:space:]]+)?))*'
 
 # raw_segments <command>: segments without stripping assignments.
 raw_segments() {
@@ -54,8 +57,15 @@ dir_for() {
 # get their HTTPS credentials from that gh config. Used to fail closed.
 AGENT_LOGIN=${AGENT_LOGIN:-chillingdaisy-worker1}
 agent_gh_ok() {
+  # Token variables take precedence over the stored login, so an inherited one would make
+  # writes go out as whoever owns that token, whatever hosts.yml says.
+  agent_no_token_override || return 1
   [ -n "${GH_CONFIG_DIR:-}" ] && [ -f "$GH_CONFIG_DIR/hosts.yml" ] &&
     grep -qE "^[[:space:]]+user:[[:space:]]+${AGENT_LOGIN}[[:space:]]*$" "$GH_CONFIG_DIR/hosts.yml"
+}
+agent_no_token_override() {
+  [ -z "${GH_TOKEN:-}" ] && [ -z "${GITHUB_TOKEN:-}" ] &&
+    [ -z "${GH_ENTERPRISE_TOKEN:-}" ] && [ -z "${GITHUB_ENTERPRISE_TOKEN:-}" ]
 }
 agent_git_ok() {
   local n=${GIT_CONFIG_COUNT:-0} i key val helper=""

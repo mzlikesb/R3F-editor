@@ -20,13 +20,15 @@ raw=$(raw_segments "$cmd")
 
 # --- Identity: agents act only as the agent account ------------------------------------
 # Overriding or clearing the variables that pick the account, or switching gh accounts.
-if grep -qE '^[[:space:]]*(export[[:space:]]+|env[[:space:]]+)?(GH_CONFIG_DIR|GIT_CONFIG_[A-Z0-9_]+|GH_TOKEN|GITHUB_TOKEN|GH_ENTERPRISE_TOKEN)=' <<<"$raw" ||
-  grep -qE '^[[:space:]]*(env[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*(GH_CONFIG_DIR|GIT_CONFIG_[A-Z0-9_]+|GH_TOKEN|GITHUB_TOKEN)=' <<<"$raw" ||
-  grep -qE '^[[:space:]]*unset[[:space:]].*(GH_CONFIG_DIR|GIT_CONFIG_)' <<<"$raw" ||
-  grep -qE '^[[:space:]]*env[[:space:]]+(-i|-u|--unset)' <<<"$raw"; then
+id_vars='(GH_CONFIG_DIR|GIT_CONFIG_[A-Z0-9_]+|GH_TOKEN|GITHUB_TOKEN|GH_ENTERPRISE_TOKEN|GITHUB_ENTERPRISE_TOKEN)'
+if grep -qE "^[[:space:]]*[({]?[[:space:]]*(env[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*=(\"[^\"]*\"|'[^']*'|[^[:space:]]*)[[:space:]]+)*${id_vars}=" <<<"$raw" ||
+  grep -qE "^[[:space:]]*(export|declare|typeset|local|readonly)\b.*[[:space:]]${id_vars}=" <<<"$raw" ||
+  grep -qE "^[[:space:]]*unset\b.*${id_vars}" <<<"$raw" ||
+  grep -qE '^[[:space:]]*env[[:space:]]+(-i|-u|--unset|--ignore-environment)' <<<"$raw"; then
   block "계정을 고르는 변수(GH_CONFIG_DIR, GIT_CONFIG_*, GH_TOKEN)를 바꾸거나 지우지 않는다. 에이전트 계정은 세션 설정이 정한다."
 fi
-if grep -qE '^[[:space:]]*gh[[:space:]]+auth[[:space:]]+(switch|login|logout|token|refresh|setup-git)\b' <<<"$segs"; then
+if grep -qE '^[[:space:]]*gh[[:space:]]+auth[[:space:]]+(switch|login|logout|token|refresh|setup-git|git-credential)\b' <<<"$segs" ||
+  grep -qE '^[[:space:]]*gh[[:space:]]+auth[[:space:]]+status\b.*(--show-token|-t\b)' <<<"$segs"; then
   block "gh 계정을 바꾸거나 토큰을 꺼내지 않는다(gh auth status만 허용)."
 fi
 if grep -qE '^[[:space:]]*git[[:space:]].*-c[[:space:]]*credential\.' <<<"$segs"; then
@@ -34,29 +36,34 @@ if grep -qE '^[[:space:]]*git[[:space:]].*-c[[:space:]]*credential\.' <<<"$segs"
 fi
 
 # Write commands (anything that pushes or changes GitHub state).
-gh_api_write='^[[:space:]]*gh[[:space:]]+api\b.*(-X[[:space:]]*(POST|PATCH|PUT|DELETE)|--method[[:space:]]+(POST|PATCH|PUT|DELETE)|[[:space:]](-f|-F|--field|--raw-field|--input)([[:space:]=]|$))'
+gh_api_write='^[[:space:]]*gh[[:space:]]+api\b.*(-X[[:space:]]*(POST|PATCH|PUT|DELETE)|--method([[:space:]]+|=)(POST|PATCH|PUT|DELETE)|[[:space:]](-f|-F)|[[:space:]](--field|--raw-field|--input)([[:space:]=]|$))'
+gh_api_get='^[[:space:]]*gh[[:space:]]+api\b.*(-X[[:space:]]*GET|--method([[:space:]]+|=)GET)\b'
 gh_write='^[[:space:]]*gh[[:space:]]+(pr[[:space:]]+(create|edit|comment|review|merge|ready|close|reopen)|issue[[:space:]]+(create|edit|comment|close|reopen)|label[[:space:]]+(create|edit|delete)|release[[:space:]]+create)\b'
-git_opt='git(\s+-C\s+\S+)?'
+git_opt=$git_cmd
 is_push=false is_gh_write=false
-grep -qE "^\s*${git_opt}\s+push\b" <<<"$segs" && is_push=true
-{ grep -qE "$gh_write" <<<"$segs" || grep -qE "$gh_api_write" <<<"$segs"; } && is_gh_write=true
+grep -qE "^[[:space:]]*${git_opt}[[:space:]]+push\b" <<<"$segs" && is_push=true
+grep -qE "$gh_write" <<<"$segs" && is_gh_write=true
+# `-f` with `-X GET` sends query parameters, not a write.
+if grep -E "$gh_api_write" <<<"$segs" | grep -qvE "$gh_api_get"; then is_gh_write=true; fi
 
 # Fail closed: without the agent session settings, writes would silently go out as the user.
 if [ "$is_gh_write" = true ] || [ "$is_push" = true ]; then
+  agent_no_token_override || block "GH_TOKEN·GITHUB_TOKEN이 세션 환경에 있다. 저장된 에이전트 로그인보다 먼저 쓰여 다른 계정으로 나갈 수 있다. 세션 환경에서 지운다."
   agent_gh_ok || block "에이전트 gh 설정이 없다(GH_CONFIG_DIR → ${AGENT_LOGIN}). .claude/settings.local.json의 env를 확인하고 'scripts/agent-env.sh'로 점검한다."
 fi
 if [ "$is_push" = true ]; then
   agent_git_ok || block "git push 자격 증명이 에이전트 계정으로 설정돼 있지 않다(GIT_CONFIG_* → '!gh auth git-credential'). 'scripts/agent-env.sh'로 점검한다."
 fi
 
-# neon reviews are posted only through scripts/neon-review.sh. Reading them is fine.
-if [ "$is_gh_write" = true ] && grep -qi 'neon review' <<<"$cmd" && ! grep -q 'scripts/neon-review.sh' <<<"$cmd"; then
+# neon reviews are posted only through scripts/neon-review.sh, which adds this fixed header.
+# Reading them, or mentioning neon in other text, is fine.
+if [ "$is_gh_write" = true ] && grep -qF '## neon review' <<<"$cmd" && ! grep -q 'scripts/neon-review.sh' <<<"$cmd"; then
   block "neon 리뷰는 'scripts/neon-review.sh <PR> <플랜>'으로만 올린다."
 fi
 
 # --- Merges: agents only queue small PRs for auto-merge --------------------------------
-merge_seg=$(grep -E '^[[:space:]]*gh[[:space:]]+pr[[:space:]]+merge\b' <<<"$segs" | head -1 || true)
-if [ -n "$merge_seg" ]; then
+while IFS= read -r merge_seg; do
+  [ -n "$merge_seg" ] || continue
   if grep -qE -- '--admin\b' <<<"$merge_seg"; then
     block "'gh pr merge --admin' 금지. 필수 체크와 승인을 거쳐 머지한다."
   elif grep -qE -- '--disable-auto\b' <<<"$merge_seg"; then
@@ -65,11 +72,11 @@ if [ -n "$merge_seg" ]; then
     target=$(sed -E 's/^[[:space:]]*gh[[:space:]]+pr[[:space:]]+merge[[:space:]]*//' <<<"$merge_seg" | tr ' ' '\n' | grep -vE '^-|^$' | head -1 || true)
     d=$(dir_for "$cwd" "$cmd" '^[[:space:]]*gh[[:space:]]+pr[[:space:]]+merge\b')
     labels=$(cd "${d:-$cwd}" 2>/dev/null && gh pr view ${target:+"$target"} --json labels -q '[.labels[].name]|join(",")' 2>/dev/null || echo "?")
-    grep -q 'size:small' <<<"$labels" || block "auto-merge 예약은 size:small PR만. large는 사용자가 직접 머지한다(현재 라벨: ${labels})."
+    grep -q 'size:small' <<<"$labels" || block "auto-merge 예약은 size:small PR만. large는 사용자가 직접 머지한다(PR ${target:-현재 브랜치} 라벨: ${labels})."
   else
     block "에이전트는 PR을 직접 머지하지 않는다. small은 'gh pr merge --auto --squash'로 예약, large는 사용자가 머지한다."
   fi
-fi
+done < <(grep -E '^[[:space:]]*gh[[:space:]]+pr[[:space:]]+merge\b' <<<"$segs" || true)
 
 # --- Branches -------------------------------------------------------------------------
 repo_info() { # repo_info <dir>: sets branch and main_checkout; returns 1 outside a repo
