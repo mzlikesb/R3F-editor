@@ -1,0 +1,50 @@
+{
+  "name": "outpost",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "npm run build && wrangler dev",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "oxlint --deny-warnings",
+    "typecheck": "tsc -b",
+    "test": "vitest run",
+    "test:worker": "vitest run --project worker",
+    "deploy": "npm run build && wrangler deploy",
+    "deploy:preview": "npm run build && wrangler versions upload"
+  },
+  "dependencies": {
+    "@react-three/drei": "^10.7.9",
+    "@react-three/fiber": "^9.8.2",
+    "@react-three/postprocessing": "^3.2.2",
+    "maath": "^0.10.8",
+    "r3f-perf": "^7.2.3",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "three": "^0.187.0",
+    "zustand": "^5.1.0"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "^1.9.2",
+    "@types/node": "^26.6.11",
+    "@types/react": "^19.3.3",
+    "@types/react-dom": "^19.3.0",
+    "@types/three": "^0.187.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "oxlint": "^1.95.0",
+    "prettier": "^3.10.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "vitest": "^4.1.12",
+    "wrangler": "^4.168.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true,
+    "esbuild@0.28.2": true,
+    "workerd@1.20260815.1": true,
+    "workerd@1.20261123.1": true
+  }
+}
