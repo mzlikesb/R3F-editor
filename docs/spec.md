@@ -17,7 +17,7 @@
 | 7 | PBR 머티리얼 + 조명 (HDRI 환경맵, directional + ambient) |
 | 8 | WebSocket 실시간 데이터 스트림 → 3D 오버레이, 값에 따라 색 변화 |
 | 9 | REST API 연동 |
-| 10 | 성능: 인스턴싱 또는 LOD, 드로우콜·FPS 표시(r3f-perf), 모바일/PC 크로스플랫폼 확인 |
+| 10 | 성능: 인스턴싱 또는 LOD, 드로우콜·FPS 표시(`gl.info.render` 기반 자체 HUD), 모바일/PC 크로스플랫폼 확인 |
 | 11 | 배포: Cloudflare (WebSocket은 Worker + Durable Object). 열리는 URL이 있어야 한다 |
 
 ## 추가 — 싸게 먹히는 것만

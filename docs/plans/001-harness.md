@@ -144,7 +144,7 @@ Codex는 `AGENTS.md`의 `## Review guidelines`, neon은 프롬프트 파일, QA�
 ## 만들 것 (001)
 1. **앱 스캐폴드**
    - Vite + React + TypeScript + R3F + drei, Prettier, oxlint, Vitest, `.nvmrc`
-   - 콘텐츠 계획의 추가 의존성(`zustand`, `@react-three/postprocessing`, `r3f-perf`, `maath`) 설치·빌드 호환성 확인. `r3f-perf` 충돌 시 대체 HUD로 기록
+   - 콘텐츠 계획의 추가 의존성(`zustand`, `@react-three/postprocessing`, `maath`) 설치·빌드 호환성 확인. `r3f-perf`는 drei 9·React 18·zustand 4를 따로 끌고 와 충돌해서 제외하고, 성능 표시는 `gl.info.render` 기반 자체 HUD로 간다(M4)
    - 화면은 큐브 하나
    - `.gitignore`: `.dev.vars`, `.wrangler/`, `playwright-report/`, `test-results/` 추가
 2. **Worker 단일 배포**

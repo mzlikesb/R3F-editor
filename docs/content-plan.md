@@ -55,7 +55,7 @@
 |PBR+조명|HDRI `Environment`, directional(그림자)+ambient, 금속/거칠기 머티리얼|
 |WebSocket|DO가 기지 상태 소유, 위 메시지 규격|
 |REST|`GET /api/base` 초기 스냅샷, `GET /api/history` 가동·정전 기록|
-|성능|운석·바위·태양광 패널 수천 개 drei `Instances`, LOD(`Detailed`), `r3f-perf` 토글(설치 충돌 시 `gl.info.render` 드로우콜·삼각형 + FPS 직접 HUD), `PerformanceMonitor` dpr 적응, 모바일은 Outline 끄고 emissive만|
+|성능|운석·바위·태양광 패널 수천 개 drei `Instances`, LOD(`Detailed`), 자체 성능 HUD 토글(`gl.info.render` 드로우콜·삼각형 + FPS. `r3f-perf`는 drei 9·React 18 의존이라 제외), `PerformanceMonitor` dpr 적응, 모바일은 Outline 끄고 emissive만|
 |배포|**Workers Static Assets 단일 배포**: 한 Worker가 `dist/` 정적 파일 + `/api/*` + `/ws` + DO(SQLite)를 같이 서빙 → 같은 도메인이라 CORS·프록시 불필요|
 
 ## 구조
@@ -74,7 +74,7 @@ wrangler.jsonc   assets(dist, SPA fallback) + DO 바인딩 + SQLite migration
 shared/protocol.ts   메시지 타입 (클라·워커 공용)
 public/models/*.glb (Draco), public/draco/, scripts/compress.sh
 ```
-추가 의존성: `zustand`, `@react-three/postprocessing`, `r3f-perf`, `maath`; dev: `@gltf-transform/cli`, `wrangler`.
+추가 의존성: `zustand`, `@react-three/postprocessing`, `maath`; dev: `@gltf-transform/cli`, `wrangler`.
 에셋: CC0 로우폴리 SF 팩(Kenney Space Kit 등) + Poly Haven HDRI.
 
 ## 재사용
@@ -82,7 +82,7 @@ public/models/*.glb (Draco), public/draco/, scripts/compress.sh
 - github.com/mzlikesb/threejs-metaverse raycasting/조명 코드(개념 복기)
 
 ## 순서
-1. **11/26–27** **패키지 호환성 먼저 확인**(최신 스택 react 19.3·R3F 9.8·drei 10.7·three 0.187·vite 8.3·ts 7.0에 `@react-three/postprocessing`·`r3f-perf`·`maath`·`zustand` 설치 + `npm run build` 통과) → 뼈대 정리 + Worker 단일 배포(정적 + DO WS 에코)
+1. **11/26–27** **패키지 호환성 먼저 확인**(최신 스택 react 19.3·R3F 9.8·drei 10.7·three 0.187·vite 8.3·ts 7.0에 `@react-three/postprocessing`·`maath`·`zustand` 설치 + `npm run build` 통과) → 뼈대 정리 + Worker 단일 배포(정적 + DO WS 에코)
 2. **11/28** ★첫 이정표: 큐브 발전기 고장 1개 + 선택 + 패널 + 수리(멱등) + 스냅샷/재연결 → 폰↔PC 동기화 확인
 3. **11/29** 에셋·Draco, 기지 배치, 조명·HDRI, CameraControls 포커스, 하이라이트
 4. **11/30–12/1** 모듈 전체로 확장: 센서 틱, 고장 주입, 무인 경과·상한, 첫 방문 보장, 정전/복구, 기록·`/api/history`
@@ -101,7 +101,7 @@ public/models/*.glb (Draco), public/draco/, scripts/compress.sh
 - DO storage: 탭 다 닫고 시간 지나 재접속 → 고장 2~3개, 정전 아님, 가동 기록 유지. 고장 방치 → 정전 1회만 기록 → 발전기 수리로 복구·새 기록
 - WS 끊기(DevTools offline) → "재연결 중"·수리 잠금 → 복귀 시 스냅샷 적용
 - Network: GLB에 `KHR_draco_mesh_compression`, 디코더가 `/draco/`에서 로드, `/api/base` 200 후 WS
-- r3f-perf(또는 대체 HUD): 운석 수천 개가 소수 드로우콜, 폰 실기 FPS
+- 성능 HUD: 운석 수천 개가 소수 드로우콜, 폰 실기 FPS
 - 홀드 중 다른 탭에서 먼저 수리 → 홀드 즉시 해제·피드백 / 폰에서 홀드해도 카메라가 안 돌아감
 - 방어: 없는 faultId·큰 메시지·연타 전송 → 무시되고 상태 안 깨짐
 - 탭 다 닫으면 alarm이 멈추는지(Workers 대시보드 요청 수) 확인

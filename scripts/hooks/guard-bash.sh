@@ -29,14 +29,16 @@ common_dir=$(cd "$cwd" && realpath "$(git rev-parse --git-common-dir)")
 main_checkout=false
 [ "$git_dir" = "$common_dir" ] && main_checkout=true
 
-# Force push, in any form.
-if grep -qE '\bgit\s+push\b' <<<"$cmd" && grep -qE '(\s-f\b|--force\b|--force-with-lease|\s\+[^ ]+)' <<<"$cmd"; then
-  block "force push 금지."
-fi
-
-# Pushing to main explicitly, or committing/pushing while on main.
-if grep -qE '\bgit\s+push\b.*(\smain\b|:main\b)' <<<"$cmd"; then
-  block "main으로 직접 push 금지. PR로 머지한다."
+# Push flags are checked only on the `git push` segments themselves, so text such as a
+# commit message that mentions "-f" or "main" does not trip the guard.
+push_segments=$(sed -E 's/(&&|\|\||;|\|)/\n/g' <<<"$cmd" | grep -E '^\s*git\s+push\b' || true)
+if [ -n "$push_segments" ]; then
+  if grep -qE '(\s-[a-zA-Z]*f[a-zA-Z]*(\s|$)|--force\b|--force-with-lease|\s\+[^ ]+)' <<<"$push_segments"; then
+    block "force push 금지."
+  fi
+  if grep -qE '(\smain|:main)(\s|$)' <<<"$push_segments"; then
+    block "main으로 직접 push 금지. PR로 머지한다."
+  fi
 fi
 if [ "$branch" = main ] && grep -qE '\bgit\s+(commit|push)\b' <<<"$cmd"; then
   block "main 브랜치에서 commit/push 금지. 작업 브랜치(worktree)에서 한다."
