@@ -4,17 +4,12 @@
 
 ## 역할별 서브에이전트
 
-| 역할        | 에이전트                     | 모델   |
-| ----------- | ---------------------------- | ------ |
-| 기획/디자인 | `.claude/agents/planner.md`  | opus   |
-| 개발 리드   | `.claude/agents/dev-lead.md` | opus   |
-| 개발        | `.claude/agents/dev.md`      | sonnet |
-| QA          | `.claude/agents/qa.md`       | opus   |
+역할별 에이전트 정의(모델·도구)는 `.claude/agents/*.md`에 있다. 역할 설명은 `AGENTS.md`의 역할 표를 본다.
 
 - 개발 서브에이전트를 병렬로 돌릴 때는 `isolation: worktree`로 실행한다. 개발 리드가 각 worktree 결과를 PR 브랜치로 모은다
 - 순차 작업은 PR worktree 하나를 재사용한다
 
-## neon(Gemini) 호출
+## neon 호출 (Gemini 모델, Antigravity CLI `agy`)
 
 neon은 리뷰만 한다. **훅이 자동으로 부른다**(`scripts/hooks/neon-trigger.sh`, PostToolUse): `gh pr create`나 `git push` 직후, 그 브랜치 PR이 `stage:plan-review`이고 마지막 neon 리뷰 이후 플랜 파일(`docs/plans/NNN-*.md`, tasks·qa 제외)이 바뀌었으면 백그라운드로 실행하고 끝나면 herdr 알림을 띄운다. 에이전트가 따로 부를 필요는 없다.
 

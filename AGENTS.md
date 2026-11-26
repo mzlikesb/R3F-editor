@@ -1,6 +1,6 @@
 # OUTPOST — 에이전트 규칙
 
-행성에 기지가 하나 있고, 접속한 사람 전원이 같은 기지를 본다. 서버에서 모듈이 고장 나고 누군가 수리하면 모든 화면에 바로 반영된다. 기지는 사람들이 함께 살려두는 한 계속 가동된다. React Three Fiber / TypeScript / Vite 클라이언트, Cloudflare Worker + Durable Object 서버(단일 Worker 배포). 이 파일이 모든 에이전트(Claude Code, Codex, Gemini CLI)의 단일 규칙 원본이다.
+행성에 기지가 하나 있고, 접속한 사람 전원이 같은 기지를 본다. 서버에서 모듈이 고장 나고 누군가 수리하면 모든 화면에 바로 반영된다. 기지는 사람들이 함께 살려두는 한 계속 가동된다. React Three Fiber / TypeScript / Vite 클라이언트, Cloudflare Worker + Durable Object 서버(단일 Worker 배포). 이 파일이 모든 에이전트(Claude Code, Codex, neon은 Antigravity CLI `agy`)의 단일 규칙 원본이다.
 
 ## 경험 원칙
 
@@ -43,12 +43,12 @@ README·UI·커밋 메시지는 작품 자체로 설명한다.
 
 ```
 브랜치 생성 → docs/plans/NNN-*.md 작성 → draft PR
-  → 플랜 리뷰: Codex(웹) + neon(Gemini) → 사용자   (최대 3턴, 결론은 사용자가 냄)
+  → 플랜 리뷰: Codex(웹) + neon(Gemini 모델, `agy`로 실행) → 사용자   (최대 3턴, 결론은 사용자가 냄)
   → 승인(plan-approved 라벨)
   → 개발 리드(Opus): 작업 분할(tasks.md) + 테스트 먼저 작성 (서버 로직·UI 로직만)
   → 개발(Sonnet): 구현
   → QA(Opus): 명세 대비 검증, 실패 시 개발로 반려
-  → Preview 배포 → 플레이테스트 (기능 PR부터. 페르소나 자동 플레이테스트는 미구현·004 예정, 지금은 사용자가 Preview를 폰·PC로 확인)
+  → Preview 배포 → 플레이테스트 (기능 PR부터. 페르소나 자동 플레이테스트는 미구현 — #23, 지금은 사용자가 Preview를 폰·PC로 확인)
   → PR ready → 최종 SHA에 코드 리뷰: Codex(웹) → 사용자
   → 사용자 "리뷰 끝났어" → 반영 → CI 통과
   → 사용자가 최종 커밋 확인 후 Approve
@@ -102,6 +102,7 @@ README·UI·커밋 메시지는 작품 자체로 설명한다.
 - **승인 = 사용자의 GitHub Approve.** 에이전트 계정은 작성자라 자기 PR을 Approve할 수 없다(서버가 막음)
 - small: 에이전트가 PR을 ready로 열면서 `gh pr merge --auto --squash`로 예약한다 → 사용자가 Approve하면 체크 통과 후 자동 머지
 - large: 사용자가 Approve 후 직접 머지. 에이전트의 `gh pr merge`는 `--auto`(small만)와 `--disable-auto`만 훅이 허용한다
+- **Codex가 최종 커밋 리뷰를 마치면 에이전트가 PR에 "Approve·머지 가능" 코멘트를 단다.** 사용자는 그 코멘트를 보고 Approve한다(Approve가 Codex보다 먼저 들어가 리뷰 전에 머지된 일이 #8·#11에서 있었다)
 - small → large 전환: **auto-merge 예약을 먼저 해제한 뒤** 라벨을 바꾼다(`pr-check`가 large + 예약 켜짐을 실패로 본다)
 - **사용자는 에이전트 PR 브랜치에 직접 push하지 않는다**(웹의 "Update branch"·"Apply suggestion" 포함). 마지막 push가 `mzlikesb`면 아무도 Approve할 수 없게 된다. 실수했으면 에이전트가 브랜치를 다시 push(빈 커밋 등)해 마지막 pusher를 에이전트 계정으로 되돌린다
 - **모든 PR은 에이전트 계정으로 연다.** 사용자가 직접 연 PR은 본인 Approve가 안 되므로, 긴급할 때만 사용자가 **`enforce_admins`만** 잠시 끄고 머지한 뒤 다시 켠다. 브랜치 보호 전체를 끄지 않는다
@@ -153,7 +154,7 @@ README·UI·커밋 메시지는 작품 자체로 설명한다.
 ### 에셋
 
 - CC0 등 출처가 분명한 것만 쓰고 `CREDITS.md`에 기록한다
-- GLB는 Draco 압축 필수(`scripts/compress.sh`). 원본은 커밋하지 않는다
+- GLB는 Draco 압축 필수(압축 스크립트 `scripts/compress.sh`는 M2에서 만든다). 원본은 커밋하지 않는다
 
 ### 멈추고 사용자를 부르는 조건
 
@@ -169,7 +170,7 @@ README·UI·커밋 메시지는 작품 자체로 설명한다.
 
 - **small**: CI + pr-check 통과, Codex 리뷰, 사용자 Approve → auto-merge
 - **large**: 위 + 플랜 승인 + QA 통과 + (플레이 가능한 기능이 있는 PR이면) Preview 확인 + 사용자 머지
-- Preview 확인은 지금 **사용자가 폰·PC로 직접** 한다. 페르소나 에이전트 플레이테스트와 neon 아트/UX 크리틱은 **미구현(004 예정)**이다
+- Preview 확인은 지금 **사용자가 폰·PC로 직접** 한다. 페르소나 에이전트 플레이테스트(#23)와 neon 아트/UX 크리틱(#24)은 **미구현**이다. 헤드리스 렌더링이 되는 것은 확인했다(#22)
 - 공통: 테스트 대상(서버 로직·UI 로직)은 테스트가 있다, 성능 예산 확인 결과를 PR 본문에 적는다, 리뷰 기록 표가 채워져 있다
 
 ### 외부 입력 (공개 레포)
@@ -186,13 +187,13 @@ README·UI·커밋 메시지는 작품 자체로 설명한다.
 - 닫힌 이슈에 할 일을 남기지 않는다. 후속 작업은 새 이슈로 올리고 원래 이슈를 `Refs #N`로 건다
 - **이슈를 처리하는 PR은 본문에 이슈를 링크한다**: `- 관련 이슈: Closes #N` / `Refs #N`. 없으면 `없음`. pr-check가 강제
 - **모든 PR·이슈에 라벨과 마일스톤.** PR은 `size:*` 1개 + `stage:*` 1개 + 마일스톤 필수. pr-check가 강제. 단계 라벨은 에이전트가 단계를 넘길 때 바꾼다
-- 라벨: `size:small` `size:large` `stage:plan-review` `stage:dev` `stage:qa` `stage:playtest` `stage:code-review` `plan-approved` `bug` `playtest` `art-ux` `quality` `needs-decision`.
-- 마일스톤: M0 하네스 ~ M5 출시
+- 라벨: 전체는 `gh label list`. PR에 필수인 것은 `size:*` 1개와 `stage:*` 1개. 승인 전 결정이 남은 이슈는 `needs-decision`
+- 마일스톤: `gh api 'repos/mzlikesb/outpost/milestones?state=all'`
 
 ### 시크릿·환경변수
 
 - 로컬은 `.dev.vars`(gitignore), 필요한 키 목록은 `.dev.vars.example`
-- CI는 GitHub Secrets(`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`). 시크릿 값은 문서·로그·PR에 남기지 않는다
+- CI는 GitHub Secrets(목록은 `gh secret list`). 시크릿 값은 문서·로그·PR에 남기지 않는다
 
 ### 배포·롤백
 
