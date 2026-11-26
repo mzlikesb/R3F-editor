@@ -1,5 +1,7 @@
 # 001 — 하네스 코어·개발환경 세팅
 
+> **설계 변경됨.** 승인은 `user-approved` 라벨이 아니라 사용자의 GitHub Approve로 바뀌었다(`docs/plans/002-identity.md`). 현재 규칙은 `AGENTS.md`가 기준이다. 이 문서는 PR #1 당시 기록으로 남긴다.
+
 - 브랜치: `chore/harness-setup`
 - 등급: **large** (사용자 머지)
 - 관련 이슈: 없음
