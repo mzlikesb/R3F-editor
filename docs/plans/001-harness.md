@@ -94,6 +94,7 @@ OUTPOST(`docs/content-plan.md`)를 만들기 전에, 실제 팀처럼 PR 단위�
 
 ## 세팅하면서 확인할 것
 - Worker Previews(2026-09)가 DO를 PR별로 분리해 주는지 → 되면 PR별 staging, 안 되면 `staging` 환경 1개
+- 서브에이전트도 `CLAUDE.md`를 받는지. 받으면 플레이어 에이전트는 레포 밖 빈 폴더에서 `claude -p`로 따로 띄워 사전 정보를 완전히 차단
 - herdr 알림을 에이전트 턴 종료와 연결할 수 있는지
 - 최신 스택(React 19.3 / R3F 9.8 / drei 10.7 / three 0.187 / Vite 8 / TS 7)과 추가 패키지 호환
 - Gemini CLI가 `GEMINI.md`의 `@` 임포트를 지원하는지, 구글 로그인 무료 한도가 지금도 있는지, 비대화식(`-p`)에서 이미지 입력이 되는지
