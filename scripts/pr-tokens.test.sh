@@ -45,6 +45,17 @@ check "time link, shared bucket, branch first" \
     $(row t3 11:30:00 feat/9 dev claude-sonnet-5-5 4 4 4 4)
   ]}"
 
+# Rows of a known PR branch that is not in the queried set are dropped, never time-linked; an
+# unknown branch still is. An open PR's current stage runs until now (not "머지 후").
+pr3="{\"number\":13,\"title\":\"o\",\"branch\":\"feat/13\",\"opened\":$t0,\"closed\":null,\"intervals\":[{\"stage\":\"plan-review\",\"start\":$t0,\"end\":$((t0 + 1200))},{\"stage\":\"dev\",\"start\":$((t0 + 1200)),\"end\":null}]}"
+check "known branch outside query dropped, open stage" \
+  '[{"pr":"#13","title":"o","link":"브랜치","stage":"dev","role":"dev (sonnet-5-5)","input":1,"output":1,"cache_read":1,"cache_write":1},{"pr":"#13","title":"o","link":"시간","stage":"dev","role":"main session (opus-5-5)","input":2,"output":2,"cache_read":2,"cache_write":2}]' \
+  "{\"now\":$now,\"known_branches\":[\"feat/13\",\"feat/12\"],\"prs\":[$pr3],\"rows\":[
+    $(row o1 10:40:00 feat/13 dev claude-sonnet-5-5 1 1 1 1),
+    $(row o2 10:40:00 feat/12 dev claude-sonnet-5-5 7 7 7 7),
+    $(row o3 10:41:00 main 'main session' claude-opus-5-5 2 2 2 2)
+  ]}"
+
 check "no stages" \
   '[{"pr":"#3","title":"s","link":"브랜치","stage":"—","role":"qa (opus-5-5)","input":1,"output":2,"cache_read":3,"cache_write":4}]' \
   "{\"now\":$now,\"prs\":[{\"number\":3,\"title\":\"s\",\"branch\":\"b\",\"opened\":0,\"closed\":null,\"intervals\":[]}],\"rows\":[$(row a 10:00:00 b qa claude-opus-5-5 1 2 3 4)]}"

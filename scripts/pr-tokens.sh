@@ -44,8 +44,10 @@ for n in "$@"; do
   prs=$(jq -c --argjson one "$one" --argjson m "$meta" '. + [{number: $one.number, title: $one.title, intervals: $one.intervals} + $m]' <<<"$prs")
 done
 
+known=$(gh pr list --state all --limit 500 --json headRefName -q '[.[].headRefName]')
+
 printf '| PR | 연결 | 단계 | 역할 (모델) | 입력 | 출력 | 캐시 읽기 | 캐시 쓰기 |\n'
 printf '|---|---|---|---|---|---|---|---|\n'
-jq -n -c --slurpfile rows "$rows" --argjson prs "$prs" --argjson now "$(date +%s)" '{rows: $rows[0], prs: $prs, now: $now}' |
+jq -n -c --slurpfile rows "$rows" --argjson prs "$prs" --argjson known "$known" --argjson now "$(date +%s)" '{rows: $rows[0], prs: $prs, known_branches: $known, now: $now}' |
   jq -r -f pr-tokens.jq |
   jq -r '.[] | "| \(.pr) | \(.link) | \(.stage) | \(.role) | \(.input) | \(.output) | \(.cache_read) | \(.cache_write) |"'

@@ -25,6 +25,12 @@ def neon: who == "chillingdaisy-worker1" and (body | startswith("## neon review"
       else . end)
   | .done + [.open | to_entries[] | select($merged != null) | {stage: .key, start: .value, end: ($merged | fromdateiso8601)}]
   ) as $iv
+# Stages still open on an unmerged PR: end null (until now).
+| (if $merged != null then [] else
+    (reduce $lab[] as $e ({}; ($e.label.name | ltrimstr("stage:")) as $s
+      | if $e.event == "labeled" then .[$s] = ($e | ts) else del(.[$s]) end)
+    | to_entries | map({stage: .key, start: .value, end: null}))
+  end) as $still_open
 # Commits pushed before the first stage label (e.g. the plan commit right before the PR
 # opens) belong to the first stage.
 | ([$iv[].start] | min) as $first
@@ -53,7 +59,7 @@ def neon: who == "chillingdaisy-worker1" and (body | startswith("## neon review"
     number: $d.pr.number,
     title: $d.pr.title,
     stages: $stages,
-    intervals: [$iv[] | {stage, start, end}],
+    intervals: ([$iv[] | {stage, start, end}] + $still_open),
     wait_plan_min: $wait_plan,
     wait_approve_min: $wait_approve
   }

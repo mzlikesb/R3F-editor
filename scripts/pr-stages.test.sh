@@ -46,7 +46,7 @@ check "small, approve before codex" \
 
 # Not merged yet: open stages have no end, no Approve.
 check "open PR" \
-  '{"number":3,"title":"o","stages":{},"intervals":[],"wait_plan_min":null,"wait_approve_min":null}' \
+  '{"number":3,"title":"o","stages":{},"intervals":[{"stage":"dev","start":1795687200,"end":null}],"wait_plan_min":null,"wait_approve_min":null}' \
   "{\"pr\":{\"number\":3,\"title\":\"o\",\"merged_at\":null},\"timeline\":[$(lab labeled 10:00:00 stage:dev)]}"
 
 exit $fail
