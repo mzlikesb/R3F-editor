@@ -44,6 +44,13 @@ OUTPOST(`docs/content-plan.md`)를 만들기 전에, 실제 팀처럼 PR 단위�
 
 플레이어 페르소나(초안): ① 출퇴근길 폰으로 링크 하나 눌러본 캐주얼 게이머 ② 3D/웹에 관심 있는 PC 개발자 ③ 게임 거의 안 하는 첫 방문자.
 플레이어 에이전트는 레포·플랜을 **읽지 않는다**. staging URL과 페르소나 설명만 받는다.
+서브에이전트로 띄우면 `CLAUDE.md`를 통해 정보가 샐 수 있어서, 별도 프로세스로 띄운다(`scripts/playtest.sh`):
+- 레포 밖 빈 임시 폴더에서 `claude -p` 실행 → 프로젝트 `CLAUDE.md`·`AGENTS.md`·프로젝트 메모리가 없다
+- `--tools ""`(파일·셸 도구 없음) + `--strict-mcp-config --mcp-config`로 **Playwright MCP만** → 브라우저 말고는 아무것도 못 본다
+- Playwright는 `--isolated` 프로필 → 쿠키·기록 없는 첫 방문 브라우저
+- `--append-system-prompt-file`로 페르소나만 주입(`docs/personas/*.md`, 사람 설명만 쓰고 게임 정보는 쓰지 않는다)
+- 리포트는 stdout으로 받아 기획 에이전트가 `docs/playtests/`에 저장
+- `--bare`는 API 키 과금이라 쓰지 않는다
 
 ## 인수인계 형식 (전부 md)
 - `docs/plans/NNN-*.md` — 플랜 (`docs/templates/plan.md`)
@@ -77,6 +84,7 @@ OUTPOST(`docs/content-plan.md`)를 만들기 전에, 실제 팀처럼 PR 단위�
    - `.claude/prompts/`: `neon-plan-review.md`, `neon-art-critique.md`
    - `.mcp.json`: Playwright MCP (플레이어·QA용)
    - `docs/templates/`: plan, tasks, playtest
+   - `docs/personas/`: 페르소나 3종, `scripts/playtest.sh`
 4. **GitHub**
    - `.github/workflows/ci.yml`: lint · typecheck · test · build (PR·main). Node 버전은 `.nvmrc`로 로컬과 맞춘다
    - `.github/workflows/deploy.yml`: PR → staging, main 머지 → production
@@ -94,7 +102,6 @@ OUTPOST(`docs/content-plan.md`)를 만들기 전에, 실제 팀처럼 PR 단위�
 
 ## 세팅하면서 확인할 것
 - Worker Previews(2026-09)가 DO를 PR별로 분리해 주는지 → 되면 PR별 staging, 안 되면 `staging` 환경 1개
-- 서브에이전트도 `CLAUDE.md`를 받는지. 받으면 플레이어 에이전트는 레포 밖 빈 폴더에서 `claude -p`로 따로 띄워 사전 정보를 완전히 차단
 - herdr 알림을 에이전트 턴 종료와 연결할 수 있는지
 - 최신 스택(React 19.3 / R3F 9.8 / drei 10.7 / three 0.187 / Vite 8 / TS 7)과 추가 패키지 호환
 - Gemini CLI가 `GEMINI.md`의 `@` 임포트를 지원하는지, 구글 로그인 무료 한도가 지금도 있는지, 비대화식(`-p`)에서 이미지 입력이 되는지
@@ -110,6 +117,7 @@ OUTPOST(`docs/content-plan.md`)를 만들기 전에, 실제 팀처럼 PR 단위�
 - 이 PR에서 CI 녹색, staging 배포 URL이 열리고 WS 에코 동작
 - main 머지 후 production URL 동작
 - 테스트용 `size:small` 더미 PR로 auto-merge 동작 확인 후 닫기
+- `scripts/playtest.sh`로 띄운 플레이어에게 "이 게임 이름과 계획을 아는 대로 말해봐"라고 물으면 모른다고 답한다(정보 차단 확인)
 - 세 도구에서 "이 프로젝트 규칙과 먼저 읽을 문서가 뭐야?"라고 물으면 같은 답이 나온다
 - `gemini -p`로 이 플랜을 리뷰시켜 PR에 `neon review` 코멘트가 달린다
 - Claude Code에서 `.claude/agents/*` 6종이 인식되고, Playwright MCP로 staging URL 스크린샷 1장 확보
