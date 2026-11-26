@@ -1,30 +1,105 @@
-/** Messages shared by the client and the Worker. Single source of truth. */
+/**
+ * Messages shared by the client and the Worker. Single source of truth.
+ *
+ * The types below are the contract between the server task (S) and the client task (C) of plan 003
+ * (`docs/plans/003-tasks.md`). Changing a type here needs both sides and the dev lead to agree.
+ */
 
-/** Largest client message the server accepts, in bytes. */
+/** Largest client message the server accepts, in UTF-8 bytes. */
 export const MAX_CLIENT_MESSAGE_BYTES = 256;
 
-export interface EchoMessage {
-  type: 'echo';
-  /** The text the client sent. */
-  data: string;
-  /** Random id stored once per Durable Object; differs across isolated environments. */
+/** Client messages allowed per socket per second; the rest are ignored. */
+export const MAX_CLIENT_MESSAGES_PER_SECOND = 5;
+
+/**
+ * Heartbeat. These are raw text frames, not JSON. The server answers `PING` with `PONG` through
+ * `ctx.setWebSocketAutoResponse`, so it never wakes the Durable Object.
+ */
+export const PING = 'ping';
+export const PONG = 'pong';
+/** The client sends `PING` this often. */
+export const PING_INTERVAL_MS = 20_000;
+/** The client drops and reconnects the socket when no `PONG` arrives within this time. */
+export const PONG_TIMEOUT_MS = 10_000;
+
+/** The only module in this milestone. */
+export type ModuleId = 'generator';
+export const GENERATOR: ModuleId = 'generator';
+
+export interface Fault {
+  /** Unique per fault; a repair must name it. */
+  id: string;
+  moduleId: ModuleId;
+  /** Epoch milliseconds. */
+  createdAt: number;
+}
+
+// ---- server -> client ----
+
+/**
+ * Full base state. Sent first on every connection, and returned as JSON by `GET /api/base`.
+ * `version` covers `fault` and `repairs` only; `presence` is not versioned.
+ */
+export interface SnapshotMessage {
+  type: 'snapshot';
+  version: number;
+  fault: Fault | null;
+  /** Total repairs since the base was created. */
+  repairs: number;
+  /** Open sockets right now. */
+  presence: number;
+  /** Random id stored once per Durable Object; differs across isolated environments. Not shown in the UI. */
   instanceId: string;
 }
 
-export type ServerMessage = EchoMessage;
+/** A new fault appeared. */
+export interface FaultMessage {
+  type: 'fault';
+  version: number;
+  fault: Fault;
+}
 
-/** Parses a server message, returning null for anything that is not a known message. */
+/** The fault `faultId` was repaired; the base now has no fault. */
+export interface RepairedMessage {
+  type: 'repaired';
+  version: number;
+  faultId: string;
+  /** Total repairs after this one. */
+  repairs: number;
+}
+
+/** Open sockets right now. Not versioned: the client always takes the latest value. */
+export interface PresenceMessage {
+  type: 'presence';
+  count: number;
+}
+
+export type ServerMessage = SnapshotMessage | FaultMessage | RepairedMessage | PresenceMessage;
+
+// ---- client -> server ----
+
+export interface RepairRequest {
+  type: 'repair';
+  faultId: string;
+}
+
+export type ClientMessage = RepairRequest;
+
+/**
+ * Parses a message from the server (WS frame or `/api/base` body).
+ * Returns null for invalid JSON, unknown `type`, or missing/mistyped fields. Unknown extra fields are dropped.
+ */
 export function parseServerMessage(raw: string): ServerMessage | null {
-  let value: unknown;
-  try {
-    value = JSON.parse(raw);
-  } catch {
-    return null;
-  }
-  if (typeof value !== 'object' || value === null) return null;
-  const msg = value as Record<string, unknown>;
-  if (msg['type'] === 'echo' && typeof msg['data'] === 'string' && typeof msg['instanceId'] === 'string') {
-    return { type: 'echo', data: msg['data'], instanceId: msg['instanceId'] };
-  }
-  return null;
+  void raw;
+  throw new Error('not implemented: parseServerMessage (task S)');
+}
+
+/**
+ * Parses a message from a client. Returns null when the frame is binary, larger than
+ * `MAX_CLIENT_MESSAGE_BYTES` (UTF-8 bytes), invalid JSON, an unknown `type`, or a `repair` whose
+ * `faultId` is not a non-empty string. Unknown extra fields are dropped.
+ */
+export function parseClientMessage(raw: string | ArrayBuffer): ClientMessage | null {
+  void raw;
+  throw new Error('not implemented: parseClientMessage (task S)');
 }
