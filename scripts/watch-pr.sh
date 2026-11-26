@@ -27,6 +27,8 @@ emit() { # emit <id> <kind> <login> <url> <body>
   grep -qx "$id" "$seen" && return
   echo "$id" >>"$seen"
   grep -q '<!-- agent -->' <<<"$body" && return
+  # Replying to an inline comment creates an empty review; the reply itself is reported separately.
+  [ -n "${body// /}" ] || return
   # Codex's status summary edits itself; only its receipts and findings matter.
   grep -q 'codex-pull-request-review-summary' <<<"$body" && return
   local first
@@ -43,17 +45,17 @@ while true; do
 
   while IFS=$'\t' read -r id login url body; do
     [ -n "$id" ] && emit "c$id" comment "$login" "$url" "$body"
-  done < <(gh api "repos/$repo/issues/$pr/comments?since=$since&per_page=100" \
+  done < <(gh api --paginate "repos/$repo/issues/$pr/comments?since=$since&per_page=100" \
     --jq '.[] | [.id, .user.login, .html_url, ((.body // "") | gsub("[\r\n\t]+"; " ") | .[0:600])] | @tsv' 2>/dev/null || true)
 
   while IFS=$'\t' read -r id login url body; do
     [ -n "$id" ] && emit "r$id" inline "$login" "$url" "$body"
-  done < <(gh api "repos/$repo/pulls/$pr/comments?since=$since&per_page=100" \
+  done < <(gh api --paginate "repos/$repo/pulls/$pr/comments?since=$since&per_page=100" \
     --jq '.[] | [.id, .user.login, .html_url, ((.body // "") | gsub("[\r\n\t]+"; " ") | .[0:600])] | @tsv' 2>/dev/null || true)
 
   while IFS=$'\t' read -r id login url state body; do
     [ -n "$id" ] && emit "v$id" "review:$state" "$login" "$url" "$body"
-  done < <(gh api "repos/$repo/pulls/$pr/reviews?per_page=100" \
+  done < <(gh api --paginate "repos/$repo/pulls/$pr/reviews?per_page=100" \
     --jq '.[] | select(.submitted_at >= "'"$since"'") | [.id, .user.login, .html_url, .state, ((.body // "") | gsub("[\r\n\t]+"; " ") | .[0:600])] | @tsv' 2>/dev/null || true)
 
   sleep "$interval"
