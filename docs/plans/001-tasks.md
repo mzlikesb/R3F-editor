@@ -9,7 +9,7 @@
 - Worker 이름 `outpost`, DO 클래스 `BaseRoom`, 바인딩 `BASE_ROOM`, WS 경로 `/ws`
 - 라벨: `size:small` `size:large` `stage:plan-review` `stage:dev` `stage:qa` `stage:playtest` `stage:code-review` `plan-approved` `user-approved` `bug` `playtest` `art-ux` `quality`
 - 시크릿: `CLOUDFLARE_API_TOKEN` `CLOUDFLARE_ACCOUNT_ID` `AUTOMERGE_TOKEN`
-- 문서·커밋·UI는 작품 자체로 설명한다. 만든 목적이나 용도는 적지 않는다
+- 문서·커밋·UI는 작품 자체로 설명한다
 
 ## 작업
 
