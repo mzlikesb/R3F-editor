@@ -20,17 +20,22 @@ export function Panel() {
   const busy = holdKind !== 'idle' || noticeKind !== null;
   useEffect(() => {
     if (!busy) return;
+    const el = fill.current;
     let raf = 0;
     const loop = () => {
       const now = performance.now();
       const { dispatchHold } = useStore.getState();
       dispatchHold({ type: 'tick', now });
       const hold = useStore.getState().repair.hold;
-      if (fill.current) fill.current.style.transform = `scaleX(${holdProgress(hold, now)})`;
+      if (el) el.style.transform = `scaleX(${holdProgress(hold, now)})`;
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      // The loop is the only painter, so reset the fill when it stops (release, cancel, reconnect).
+      if (el) el.style.transform = 'scaleX(0)';
+    };
   }, [busy]);
 
   // Hold is cancelled when the tab loses focus or is hidden.
@@ -62,7 +67,8 @@ export function Panel() {
         className="repair"
         disabled={!enabled}
         onPointerDown={(e) => {
-          if (!fault || e.button > 0) return;
+          // `disabled` alone is not enough: some browsers still deliver pointer events.
+          if (!enabled || !fault || e.button > 0) return;
           e.currentTarget.setPointerCapture(e.pointerId);
           dispatch({ type: 'press', faultId: fault.id, now: performance.now() });
         }}
