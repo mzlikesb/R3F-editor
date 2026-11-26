@@ -6,7 +6,7 @@ const BASE_NAME = 'base';
 export default {
   async fetch(request, env): Promise<Response> {
     const url = new URL(request.url);
-    if (url.pathname === '/ws') {
+    if (url.pathname === '/ws' || url.pathname === '/api/base') {
       return env.BASE_ROOM.getByName(BASE_NAME).fetch(request);
     }
     return env.ASSETS.fetch(request);
