@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Polls a PR and prints one line per new review comment, review, or conversation comment.
 # Meant to run under Claude Code's Monitor tool: each stdout line is an event.
-# Skips comments carrying the <!-- agent --> marker (posted by our own agents).
+# Skips the agent account's own comments; neon reviews (fixed header) are reported.
 # Exits when the PR is merged or closed.
 # Usage: scripts/watch-pr.sh <pr-number> [interval-seconds]
 set -uo pipefail
@@ -13,10 +13,12 @@ since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 seen=$(mktemp)
 trap 'rm -f "$seen"' EXIT
 
-role() { # role <login>. Anyone not listed is untrusted (public repo).
+role() { # role <login> [body]. Exact logins only; anyone not listed is untrusted (public repo).
   case "$1" in
     'chatgpt-codex-connector[bot]') echo codex ;;
-    chillingdaisy-worker1) echo ai-reviewer ;;
+    # The agent account posts both agent work and neon reviews. neon-review.sh (not the
+    # model) prefixes every review with this fixed header.
+    chillingdaisy-worker1) case "${2:-}" in '## neon review'*) echo neon ;; *) echo agent ;; esac ;;
     mzlikesb) echo user ;;
     'github-actions[bot]') echo ci ;;
     *) echo untrusted ;;
@@ -24,15 +26,17 @@ role() { # role <login>. Anyone not listed is untrusted (public repo).
 }
 
 emit() { # emit <id> <kind> <login> <url> <body>
-  local id=$1 kind=$2 login=$3 url=$4 body=$5
+  local id=$1 kind=$2 login=$3 url=$4 body=$5 who
   grep -qx "$id" "$seen" && return
   echo "$id" >>"$seen"
+  who=$(role "$login" "$body")
   # Text from untrusted authors never reaches the agent; only the fact that it exists.
-  if [ "$(role "$login")" = untrusted ]; then
+  if [ "$who" = untrusted ]; then
     echo "PR#$pr $kind [untrusted] $login: (내용 생략 — 신뢰 목록 밖 작성자) — $url"
     return
   fi
-  grep -q '<!-- agent -->' <<<"$body" && return
+  # The agent's own comments are not news to the agent.
+  [ "$who" = agent ] && return
   # Replying to an inline comment creates an empty COMMENTED review; the reply itself is
   # reported separately. Empty APPROVED / CHANGES_REQUESTED reviews still carry a verdict.
   [ "$kind" = review:COMMENTED ] && [ -z "${body// /}" ] && return
@@ -40,7 +44,7 @@ emit() { # emit <id> <kind> <login> <url> <body>
   grep -q 'codex-pull-request-review-summary' <<<"$body" && return
   local first
   first=$(tr '\n' ' ' <<<"$body" | sed -E 's/<[^>]+>//g; s/[[:space:]]+/ /g' | cut -c1-140)
-  echo "PR#$pr $kind [$(role "$login")] $login: $first — $url"
+  echo "PR#$pr $kind [$who] $login: $first — $url"
 }
 
 while true; do

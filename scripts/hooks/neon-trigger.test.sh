@@ -45,6 +45,8 @@ stub_gh '["size:large","stage:plan-review"]'
 expect "$repo" "" "git status"
 expect "$repo" "would review PR #99 with docs/plans/003-x.md" "git push -q"
 expect "$repo" "would review PR #99 with docs/plans/003-x.md" "gh pr create --draft --title x"
+# Leading environment assignments do not hide the command.
+expect "$repo" "would review PR #99 with docs/plans/003-x.md" "FOO=bar gh pr create --draft --title x"
 # Run from elsewhere: the hook follows `cd` / `git -C` into the repo.
 expect /tmp "would review PR #99" "cd $repo && git push -q"
 expect /tmp "would review PR #99" "git -C $repo push -q"

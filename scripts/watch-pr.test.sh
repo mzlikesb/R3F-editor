@@ -4,18 +4,20 @@ set -uo pipefail
 cd "$(dirname "$0")"
 eval "$(sed -n '/^role()/,/^}/p' watch-pr.sh)"
 fail=0
-expect() { # expect <login> <role>
+expect() { # expect <login> <body> <role>
   local got
-  got=$(role "$1")
-  if [ "$got" = "$2" ]; then echo "ok   $1 → $got"; else echo "FAIL $1 → $got (want $2)"; fail=1; fi
+  got=$(role "$1" "$2")
+  if [ "$got" = "$3" ]; then echo "ok   $1 → $got"; else echo "FAIL $1 → $got (want $3)"; fail=1; fi
 }
-expect 'chatgpt-codex-connector[bot]' codex
-expect 'chatgpt-codex-connector-attacker' untrusted
-expect 'chatgpt-codex-connector' untrusted
-expect 'github-actions[bot]' ci
-expect 'github-actions' untrusted
-expect chillingdaisy-worker1 ai-reviewer
-expect chillingdaisy-worker1x untrusted
-expect mzlikesb user
-expect someone-else untrusted
+expect 'chatgpt-codex-connector[bot]' '' codex
+expect 'chatgpt-codex-connector-attacker' '' untrusted
+expect 'chatgpt-codex-connector' '' untrusted
+expect 'github-actions[bot]' '' ci
+expect 'github-actions' '' untrusted
+expect chillingdaisy-worker1 '## neon review · `abc`' neon
+expect chillingdaisy-worker1 '@codex review — 대상 커밋' agent
+expect chillingdaisy-worker1 '반영했습니다. ## neon review' agent
+expect chillingdaisy-worker1x '## neon review' untrusted
+expect mzlikesb '' user
+expect someone-else '## neon review' untrusted
 exit $fail
