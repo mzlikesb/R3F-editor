@@ -151,10 +151,10 @@ Codex는 `AGENTS.md`의 `## Review guidelines`, neon은 프롬프트 파일, QA�
    - `wrangler.jsonc`: static assets(dist, SPA fallback) + DO 바인딩 + SQLite migration. Preview를 쓰면 `previews` 블록에도 DO 바인딩 선언
    - `worker/index.ts` + `worker/BaseRoom.ts`: `/ws` 에코만 (Hibernation API). DO는 첫 접속 때 임의 `instanceId`를 storage에 한 번 저장하고 에코 응답에 함께 돌려준다 → Preview 격리 실측용 관측값
    - `@cloudflare/vitest-pool-workers`로 DO 테스트 1개(에코)
-3. **규칙 문서** — 세 도구가 처음 읽는 파일이 다르다(Claude Code `CLAUDE.md`, Codex `AGENTS.md`, Gemini CLI `GEMINI.md`). **`AGENTS.md` 하나를 원본**으로 둔다
+3. **규칙 문서** — 세 도구가 처음 읽는 파일이 다르다(Claude Code `CLAUDE.md`, Codex `AGENTS.md`, neon은 Antigravity CLI `agy` — 시작 시 `AGENTS.md`를 읽는 것 확인). **`AGENTS.md` 하나를 원본**으로 둔다
    - `AGENTS.md`: 한 단락 소개, 명령어, **먼저 읽을 문서**(`docs/content-plan.md` 작업 전 항상, `docs/spec.md`, 진행 중인 `docs/plans/NNN-*`, `docs/templates/`), 위 규칙 전부, 병렬 세션 규칙(메인 체크아웃 읽기 전용, 브랜치 작업은 worktree, 착수 전 브랜치 push로 클레임, 남의 브랜치·미커밋 변경 불가침, 인터페이스 기준 분할), `## Review guidelines`(공통 출력 형식 + 중점: 서버 상태 멱등성, 테스트 유무, 범위 이탈, 모바일 성능)
    - `CLAUDE.md`: `@AGENTS.md` 임포트 + Claude 전용(서브에이전트 구성, 역할별 에이전트, neon 호출 절차). 현재 초안의 옛 계획서 경로·머지 규칙은 이 내용으로 대체
-   - `GEMINI.md`: `@AGENTS.md` 임포트 + neon 역할 한 단락(리뷰만, 코드 수정 금지). 임포트가 안 되면 `.gemini/settings.json`으로 `AGENTS.md` 지정
+   - `GEMINI.md`: `@AGENTS.md` 임포트 + neon 역할 한 단락(리뷰만, 코드 수정 금지). Gemini 계열 도구용 보조 파일
    - `.claude/agents/`: `planner.md` `dev-lead.md` `dev.md` `qa.md` (모델·도구 권한, 역할별 읽을 문서와 산출물만. 공통 규칙 반복 안 함). 개발은 병렬일 때 `isolation: worktree`
    - 역할별 스킬: 기획 `minimal-ui`(HUD·패널), QA `/code-review medium`, 마일스톤마다 `doc-lint`
    - `.claude/prompts/neon-plan-review.md`
@@ -193,7 +193,7 @@ Codex는 `AGENTS.md`의 `## Review guidelines`, neon은 프롬프트 파일, QA�
 ## 사용자가 해야 할 것 (그때 알림)
 - Cloudflare API 토큰 → GitHub 시크릿 `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`
 - 로컬 `npx wrangler login`
-- Gemini CLI 설치 후 `gemini` 한 번 실행해 구글 로그인
+- Antigravity CLI(`agy`) 설치·구글 로그인 (완료)
 - 레포에 Codex 웹 리뷰 연결
 - auto-merge용 fine-grained PAT(이 레포만, Contents·Pull requests 쓰기) → 시크릿 `AUTOMERGE_TOKEN`
 - 브랜치 보호: gh로 제가 걸 수 있으면 걸고 결과를 보여준다
@@ -202,7 +202,7 @@ Codex는 `AGENTS.md`의 `## Review guidelines`, neon은 프롬프트 파일, QA�
 - Worker Previews의 DO 격리 실측: 같은 방 이름으로 Preview A에 재접속하면 같은 `instanceId`, Preview B에서는 다른 값인지. 되면 PR Preview, 안 되면 단일 `staging`
 - herdr 알림을 훅과 연결하는 방법
 - 최신 스택(React 19.3 / R3F 9.8 / drei 10.7 / three 0.187 / Vite 8 / TS 7)과 추가 패키지 호환
-- Gemini CLI: `GEMINI.md`의 `@` 임포트, 구글 로그인 무료 한도
+- `agy`: 규칙 자동 로드(확인됨), 헤드리스에서 명령 실행 권한이 없어 플랜을 프롬프트에 넣고 도구 없이 리뷰(확인됨)
 
 ## 하지 않는 것
 - 콘텐츠 기능 구현

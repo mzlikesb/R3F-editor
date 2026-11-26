@@ -116,7 +116,8 @@ jobs:
 
   auto-merge:
     needs: [user-approval]
-    if: always()
+    # Same-repo PRs only: fork PRs get no secrets.
+    if: always() && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
