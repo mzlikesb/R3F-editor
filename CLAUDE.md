@@ -18,7 +18,9 @@
 
 neon은 리뷰만 한다. 기획 에이전트가 다음 시점에 호출한다: draft PR을 올릴 때, 플랜을 고칠 때마다.
 
-1. 비대화식으로 실행한다. 플랜은 stdin으로 넘긴다: `cat docs/plans/NNN-*.md | gemini -p "$(cat .claude/prompts/neon-plan-review.md)"`
+1. Antigravity CLI(`agy`)를 읽기 전용 비대화식으로 실행한다. 프롬프트와 플랜을 한 문자열로 넘긴다:
+   `agy -p "$(cat .claude/prompts/neon-plan-review.md; echo; cat docs/plans/NNN-*.md)" --mode plan --print-timeout 300s`
+   `agy`는 시작할 때 프로젝트 규칙(`AGENTS.md`)을 스스로 읽는다
 2. 출력을 PR 코멘트로 단다. 제목은 `neon review`
 3. PR 본문 `리뷰 기록` 표에 대상 SHA와 판정을 기록한다
 4. 한도·CLI 오류로 실패하면 표에 `skipped(사유)`로 적고 다음 단계로 진행한다

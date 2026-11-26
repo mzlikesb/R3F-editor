@@ -53,7 +53,7 @@ OUTPOST(`docs/content-plan.md`)를 만들기 전에, 실제 팀처럼 PR 단위�
 - auto-merge는 처음부터 fine-grained PAT(`AUTOMERGE_TOKEN`)로 켠다. `GITHUB_TOKEN`으로 일으킨 머지는 production 배포 워크플로우를 깨우지 않고, auto-merge는 비동기로 머지돼서 `workflow_run`으로 우회하기도 어렵다
 
 **neon(Gemini)** 은 로컬 Gemini CLI를 구글 계정 로그인(무료 한도)으로 쓴다. 과금되는 API 키나 GitHub Action은 쓰지 않는다.
-기획 에이전트가 정해진 단계에서 `gemini -p`로 비대화식 호출하고, 결과를 PR에 `neon review` 코멘트로 단다.
+기획 에이전트가 정해진 단계에서 Antigravity CLI(`agy -p`, 구글 로그인)로 비대화식 호출하고, 결과를 PR에 `neon review` 코멘트로 단다.
 - 플랜 리뷰(001부터): draft PR을 올리거나 플랜을 고칠 때마다. 프롬프트 `.claude/prompts/neon-plan-review.md`
 - 아트/UX 크리틱(002에서): 플레이테스트 스크린샷 평가. 프롬프트 `.claude/prompts/neon-art-critique.md`
 
@@ -222,7 +222,7 @@ Codex는 `AGENTS.md`의 `## Review guidelines`, neon은 프롬프트 파일, QA�
 - Preview(또는 staging) URL에서 큐브가 보이고 WS 에코 왕복. 격리 실측 결과(`instanceId` 비교, 또는 실제로 검증한 범위)를 PR에 기록
 - 훅: main 커밋, 메인 체크아웃 브랜치 전환, `.dev.vars` 커밋, 에이전트의 `user-approved` 부착이 각각 막히고, worktree 안의 브랜치 작업은 막히지 않는다
 - 세 도구에 "이 프로젝트 규칙과 먼저 읽을 문서가 뭐야?" → 같은 답
-- `gemini -p`로 이 플랜 리뷰 → PR에 `neon review` 코멘트, 리뷰 기록 표에 SHA와 함께 기록
+- `agy -p`로 이 플랜 리뷰 → PR에 `neon review` 코멘트, 리뷰 기록 표에 SHA와 함께 기록
 
 ### 001 머지 후 (새 워크플로우가 main에 들어간 뒤에만 가능)
 1. 머지 직후 production URL에서 큐브와 WS 에코 확인
