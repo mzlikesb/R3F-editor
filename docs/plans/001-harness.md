@@ -100,6 +100,8 @@ OUTPOST(`docs/content-plan.md`)를 만들기 전에, 실제 팀처럼 PR 단위�
 ### 발견한 문제 쌓기
 - QA 버그·플레이테스트 지적은 GitHub Issues로 올린다. 라벨 `bug` `playtest` `art-ux` + 출처 페르소나
 - 기획 에이전트가 묶고 우선순위 제안, 처리 여부는 사용자가 정한다
+- **이슈를 처리하는 PR은 본문에 반드시 이슈를 링크한다**(`Closes #N`, 일부만 처리하면 `Refs #N`). 플랜 문서에도 `관련 이슈` 칸을 둔다
+- 빼먹지 않게 CI로 강제한다: PR 본문의 `관련 이슈` 칸이 비어 있으면 실패. 관련 이슈가 없으면 `없음`이라고 명시해야 통과한다
 
 ### 시크릿·환경변수
 - 로컬은 `.dev.vars`(gitignore), 필요한 키 목록은 `.dev.vars.example`
@@ -141,7 +143,8 @@ OUTPOST(`docs/content-plan.md`)를 만들기 전에, 실제 팀처럼 PR 단위�
    - `.github/workflows/ci.yml`: lint · typecheck · test · build (PR·main). Node 버전은 `.nvmrc`로 로컬과 맞춘다
    - `.github/workflows/deploy.yml`: PR → staging, main 머지 → production
    - 라벨: 등급 `size:small` `size:large` / 단계 `stage:plan-review` `stage:dev` `stage:qa` `stage:playtest` `stage:code-review` / 승인 `plan-approved` / 이슈 `bug` `playtest` `art-ux`. 단계 라벨은 에이전트가 단계 넘어갈 때 바꾼다 → GitHub만 봐도 누구 차례인지 보인다
-   - 브랜치 보호(main): CI 필수 + 사용자 승인 필수, auto-merge 허용 → `size:small`이면 auto-merge 켜는 워크플로우
+   - `.github/workflows/pr-check.yml`: PR 본문 `관련 이슈` 칸 검사(`Closes/Refs #N` 또는 `없음`)
+   - 브랜치 보호(main): CI·pr-check 필수 + 사용자 승인 필수, auto-merge 허용 → `size:small`이면 auto-merge 켜는 워크플로우
    - Codex 웹 리뷰 연결: 사용자가 기존 방식대로 설정
 5. **훅으로 규칙 강제** (`.claude/settings.json`, 커밋되는 프로젝트 설정)
    - main 브랜치에서 커밋·push, force push 차단
@@ -180,6 +183,7 @@ OUTPOST(`docs/content-plan.md`)를 만들기 전에, 실제 팀처럼 PR 단위�
 - 테스트용 `size:small` 더미 PR로 auto-merge 동작 확인 후 닫기
 - 훅 확인: main에서 커밋 시도, 메인 체크아웃에서 브랜치 전환 시도, `.dev.vars` 커밋 시도가 각각 막힌다
 - 포맷·린트 위반 코드를 넣은 커밋에서 CI가 실패한다
+- PR 본문 `관련 이슈` 칸을 비우면 pr-check가 실패하고, `Closes #N`이나 `없음`을 쓰면 통과한다
 - `scripts/playtest.sh`로 띄운 플레이어에게 "이 게임 이름과 계획을 아는 대로 말해봐"라고 물으면 모른다고 답한다(정보 차단 확인), 두 번째 실행에서도 첫 실행 내용을 모른다
 - 세 도구에서 "이 프로젝트 규칙과 먼저 읽을 문서가 뭐야?"라고 물으면 같은 답이 나온다
 - `gemini -p`로 이 플랜을 리뷰시켜 PR에 `neon review` 코멘트가 달린다
