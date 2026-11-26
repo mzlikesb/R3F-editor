@@ -13,5 +13,11 @@
     "bindings": [{ "name": "BASE_ROOM", "class_name": "BaseRoom" }],
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["BaseRoom"] }],
+  // Each PR preview gets its own DO namespace and storage; the env binding must be repeated here.
+  "previews": {
+    "durable_objects": {
+      "bindings": [{ "name": "BASE_ROOM", "class_name": "BaseRoom" }],
+    },
+  },
   "observability": { "enabled": true },
 }
