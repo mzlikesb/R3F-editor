@@ -8,10 +8,16 @@ input=$(cat)
 path=$(jq -r '.tool_input.file_path // .tool_input.notebook_path // empty' <<<"$input")
 [ -n "$path" ] || exit 0
 cwd=$(jq -r '.cwd // empty' <<<"$input")
-main=${GUARD_MAIN_CHECKOUT:-${CLAUDE_PROJECT_DIR:-}}
-[ -n "$main" ] || exit 0
+start=${CLAUDE_PROJECT_DIR:-${cwd:-$PWD}}
 
-# The main checkout is the repo whose .git is a directory (worktrees have a .git file).
+# The main checkout is the parent of the shared git dir, wherever the session started
+# (a session launched inside a worktree still protects the real main checkout).
+if [ -n "${GUARD_MAIN_CHECKOUT:-}" ]; then
+  main=$GUARD_MAIN_CHECKOUT
+else
+  common=$(git -C "$start" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || exit 0
+  main=$(dirname "$common")
+fi
 main=$(cd "$main" 2>/dev/null && pwd -P) || exit 0
 case "$path" in /*) ;; *) path="${cwd:-$PWD}/$path" ;; esac
 # Resolve the nearest existing parent (the file itself may not exist yet).
