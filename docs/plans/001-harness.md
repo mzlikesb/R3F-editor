@@ -4,7 +4,7 @@
 - 등급: **large** (사용자 머지)
 - 관련 이슈: 없음
 - 마일스톤: M0 하네스
-- 상태: 플랜 리뷰 2턴
+- 상태: 플랜 리뷰 3턴
 
 ## Context
 OUTPOST(`docs/content-plan.md`)를 만들기 전에, 실제 팀처럼 PR 단위로 굴러가는 개발 프로세스를 먼저 세운다.
@@ -48,8 +48,9 @@ OUTPOST(`docs/content-plan.md`)를 만들기 전에, 실제 팀처럼 PR 단위�
 - **`user-approved` 라벨은 사용자만 단다.** 에이전트가 이 라벨을 다는 명령은 훅으로 막는다
 - 새 커밋이 올라오면 워크플로우가 `user-approved`를 자동으로 떼고 코멘트를 남긴다 → 승인은 항상 최종 커밋 기준
 - `user-approval` 체크는 라벨이 있을 때만 통과
-- small: `user-approved`가 붙으면 auto-merge를 켠다 / large: 사용자가 직접 머지
-- `GITHUB_TOKEN`으로 일으킨 머지는 다른 워크플로우(production 배포)를 깨우지 않는다. 그래서 auto-merge를 켜는 데는 별도 토큰(fine-grained PAT `AUTOMERGE_TOKEN`)을 쓰거나, 배포를 `workflow_run`으로 건다. 세팅하면서 정한다
+- small: `small + user-approved + ready`가 모두 맞으면 auto-merge를 켠다 / large: 사용자가 직접 머지
+- **조건이 깨지면 예약을 끈다:** 승인 후 등급을 large로 바꾸거나, `user-approved`를 떼거나, draft로 되돌리면 이미 켜진 auto-merge를 해제한다(`gh pr merge --disable-auto`). 같은 SHA에서 등급만 바뀌면 새 커밋이 없어 라벨 자동 해제가 안 걸리기 때문이다
+- auto-merge는 처음부터 fine-grained PAT(`AUTOMERGE_TOKEN`)로 켠다. `GITHUB_TOKEN`으로 일으킨 머지는 production 배포 워크플로우를 깨우지 않고, auto-merge는 비동기로 머지돼서 `workflow_run`으로 우회하기도 어렵다
 
 **neon(Gemini)** 은 로컬 Gemini CLI를 구글 계정 로그인(무료 한도)으로 쓴다. 과금되는 API 키나 GitHub Action은 쓰지 않는다.
 기획 에이전트가 정해진 단계에서 `gemini -p`로 비대화식 호출하고, 결과를 PR에 `neon review` 코멘트로 단다.
@@ -148,7 +149,7 @@ Codex는 `AGENTS.md`의 `## Review guidelines`, neon은 프롬프트 파일, QA�
    - `.gitignore`: `.dev.vars`, `.wrangler/`, `playwright-report/`, `test-results/` 추가
 2. **Worker 단일 배포**
    - `wrangler.jsonc`: static assets(dist, SPA fallback) + DO 바인딩 + SQLite migration. Preview를 쓰면 `previews` 블록에도 DO 바인딩 선언
-   - `worker/index.ts` + `worker/BaseRoom.ts`: `/ws` 에코만 (Hibernation API)
+   - `worker/index.ts` + `worker/BaseRoom.ts`: `/ws` 에코만 (Hibernation API). DO는 첫 접속 때 임의 `instanceId`를 storage에 한 번 저장하고 에코 응답에 함께 돌려준다 → Preview 격리 실측용 관측값
    - `@cloudflare/vitest-pool-workers`로 DO 테스트 1개(에코)
 3. **규칙 문서** — 세 도구가 처음 읽는 파일이 다르다(Claude Code `CLAUDE.md`, Codex `AGENTS.md`, Gemini CLI `GEMINI.md`). **`AGENTS.md` 하나를 원본**으로 둔다
    - `AGENTS.md`: 한 단락 소개, 명령어, **먼저 읽을 문서**(`docs/content-plan.md` 작업 전 항상, `docs/spec.md`, 진행 중인 `docs/plans/NNN-*`, `docs/templates/`), 위 규칙 전부, 병렬 세션 규칙(메인 체크아웃 읽기 전용, 브랜치 작업은 worktree, 착수 전 브랜치 push로 클레임, 남의 브랜치·미커밋 변경 불가침, 인터페이스 기준 분할), `## Review guidelines`(공통 출력 형식 + 중점: 서버 상태 멱등성, 테스트 유무, 범위 이탈, 모바일 성능)
@@ -163,9 +164,10 @@ Codex는 `AGENTS.md`의 `## Review guidelines`, neon은 프롬프트 파일, QA�
    - `ci.yml`: clean checkout에서 `npm ci` → `format:check` → lint → typecheck → test → build. 전부 필수, `--if-present`·lockfile 유무 생략 없음. Node는 `node-version-file: .nvmrc`
    - `pr-check.yml`: 트리거 `pull_request: [opened, edited, synchronize, reopened, labeled, unlabeled, milestoned, demilestoned, ready_for_review]`
      - `관련 이슈` 칸(`Closes/Refs #N` 또는 `없음`), `size:*`·`stage:*` 라벨, 마일스톤 검사
-     - `user-approval` 잡: `user-approved` 라벨이 있을 때만 통과
-     - `synchronize` 시 `user-approved` 자동 제거 + 코멘트
-     - `size:small` + `user-approved`면 auto-merge 켜기
+     - `user-approval` 잡: **잡 레벨 `if:`를 쓰지 않고 항상 실행**한다(건너뛴 필수 체크는 통과로 간주되기 때문). 한 잡 안에서 순서대로 처리한다
+       1. `synchronize`이고 `user-approved`가 붙어 있으면 → 라벨 제거 + 코멘트 + 즉시 실패. (`GITHUB_TOKEN`이 뗀 라벨은 `unlabeled` 이벤트를 다시 일으키지 않으므로, 이벤트 스냅샷을 믿지 않고 여기서 끝낸다)
+       2. 그 외에는 API로 현재 라벨을 다시 읽어 `user-approved`가 없으면 실패
+     - auto-merge 잡: `size:small + user-approved + ready(draft 아님)`면 `AUTOMERGE_TOKEN`으로 `gh pr merge --auto --squash`, 조건 중 하나라도 깨졌으면 `--disable-auto`
    - `deploy.yml`: PR → Preview(또는 staging, `concurrency` 그룹), main → production
    - 라벨(만들어 둠): `size:*` `stage:*` `plan-approved` `bug` `playtest` `art-ux` `quality` + **`user-approved` 추가**
    - 마일스톤(만들어 둠): M0 하네스 ~ M5 출시
@@ -190,12 +192,11 @@ Codex는 `AGENTS.md`의 `## Review guidelines`, neon은 프롬프트 파일, QA�
 - 로컬 `npx wrangler login`
 - Gemini CLI 설치 후 `gemini` 한 번 실행해 구글 로그인
 - 레포에 Codex 웹 리뷰 연결
-- (필요하면) auto-merge용 fine-grained PAT → 시크릿 `AUTOMERGE_TOKEN`
+- auto-merge용 fine-grained PAT(이 레포만, Contents·Pull requests 쓰기) → 시크릿 `AUTOMERGE_TOKEN`
 - 브랜치 보호: gh로 제가 걸 수 있으면 걸고 결과를 보여준다
 
 ## 세팅하면서 확인할 것
-- Worker Previews의 DO 격리 실측: Preview A에서 바꾼 상태가 Preview B·production에 안 보이는지. 되면 PR Preview, 안 되면 단일 `staging`
-- auto-merge 머지가 production 배포를 깨우는지(토큰 방식 결정)
+- Worker Previews의 DO 격리 실측: 같은 방 이름으로 Preview A에 재접속하면 같은 `instanceId`, Preview B에서는 다른 값인지. 되면 PR Preview, 안 되면 단일 `staging`
 - herdr 알림을 훅과 연결하는 방법
 - 최신 스택(React 19.3 / R3F 9.8 / drei 10.7 / three 0.187 / Vite 8 / TS 7)과 추가 패키지 호환
 - Gemini CLI: `GEMINI.md`의 `@` 임포트, 구글 로그인 무료 한도
@@ -208,14 +209,20 @@ Codex는 `AGENTS.md`의 `## Review guidelines`, neon은 프롬프트 파일, QA�
 - 멈춘 뒤의 대체 경로(사용자가 나중에 결정)
 
 ## Verification
+
+### 001 안에서 (머지 전)
 - 로컬: `npm ci && npm run format:check && npm run lint && npm run typecheck && npm test && npm run build` 통과
 - `wrangler dev`에서 큐브가 보이고 `/ws` 에코 왕복
 - CI가 실제로 실패를 잡는다: 실패하는 테스트 하나를 넣은 커밋 → 필수 체크 빨간색 → 복구하면 녹색. 포맷 위반도 같은 방식으로 확인
 - pr-check: `관련 이슈` 칸 비우기 / `size:*` 빼기 / 마일스톤 빼기 → 각각 실패, 라벨·본문만 고쳐도 재실행되어 통과
-- 승인: `user-approved`를 단 뒤 새 커밋을 push → 라벨이 자동으로 떨어지고 `user-approval` 체크가 빨간색
-- auto-merge: 더미 `size:small` PR에 `user-approved` → 자동 머지 → production 배포 워크플로우가 실제로 돈다
-- Preview(또는 staging) URL에서 큐브가 보이고 WS 에코 왕복, DO 격리 실측 결과를 PR에 기록
+- 승인: `user-approved`를 단 뒤 새 커밋을 push → 라벨이 자동으로 떨어지고 `user-approval` 체크가 빨간색으로 남는다(녹색으로 남지 않는다)
+- Preview(또는 staging) URL에서 큐브가 보이고 WS 에코 왕복. 격리 실측 결과(`instanceId` 비교, 또는 실제로 검증한 범위)를 PR에 기록
 - 훅: main 커밋, 메인 체크아웃 브랜치 전환, `.dev.vars` 커밋, 에이전트의 `user-approved` 부착이 각각 막히고, worktree 안의 브랜치 작업은 막히지 않는다
 - 세 도구에 "이 프로젝트 규칙과 먼저 읽을 문서가 뭐야?" → 같은 답
 - `gemini -p`로 이 플랜 리뷰 → PR에 `neon review` 코멘트, 리뷰 기록 표에 SHA와 함께 기록
-- main 머지 후 production URL 동작
+
+### 001 머지 후 (새 워크플로우가 main에 들어간 뒤에만 가능)
+1. 머지 직후 production URL에서 큐브와 WS 에코 확인
+2. **첫 실제 small PR**(더미 아님, 예: `README.md`·`CREDITS.md` 보완)로 검증하고 결과를 그 PR에 남긴다
+   - `user-approved` → auto-merge 예약 → 머지 → 그 main 커밋으로 production 배포 워크플로우가 실제로 돈다
+   - 등급 전환: 승인된 small을 CI 대기 중에 large로 바꾸면 예약이 해제되고, CI가 통과해도 PR이 열린 채로 남는다(이 확인은 같은 PR을 먼저 large로 바꿔 검증한 뒤 small로 되돌려 머지)
