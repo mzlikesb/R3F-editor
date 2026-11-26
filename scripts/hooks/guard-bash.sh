@@ -21,6 +21,12 @@ if grep -qE -- '--add-label[ =]+["'\'']?[^ ]*user-approved' <<<"$cmd" ||
   block "'user-approved' 라벨은 사용자만 단다."
 fi
 
+# neon reviews are posted only through scripts/neon-review.sh, which uses the reviewer account.
+if grep -qE '\bgh\s+(pr\s+(comment|review)|api)\b' <<<"$cmd" && grep -qi 'neon review' <<<"$cmd" &&
+  ! grep -q 'scripts/neon-review.sh' <<<"$cmd"; then
+  block "neon 리뷰는 'scripts/neon-review.sh <PR> <플랜>'으로만 올린다(리뷰어 계정으로 게시)."
+fi
+
 in_repo=$(git -C "$cwd" rev-parse --is-inside-work-tree 2>/dev/null || echo false)
 [ "$in_repo" = true ] || exit 0
 branch=$(git -C "$cwd" symbolic-ref --short -q HEAD 2>/dev/null || echo "")

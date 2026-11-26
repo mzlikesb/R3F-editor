@@ -18,12 +18,9 @@
 
 neon은 리뷰만 한다. 기획 에이전트가 다음 시점에 호출한다: draft PR을 올릴 때, 플랜을 고칠 때마다.
 
-1. Antigravity CLI(`agy`)를 읽기 전용 비대화식으로 실행한다. 프롬프트와 플랜을 한 문자열로 넘긴다:
-   `agy -p "$(cat .claude/prompts/neon-plan-review.md; echo; cat docs/plans/NNN-*.md)" --mode plan --print-timeout 300s`
-   `agy`는 시작할 때 프로젝트 규칙(`AGENTS.md`)을 스스로 읽는다
-2. 출력을 PR 코멘트로 단다. 제목은 `neon review`
-3. PR 본문 `리뷰 기록` 표에 대상 SHA와 판정을 기록한다
-4. 한도·CLI 오류로 실패하면 표에 `skipped(사유)`로 적고 다음 단계로 진행한다
+1. `scripts/neon-review.sh <PR 번호> docs/plans/NNN-*.md`로만 실행한다. 스크립트가 `agy -p`(읽기 전용, 도구 없이 플랜을 프롬프트로 받음)를 돌리고, 결과를 **`chillingdaisy-worker1` 계정**으로 PR에 `neon review` 코멘트로 단다. 토큰은 그 호출에만 주입하고 출력하지 않는다
+2. 스크립트를 거치지 않고 `neon review` 코멘트를 직접 달면 훅이 막는다
+3. 실패하면 스크립트가 `skipped(사유)` 코멘트를 남긴다. PR 본문 `리뷰 기록` 표에 대상 SHA와 판정(또는 skipped)을 적고 다음 단계로 진행한다
 
 ## 역할별 스킬
 
