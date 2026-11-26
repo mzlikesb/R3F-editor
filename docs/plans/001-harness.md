@@ -4,7 +4,7 @@
 - 등급: **large** (사용자 머지)
 - 관련 이슈: 없음
 - 마일스톤: M0 하네스
-- 상태: 플랜 리뷰 3턴
+- 상태: 플랜 리뷰 3턴 — Codex·neon 승인, 사용자 승인 대기
 
 ## Context
 OUTPOST(`docs/content-plan.md`)를 만들기 전에, 실제 팀처럼 PR 단위로 굴러가는 개발 프로세스를 먼저 세운다.
@@ -162,12 +162,15 @@ Codex는 `AGENTS.md`의 `## Review guidelines`, neon은 프롬프트 파일, QA�
    - `.github/pull_request_template.md`, `.github/ISSUE_TEMPLATE/bug.yml`, `config.yml`
 4. **GitHub**
    - `ci.yml`: clean checkout에서 `npm ci` → `format:check` → lint → typecheck → test → build. 전부 필수, `--if-present`·lockfile 유무 생략 없음. Node는 `node-version-file: .nvmrc`
-   - `pr-check.yml`: 트리거 `pull_request: [opened, edited, synchronize, reopened, labeled, unlabeled, milestoned, demilestoned, ready_for_review]`
+   - `pr-check.yml`: 트리거 `pull_request: [opened, edited, synchronize, reopened, labeled, unlabeled, milestoned, demilestoned, ready_for_review, converted_to_draft]`
      - `관련 이슈` 칸(`Closes/Refs #N` 또는 `없음`), `size:*`·`stage:*` 라벨, 마일스톤 검사
      - `user-approval` 잡: **잡 레벨 `if:`를 쓰지 않고 항상 실행**한다(건너뛴 필수 체크는 통과로 간주되기 때문). 한 잡 안에서 순서대로 처리한다
        1. `synchronize`이고 `user-approved`가 붙어 있으면 → 라벨 제거 + 코멘트 + 즉시 실패. (`GITHUB_TOKEN`이 뗀 라벨은 `unlabeled` 이벤트를 다시 일으키지 않으므로, 이벤트 스냅샷을 믿지 않고 여기서 끝낸다)
        2. 그 외에는 API로 현재 라벨을 다시 읽어 `user-approved`가 없으면 실패
-     - auto-merge 잡: `size:small + user-approved + ready(draft 아님)`면 `AUTOMERGE_TOKEN`으로 `gh pr merge --auto --squash`, 조건 중 하나라도 깨졌으면 `--disable-auto`
+     - auto-merge 잡: `needs: [user-approval]` + `if: always()`로 승인 잡 **뒤에** 돈다(병렬이면 라벨 제거 전 상태를 볼 수 있다)
+       - `synchronize`면 무조건 승인 해제 상태로 본다
+       - `size:small + user-approved + ready(draft 아님)`면 `AUTOMERGE_TOKEN`으로 `gh pr merge --auto --squash`
+       - 조건이 하나라도 깨졌고 PR의 `autoMergeRequest`가 실제로 켜져 있을 때만 `--disable-auto`(꺼진 PR에 호출하면 오류)
    - `deploy.yml`: PR → Preview(또는 staging, `concurrency` 그룹), main → production
    - 라벨(만들어 둠): `size:*` `stage:*` `plan-approved` `bug` `playtest` `art-ux` `quality` + **`user-approved` 추가**
    - 마일스톤(만들어 둠): M0 하네스 ~ M5 출시
@@ -225,4 +228,5 @@ Codex는 `AGENTS.md`의 `## Review guidelines`, neon은 프롬프트 파일, QA�
 1. 머지 직후 production URL에서 큐브와 WS 에코 확인
 2. **첫 실제 small PR**(더미 아님, 예: `README.md`·`CREDITS.md` 보완)로 검증하고 결과를 그 PR에 남긴다
    - `user-approved` → auto-merge 예약 → 머지 → 그 main 커밋으로 production 배포 워크플로우가 실제로 돈다
+   - draft 전환: 승인된 small을 CI 대기 중에 draft로 돌리면 예약이 꺼진다
    - 등급 전환: 승인된 small을 CI 대기 중에 large로 바꾸면 예약이 해제되고, CI가 통과해도 PR이 열린 채로 남는다(이 확인은 같은 PR을 먼저 large로 바꿔 검증한 뒤 small로 되돌려 머지)
