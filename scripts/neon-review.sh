@@ -1,18 +1,20 @@
 #!/usr/bin/env bash
-# Runs the neon (Antigravity CLI) plan review and posts it to the PR as the reviewer account.
+# Runs the neon (Antigravity CLI) plan review and posts it to the PR as the agent account.
 # Usage: scripts/neon-review.sh <pr-number> <plan-file>
+# Posts with the current gh account, which must be the agent account (Claude Code agent
+# sessions set GH_CONFIG_DIR; from your own terminal, set it explicitly).
 set -euo pipefail
 
 pr=${1:?usage: scripts/neon-review.sh <pr-number> <plan-file>}
 plan=${2:?usage: scripts/neon-review.sh <pr-number> <plan-file>}
-reviewer=chillingdaisy-worker1
+agent=chillingdaisy-worker1
 repo=$(gh repo view --json nameWithOwner -q .nameWithOwner)
 cd "$(git rev-parse --show-toplevel)"
 sha=$(git rev-parse --short HEAD)
 
-# Token only for this process; never printed.
-if ! token=$(gh auth token --user "$reviewer" 2>/dev/null); then
-  echo "neon-review: '$reviewer' 계정으로 gh 로그인이 필요하다" >&2
+who=$(gh api user -q .login 2>/dev/null || echo "?")
+if [ "$who" != "$agent" ]; then
+  echo "neon-review: 현재 gh 계정이 '$who'다. '$agent'로 실행한다(GH_CONFIG_DIR=<에이전트 gh 폴더>)" >&2
   exit 1
 fi
 
@@ -28,13 +30,23 @@ prompt=$(
 )
 
 if agy -p "$prompt" --mode plan --print-timeout 300s >"$out" 2>&1 && [ -s "$out" ] && ! grep -q '^jetski: no output produced' "$out"; then
-  body=$(printf '## neon review · `%s`\n\n%s' "$sha" "$(cat "$out")")
+  text=$(cat "$out")
   verdict=done
 else
-  reason=$(head -c 300 "$out" | tr '\n' ' ')
-  body=$(printf '## neon review · `%s` · skipped\n\n사유: %s' "$sha" "${reason:-출력 없음}")
+  text="사유: $(head -c 300 "$out" | tr '\n' ' ')"
   verdict=skipped
 fi
 
-GH_TOKEN="$token" gh pr comment "$pr" --repo "$repo" --body "$body" >/dev/null
-echo "neon review $verdict for $sha (PR #$pr, posted as $reviewer)"
+# Mentions in the model's text must not ping anyone: `@codex review` in a review once
+# triggered Codex for real. A zero-width joiner after `@` keeps the text readable.
+zwj=$'\xe2\x80\x8d'
+text=${text//@/@$zwj}
+
+if [ "$verdict" = done ]; then
+  body=$(printf '## neon review · `%s`\n\n%s' "$sha" "$text")
+else
+  body=$(printf '## neon review · `%s` · skipped\n\n%s' "$sha" "$text")
+fi
+
+gh pr comment "$pr" --repo "$repo" --body "$body" >/dev/null
+echo "neon review $verdict for $sha (PR #$pr, posted as $agent)"

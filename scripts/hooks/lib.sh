@@ -1,8 +1,17 @@
 #!/usr/bin/env bash
 # Shared helpers for Bash-tool hooks.
 
-# split_segments <command>: one shell segment per line (split on && || ; |).
+# Leading `VAR=value ` assignments (optionally after `env `) on a segment.
+assign_re='^[[:space:]]*(env[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*=("[^"]*"|'"'"'[^'"'"']*'"'"'|[^[:space:]]*)[[:space:]]+)+'
+
+# split_segments <command>: one shell segment per line (split on && || ; |), with leading
+# environment assignments stripped so `FOO=1 git push` reads as `git push`.
 split_segments() {
+  sed -E 's/(&&|\|\||;|\|)/\n/g' <<<"$1" | sed -E "s/${assign_re}//"
+}
+
+# raw_segments <command>: segments without stripping assignments.
+raw_segments() {
   sed -E 's/(&&|\|\||;|\|)/\n/g' <<<"$1"
 }
 
@@ -39,4 +48,20 @@ dir_for() {
       return 0
     fi
   done < <(split_segments "$cmd")
+}
+
+# agent_identity_ok: this process's gh config is the agent account's, and git pushes
+# get their HTTPS credentials from that gh config. Used to fail closed.
+AGENT_LOGIN=${AGENT_LOGIN:-chillingdaisy-worker1}
+agent_gh_ok() {
+  [ -n "${GH_CONFIG_DIR:-}" ] && [ -f "$GH_CONFIG_DIR/hosts.yml" ] &&
+    grep -qE "^[[:space:]]+user:[[:space:]]+${AGENT_LOGIN}[[:space:]]*$" "$GH_CONFIG_DIR/hosts.yml"
+}
+agent_git_ok() {
+  local n=${GIT_CONFIG_COUNT:-0} i key val helper=""
+  for ((i = 0; i < n; i++)); do
+    key="GIT_CONFIG_KEY_$i"; val="GIT_CONFIG_VALUE_$i"
+    [ "${!key:-}" = "credential.https://github.com.helper" ] && helper=${!val:-}
+  done
+  [ "$helper" = "!gh auth git-credential" ]
 }
