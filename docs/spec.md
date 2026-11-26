@@ -35,7 +35,7 @@
 - **github.com/mzlikesb/threejs-metaverse** (2024): 손으로 쓴 three.js.
   `Client/js/ModelLoader.js`(GLTFLoader), `environment.js`(렌더러·조명), `Controls.js`, raycasting 커밋.
   3~5번을 여기서 복기할 수 있다.
-- **mr-wall-portal** (`~/projects/money/mr-wall-portal`): 인스턴싱 배칭(`src/instance-batch.ts`). 10번에 재사용.
+- **mr-wall-portal** (별도 프로젝트): 인스턴싱 배칭(`src/instance-batch.ts`). 10번에 재사용.
 
 ## 순서
 

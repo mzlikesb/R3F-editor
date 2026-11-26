@@ -78,7 +78,7 @@ public/models/*.glb (Draco), public/draco/, scripts/compress.sh
 에셋: CC0 로우폴리 SF 팩(Kenney Space Kit 등) + Poly Haven HDRI.
 
 ## 재사용
-- `~/projects/money/mr-wall-portal/src/instance-batch.ts` 인스턴싱 패턴 (배포는 Pages 대신 Workers 단일 배포로 바뀌어 portal 설정은 참고만)
+- 별도 프로젝트 mr-wall-portal의 `src/instance-batch.ts` 인스턴싱 패턴 (배포는 Pages 대신 Workers 단일 배포로 바뀌어 portal 설정은 참고만)
 - github.com/mzlikesb/threejs-metaverse raycasting/조명 코드(개념 복기)
 
 ## 순서
