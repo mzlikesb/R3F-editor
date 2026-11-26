@@ -1,18 +1,26 @@
-# 001 — 하네스·개발환경 세팅
+# 001 — 하네스 코어·개발환경 세팅
 
 - 브랜치: `chore/harness-setup`
 - 등급: **large** (사용자 머지)
-- 상태: 플랜 리뷰 중
+- 관련 이슈: 없음
+- 마일스톤: M0 하네스
+- 상태: 플랜 리뷰 2턴
 
 ## Context
 OUTPOST(`docs/content-plan.md`)를 만들기 전에, 실제 팀처럼 PR 단위로 굴러가는 개발 프로세스를 먼저 세운다.
 이 프로젝트 규모에는 무거운 구성이지만, 프로세스를 직접 운영해 보는 게 목적 중 하나다.
 레포는 공개이고, 플랜·리뷰·플레이테스트 기록이 남는 것 자체를 보여준다.
 
-**부트스트랩 예외:** 이 PR은 리뷰 자동화가 들어가기 전이라 정식 체인을 다 타지 못한다.
-플랜 리뷰는 로컬 Codex CLI(`codex exec`)와 사용자 리뷰로 하고, 코드 리뷰는 웹 Codex(`@codex review`)와 사용자 리뷰로 한다.
+하네스는 두 PR로 나눈다.
+- **001 (이 PR) — 코어:** 스캐폴드, Worker/DO 에코, 규칙 문서, CI·pr-check·배포, 승인·머지 장치, 핵심 훅, 기본 템플릿
+- **002 — 자동화:** 플레이테스트 격리 실행, 페르소나, 프로젝트 스킬, 세션 요약·상태줄, 품질 감사. 001이 만든 체인을 처음으로 정식으로 타는 PR이 된다
 
-## 워크플로우 (이 PR이 문서화·자동화할 대상)
+**부트스트랩 예외:** 이 PR은 리뷰 자동화가 들어가기 전이라 정식 체인을 다 타지 못한다.
+플랜 리뷰는 Codex·neon·사용자, 코드 리뷰는 웹 Codex(`@codex review`)와 사용자가 한다.
+
+**M0 종료 기준:** 새 체크아웃에서 필수 CI가 돌고, PR Preview(또는 staging)에서 큐브와 WS 에코를 확인하고, 사용자가 머지하면 M0를 닫는다.
+
+## 워크플로우
 ```
 브랜치 생성 → docs/plans/NNN-*.md 작성 → draft PR
   → 플랜 리뷰: Codex(웹) + neon(Gemini) → 사용자   (최대 3턴, 결론은 사용자가 냄)
@@ -20,70 +28,71 @@ OUTPOST(`docs/content-plan.md`)를 만들기 전에, 실제 팀처럼 PR 단위�
   → 개발 리드(Opus): 작업 분할(tasks.md) + 테스트 먼저 작성 (서버 로직·UI 로직만)
   → 개발(Sonnet): 구현
   → QA(Opus): 명세 대비 검증, 실패 시 개발로 반려
-  → staging 배포 → 플레이어 페르소나 에이전트들이 플레이테스트 + neon이 스크린샷으로 아트/UX 크리틱
-  → PR ready → 코드 리뷰: Codex(웹, PR 생성 시 + `@codex review`) → 사용자
+  → Preview/staging 배포 → 플레이테스트 (기능 PR부터, 002에서 자동화)
+  → PR ready → 최종 SHA에 코드 리뷰: Codex(웹) → 사용자
   → 사용자 "리뷰 끝났어" → 반영 → CI 통과
-  → small: 자동 머지 / large: 사용자 머지 → main 머지 시 production 자동 배포
+  → 사용자가 최종 커밋 확인 후 user-approved 라벨
+  → small: auto-merge / large: 사용자 머지 → main 머지 시 production 자동 배포
 ```
+
+### 리뷰 기록
+같은 PR에서 플랜 리뷰 뒤 구현이 이어지므로, 각 리뷰가 어느 커밋을 봤는지 남긴다.
+- 리뷰는 **PR 코멘트**로 남긴다(파일 안에 쓰지 않는다)
+- PR 본문의 `리뷰 기록` 표: `단계 · 리뷰어 · 대상 SHA · 판정`. 리뷰가 끝날 때마다 담당 에이전트가 한 줄 추가
+- ready 전환 시 최종 SHA로 `@codex review` 요청. 지적 반영으로 코드가 바뀌면 그 SHA도 리뷰됐는지 머지 전에 확인
+- neon이 한도·CLI 오류로 못 돌면 `skipped(사유)`로 기록하고 다음 단계로 진행한다
+
+### 승인과 머지
+모든 PR을 사용자 계정(`mzlikesb`)으로 열기 때문에 GitHub의 필수 Approve는 본인이 충족할 수 없다. 그래서 승인은 라벨로 한다.
+- 브랜치 보호(main): 필수 체크 `ci`, `pr-check`, `user-approval`. Approve 필수는 끈다
+- **`user-approved` 라벨은 사용자만 단다.** 에이전트가 이 라벨을 다는 명령은 훅으로 막는다
+- 새 커밋이 올라오면 워크플로우가 `user-approved`를 자동으로 떼고 코멘트를 남긴다 → 승인은 항상 최종 커밋 기준
+- `user-approval` 체크는 라벨이 있을 때만 통과
+- small: `user-approved`가 붙으면 auto-merge를 켠다 / large: 사용자가 직접 머지
+- `GITHUB_TOKEN`으로 일으킨 머지는 다른 워크플로우(production 배포)를 깨우지 않는다. 그래서 auto-merge를 켜는 데는 별도 토큰(fine-grained PAT `AUTOMERGE_TOKEN`)을 쓰거나, 배포를 `workflow_run`으로 건다. 세팅하면서 정한다
+
 **neon(Gemini)** 은 로컬 Gemini CLI를 구글 계정 로그인(무료 한도)으로 쓴다. 과금되는 API 키나 GitHub Action은 쓰지 않는다.
 기획 에이전트가 정해진 단계에서 `gemini -p`로 비대화식 호출하고, 결과를 PR에 `neon review` 코멘트로 단다.
-- 플랜 리뷰: draft PR을 올리거나 플랜을 고칠 때마다 플랜 문서를 넘긴다
-- 아트/UX 크리틱: 플레이테스트 스크린샷을 넘겨 화면 구성·색·가독성·연출을 평가한다
-- 프롬프트는 `.claude/prompts/neon-plan-review.md`, `.claude/prompts/neon-art-critique.md`로 고정한다
-- 무료 한도를 넘기거나 CLI가 실패하면 그 단계는 건너뛰고 PR에 건너뛰었다고 남긴다(체인을 막지 않는다)
+- 플랜 리뷰(001부터): draft PR을 올리거나 플랜을 고칠 때마다. 프롬프트 `.claude/prompts/neon-plan-review.md`
+- 아트/UX 크리틱(002에서): 플레이테스트 스크린샷 평가. 프롬프트 `.claude/prompts/neon-art-critique.md`
 
 ## 역할
 | 역할 | 모델 | 하는 일 | 사용자와 |
 |---|---|---|---|
-| 기획/디자인 | Opus 5.5 | 플랜 작성, 콘텐츠·UX 결정, 리뷰 반영 | **유일하게 직접 대화** |
-| 개발 리드 | Opus 5.5 | `tasks.md` 작업 분할, 테스트 선작성, 구현이 의도대로인지 판단 | — |
+| 기획/디자인 | Opus 5.5 | 플랜 작성, 콘텐츠·UX 결정, 리뷰 반영, neon 호출 | **유일하게 직접 대화** |
+| 개발 리드 | Opus 5.5 | `tasks.md` 작업 분할, 테스트 선작성, **개발 worktree 결과를 PR 브랜치로 모으는 책임**, 구현이 의도대로인지 판단 | — |
 | 개발 | Sonnet 5.5 | 작업 단위 구현, 테스트 통과 | — |
 | QA | Opus 5.5 | 플랜·명세 대비 검증, 버그 리포트 | 결과만 보고 |
-| 플레이어 | Sonnet 5.5 ×3 | staging에서 사전 정보 없이 페르소나 관점으로 플레이, 리포트 | 결과만 보고 |
-| 품질 감사(일일) | Opus 5.5 | 코드 품질 평가 리포트. **12/4까지 리포트만, PR 금지** | 리포트만 |
+| 플레이어 | Sonnet 5.5 ×3 | staging에서 사전 정보 없이 페르소나 관점으로 플레이 (002) | 결과만 보고 |
+| 품질 감사(일일) | Opus 5.5 | 코드 품질 평가 리포트. **12/4까지 리포트만, PR 금지** (002) | 리포트만 |
 
-플레이어 페르소나(초안): ① 출퇴근길 폰으로 링크 하나 눌러본 캐주얼 게이머 ② 3D/웹에 관심 있는 PC 개발자 ③ 게임 거의 안 하는 첫 방문자.
-플레이어 에이전트는 레포·플랜을 **읽지 않는다**. staging URL과 페르소나 설명만 받는다.
-서브에이전트로 띄우면 `CLAUDE.md`를 통해 정보가 샐 수 있어서, 별도 프로세스로 띄운다(`scripts/playtest.sh`):
-- 레포 밖 전용 빈 폴더 `~/projects/money/player-sandbox/`에서 `claude -p` 실행 → 프로젝트 `CLAUDE.md`·`AGENTS.md`가 없다. 이 폴더에는 아무 파일도 두지 않는다
-- 실행 전마다 이 폴더 몫의 Claude 프로젝트 메모리(`~/.claude/projects/<이 폴더>/memory/`)를 비운다 → 이전 플레이테스트 기억이 다음 플레이어에게 넘어가지 않는다
-- `--tools ""`(파일·셸 도구 없음) + `--strict-mcp-config --mcp-config`로 **Playwright MCP만** → 브라우저 말고는 아무것도 못 본다
-- Playwright는 `--isolated` 프로필 → 쿠키·기록 없는 첫 방문 브라우저
-- `--append-system-prompt-file`로 페르소나만 주입(`docs/personas/*.md`, 사람 설명만 쓰고 게임 정보는 쓰지 않는다)
-- 리포트는 stdout으로 받아 기획 에이전트가 `docs/playtests/`에 저장
-- `--bare`는 API 키 과금이라 쓰지 않는다
+- 개발 에이전트를 **병렬로** 돌릴 때만 작업마다 worktree를 따로 만든다. 순차 작업은 PR worktree 하나를 재사용한다(`npm ci` 반복 방지)
 
 ## 인수인계 형식 (전부 md)
-템플릿은 `docs/templates/`, GitHub 쪽은 `.github/`에 둔다.
+템플릿은 `docs/templates/`, GitHub 쪽은 `.github/`에 둔다. 001에서 만드는 것:
 
 | 산출물 | 위치 | 템플릿 | 쓰는 쪽 |
 |---|---|---|---|
 | 플랜 | `docs/plans/NNN-*.md` | `plan.md` — 등급·관련 이슈·마일스톤·Context·만들 것·하지 않는 것·Verification | 기획 |
 | 작업 목록 | `docs/plans/NNN-tasks.md` | `tasks.md` — 작업별 담당·완료 조건·연결 테스트·상태 | 개발 리드 |
-| QA 리포트 | `docs/plans/NNN-qa.md` | `qa-report.md` — 판정(통과/반려), 플랜 항목별 확인 결과, 반려 사유와 재현 방법 | QA |
-| 플레이테스트 | `docs/playtests/NNN-<persona>.md` | `playtest.md` — 콘텐츠 루프 단계별 "알아봤나·손맛·헷갈린 점", 스크린샷, 한 줄 총평 | 플레이어 |
-| 품질 감사 | `docs/audits/YYYY-MM-DD.md` | `audit.md` — 항목별 점수, 리팩토링 후보(파일·이유·예상 효과), 마감 후 PR화할 것 | 품질 감사 |
-| 회고 | `docs/retro.md` | 한 줄 형식: `날짜 · PR · 문제 · 원인 · 규칙화 여부` | 기획 |
-| 페르소나 | `docs/personas/*.md` | `persona.md` — 사람 설명만(게임 정보 금지) | 기획 |
-| PR 본문 | — | `.github/pull_request_template.md` — 등급·관련 이슈·마일스톤·플랜 링크·변경 요약·검증 결과·성능 예산·QA/플레이테스트 요약 | 모두 |
-| 이슈 | — | `.github/ISSUE_TEMPLATE/` — `bug.yml`(재현·기대·실제·환경), `playtest.yml`(페르소나·장면·지적), `art-ux.yml`(스크린샷·지적·제안), `quality.yml`(파일·문제·제안), `config.yml`(빈 이슈 금지) | QA·플레이어·neon·품질 감사 |
+| QA 리포트 | `docs/plans/NNN-qa.md` | `qa-report.md` — 판정, 플랜 항목별 확인 결과, 반려 사유와 재현 방법 | QA |
+| 회고 | `docs/retro.md` | 한 줄: `날짜 · PR · 문제 · 원인 · 규칙화 여부` | 기획 |
+| PR 본문 | — | `.github/pull_request_template.md` — 등급·관련 이슈·마일스톤·플랜 링크·변경 요약·검증 결과·성능 예산·리뷰 기록 표·사용자 체크리스트(`<details>`) | 모두 |
+| 이슈 | — | `.github/ISSUE_TEMPLATE/bug.yml`(재현·기대·실제·환경) + `config.yml`(빈 이슈 금지) | QA |
 
-**리뷰 템플릿** (리뷰어마다 출력 형식을 고정해서 사용자가 비교하기 쉽게)
-- 공통 형식: `판정(승인/수정 요청)` → `막는 문제`(반드시 고칠 것) → `제안`(선택) → `질문`. 항목마다 근거 위치(파일·줄 또는 플랜 절)
-- Codex: `AGENTS.md`의 `## Review guidelines`에 이 형식과 중점을 적는다
-- neon: `.claude/prompts/neon-plan-review.md`, `neon-art-critique.md`에 같은 형식 + 각자 관점(플랜: 다른 관점·빠진 것·과한 것 / 아트: 구성·색·가독성·연출)
-- QA·개발 리드의 "의도대로 구현됐나" 판단도 `qa-report.md`로 같은 판정 체계를 쓴다
-- 사용자용 체크리스트는 PR 템플릿 맨 아래 접힌 칸(`<details>`)에 둔다: 플랜과 일치·범위 이탈 없음·테스트 있음·플레이테스트 확인
+002에서 추가: 플레이테스트·품질 감사·페르소나 템플릿, `playtest`·`art-ux`·`quality` 이슈 템플릿.
 
-- 에이전트끼리 대화는 공유하지 않는다. 위 파일만이 인수인계 수단이다.
+**리뷰 출력 형식**(모든 리뷰어 공통): `판정(승인/수정 요청)` → `막는 문제` → `제안` → `질문`. 항목마다 근거 위치(파일·줄 또는 플랜 절).
+Codex는 `AGENTS.md`의 `## Review guidelines`, neon은 프롬프트 파일, QA는 `qa-report.md`에 이 형식을 둔다.
+
+에이전트끼리 대화는 공유하지 않는다. 위 파일만이 인수인계 수단이다.
 
 ## 규칙 (`AGENTS.md`에 들어갈 내용)
 
 ### 코드 컨벤션
-- **기준: [Google TypeScript Style Guide](https://google.github.io/styleguide/tsguide.html).** TS 전용으로 쓰여 있고 구글이 계속 관리한다. Airbnb 가이드가 더 널리 알려져 있지만 JS 시절 문서라 TS 규칙은 따로 보충해야 하고 분량도 길다
-- 가이드 전문을 옮기지 않는다. `AGENTS.md`에는 링크와 **이 프로젝트에서 다르게 하는 점**만 적는다
-- 도구로 강제할 수 있는 건 도구로: 포맷(Prettier), 린트(oxlint, typescript·react 규칙), `tsconfig` strict. CI에서 실패시킨다
-- React·R3F는 가이드가 다루지 않으므로 몇 줄 보충: 컴포넌트는 함수형+named export, 훅 규칙, `useFrame` 안에서 setState·객체 생성 금지, 지오메트리·머티리얼 재사용
+- **기준: [Google TypeScript Style Guide](https://google.github.io/styleguide/tsguide.html).** `AGENTS.md`에는 링크와 이 프로젝트에서 다르게 하는 점만 적는다
+- 도구로 강제: 포맷(Prettier), 린트(oxlint, typescript·react 규칙), `tsconfig` strict. CI에서 실패시킨다
+- React·R3F 보충: 함수형 컴포넌트 + named export, 훅 규칙, `useFrame` 안에서 setState·객체 생성 금지, 지오메트리·머티리얼 재사용
 - 브랜치 `feat|fix|chore/NNN-이름`, 커밋은 Conventional Commits
 
 ### 구조·소유권
@@ -92,136 +101,121 @@ OUTPOST(`docs/content-plan.md`)를 만들기 전에, 실제 팀처럼 PR 단위�
 - 플랜에 없는 의존성은 추가하지 않는다
 
 ### 성능 예산 (유연하게)
-- 처음엔 **잠정치**로 시작한다: 데스크톱 60fps, 중급 폰 30fps 이상, 드로우콜 100 이하, 초기 JS 번들 gzip 600KB 이하
-- 첫 이정표 뒤 실측 기준선을 재고 그걸 바탕으로 확정한다. 확정 전까지 CI는 **경고만**, 확정 후 번들 크기는 CI에서 실패 처리
-- 예산을 넘기는 PR은 이유를 PR 본문에 적으면 통과 가능(사용자 판단)
+- 잠정치: 데스크톱 60fps, 중급 폰 30fps 이상, 드로우콜 100 이하, 초기 JS 번들 gzip 600KB 이하
+- 첫 이정표 뒤 실측 기준선으로 확정. 확정 전 CI는 경고만, 확정 후 번들 크기는 실패 처리
+- 예산 초과 PR은 이유를 본문에 적으면 사용자 판단으로 통과 가능
 
 ### 에셋
-- CC0 등 출처가 분명한 것만. 출처·라이선스는 `CREDITS.md`
+- CC0 등 출처가 분명한 것만, `CREDITS.md`에 기록
 - GLB는 Draco 압축 필수(`scripts/compress.sh`), 원본은 커밋하지 않는다
 
 ### 멈추고 사용자를 부르는 조건
-아래 중 하나면 작업을 멈추고 PR 코멘트 + herdr 알림으로 사용자를 부른다. 멈춘 뒤 어떻게 할지(대체 경로 등)는 사용자가 정한다.
+작업을 멈추고 PR 코멘트 + herdr 알림으로 사용자를 부른다. 그다음은 사용자가 정한다.
 - 같은 테스트를 세 번 고쳐도 실패
-- 작업 중 범위가 플랜 밖으로 넓어짐
+- 작업 범위가 플랜 밖으로 넓어짐
 - 리뷰어 의견 충돌, 리뷰 3턴 초과
 - 시크릿·배포 설정·DO 스키마·결제 관련 변경
 - 되돌릴 수 없는 작업(데이터 삭제, force push, 프로덕션 롤백 등)
 
 ### 완료 기준 (Definition of Done)
-- **small**: CI 통과 + Codex 리뷰 + 사용자 리뷰 → 자동 머지
-- **large**: 위 + 플랜 승인 + QA 통과 + staging 플레이테스트(페르소나 3종 + neon 아트/UX) + 사용자 머지
-- 공통: 테스트 대상(서버 로직·UI 로직)은 테스트가 있다, 성능 예산 확인 결과를 PR 본문에 적는다
+- **small**: CI + pr-check 통과, Codex 리뷰, 사용자 `user-approved` → auto-merge
+- **large**: 위 + 플랜 승인 + QA 통과 + (플레이 가능한 기능이 있는 PR이면) staging 플레이테스트 + 사용자 머지
+- 플레이테스트·아트 평가는 **수리가 가능한 첫 기능 PR부터** 적용한다. 그 전 PR은 화면이 뜨고 연결되는지만 검증한다
+- 공통: 테스트 대상(서버 로직·UI 로직)은 테스트가 있다, 성능 예산 확인 결과를 PR 본문에 적는다, 리뷰 기록 표가 채워져 있다
 
 ### 발견한 문제 쌓기
-- QA 버그·플레이테스트 지적은 GitHub Issues로 올린다. 라벨 `bug` `playtest` `art-ux` + 출처 페르소나
-- 기획 에이전트가 묶고 우선순위 제안, 처리 여부는 사용자가 정한다
-- **이슈를 처리하는 PR은 본문에 반드시 이슈를 링크한다**(`Closes #N`, 일부만 처리하면 `Refs #N`). 플랜 문서에도 `관련 이슈` 칸을 둔다
-- 빼먹지 않게 CI로 강제한다: PR 본문의 `관련 이슈` 칸이 비어 있으면 실패. 관련 이슈가 없으면 `없음`이라고 명시해야 통과한다
+- QA 버그·플레이테스트 지적은 GitHub Issues로. 기획 에이전트가 묶고 우선순위 제안, 처리 여부는 사용자
+- **이슈를 처리하는 PR은 본문에 이슈를 링크한다**(`Closes #N` / `Refs #N`). 없으면 `없음`이라고 쓴다. pr-check가 강제
+- **모든 PR·이슈에 라벨과 마일스톤.** PR은 `size:*` 1개 + `stage:*` 1개 + 마일스톤 필수. pr-check가 강제. 단계 라벨은 에이전트가 단계를 넘길 때 바꾼다
 
 ### 시크릿·환경변수
 - 로컬은 `.dev.vars`(gitignore), 필요한 키 목록은 `.dev.vars.example`
 - CI는 GitHub Secrets. 시크릿 값은 문서·로그·PR에 남기지 않는다
 
-### 배포 롤백
-- 프로덕션 문제 시 `npx wrangler rollback`으로 직전 버전 복구(사용자 승인 후). DO 스키마 변경이 낀 배포는 롤백 전 사용자와 확인
+### 배포
+- PR Preview 또는 단일 `staging`. 단일 `staging`이면 `deploy.yml`에 `concurrency` 그룹을 걸어 동시 배포를 막고, `stage:playtest` PR은 한 번에 하나만
+- 프로덕션 문제 시 `npx wrangler rollback`(사용자 승인 후). DO 스키마 변경이 낀 배포는 롤백 전 사용자와 확인
 
 ### 회고
-- PR 머지 때마다 기획 에이전트가 `docs/retro.md`에 "이번에 터진 문제" 한 줄을 남긴다
-- 같은 문제가 두 번 나오면 규칙으로 올리자고 제안하고, 사용자가 승인하면 `AGENTS.md`에 추가한다. 예외 처리 규칙은 이렇게만 늘린다
+- PR 머지 때마다 기획 에이전트가 `docs/retro.md`에 한 줄
+- 같은 문제가 두 번 나오면 규칙화를 제안하고, 사용자가 승인하면 `AGENTS.md`에 추가한다. 예외 처리 규칙은 이렇게만 늘린다
 
-## 만들 것
-1. **앱 스캐폴드 (새로)**
-   - Vite + React + TypeScript + R3F + drei, oxlint, Vitest
+## 만들 것 (001)
+1. **앱 스캐폴드**
+   - Vite + React + TypeScript + R3F + drei, Prettier, oxlint, Vitest, `.nvmrc`
    - 콘텐츠 계획의 추가 의존성(`zustand`, `@react-three/postprocessing`, `r3f-perf`, `maath`) 설치·빌드 호환성 확인. `r3f-perf` 충돌 시 대체 HUD로 기록
    - 화면은 큐브 하나
+   - `.gitignore`: `.dev.vars`, `.wrangler/`, `playwright-report/`, `test-results/` 추가
 2. **Worker 단일 배포**
-   - `wrangler.jsonc`: static assets(dist, SPA fallback) + Durable Object 바인딩 + SQLite migration
+   - `wrangler.jsonc`: static assets(dist, SPA fallback) + DO 바인딩 + SQLite migration. Preview를 쓰면 `previews` 블록에도 DO 바인딩 선언
    - `worker/index.ts` + `worker/BaseRoom.ts`: `/ws` 에코만 (Hibernation API)
    - `@cloudflare/vitest-pool-workers`로 DO 테스트 1개(에코)
-3. **하네스 문서**
-   세 도구가 이 폴더에서 처음 읽는 파일이 다르다: Claude Code는 `CLAUDE.md`, Codex는 `AGENTS.md`, Gemini CLI는 `GEMINI.md`.
-   규칙이 세 군데로 갈라지지 않도록 **`AGENTS.md` 하나를 원본**으로 두고 나머지는 그걸 가리킨다.
-   - `AGENTS.md` (원본, 모든 에이전트 공통)
-     - 프로젝트 한 단락 소개, 명령어
-     - **먼저 읽을 문서** 목록과 언제 읽는지: `docs/content-plan.md`(콘텐츠·범위, 작업 전 항상), `docs/spec.md`(기술 목록), 진행 중인 `docs/plans/NNN-*.md`·`NNN-tasks.md`(맡은 작업), `docs/templates/`(산출물 쓸 때)
-     - 범위 고정 사항, 워크플로우, 브랜치·플랜 우선 규칙, PR 등급별 머지 규칙, 리뷰 최대 3턴, TDD 범위, 큰 변경(DO 스키마·배포 설정) 사용자 승인, 품질 감사 리포트 전용 규칙, 인수인계 형식
-     - **병렬 세션 규칙**: 메인 체크아웃 읽기 전용, 브랜치 작업은 전용 worktree, 착수 전 브랜치 push로 클레임, 남의 브랜치·미커밋 변경 불가침, 인터페이스 기준 분할
-     - `## Review guidelines`: Codex 웹 리뷰가 읽는 절. 중점(서버 상태 멱등성, 테스트 유무, 범위 이탈, 모바일 성능)
-   - `CLAUDE.md`: `@AGENTS.md` 임포트 + Claude 전용 내용만(서브에이전트 구성, 역할별로 어떤 에이전트를 쓰는지, neon 호출 절차)
-   - `GEMINI.md`: `@AGENTS.md` 임포트 + neon 역할 한 단락(리뷰어로서 무엇을 보는지, 코드 수정 금지). 임포트가 안 되면 `.gemini/settings.json`에서 컨텍스트 파일을 `AGENTS.md`로 지정
-   - `.claude/agents/`: `planner.md` `dev-lead.md` `dev.md` `qa.md` `player.md` `quality-auditor.md` (모델·도구 권한 지정). 각 파일은 공통 규칙을 반복하지 않고 역할별 읽을 문서와 산출물만 적는다. `player.md`만 예외로 레포 문서를 읽지 않는다
-   - `.claude/prompts/`: `neon-plan-review.md`, `neon-art-critique.md`
-   - `.mcp.json`: Playwright MCP (플레이어·QA용)
-   - `docs/templates/`: plan, tasks, qa-report, playtest, audit, persona (위 인수인계 표)
-   - `.github/pull_request_template.md`, `.github/ISSUE_TEMPLATE/`
-   - `docs/personas/`: 페르소나 3종, `scripts/playtest.sh`
+3. **규칙 문서** — 세 도구가 처음 읽는 파일이 다르다(Claude Code `CLAUDE.md`, Codex `AGENTS.md`, Gemini CLI `GEMINI.md`). **`AGENTS.md` 하나를 원본**으로 둔다
+   - `AGENTS.md`: 한 단락 소개, 명령어, **먼저 읽을 문서**(`docs/content-plan.md` 작업 전 항상, `docs/spec.md`, 진행 중인 `docs/plans/NNN-*`, `docs/templates/`), 위 규칙 전부, 병렬 세션 규칙(메인 체크아웃 읽기 전용, 브랜치 작업은 worktree, 착수 전 브랜치 push로 클레임, 남의 브랜치·미커밋 변경 불가침, 인터페이스 기준 분할), `## Review guidelines`(공통 출력 형식 + 중점: 서버 상태 멱등성, 테스트 유무, 범위 이탈, 모바일 성능)
+   - `CLAUDE.md`: `@AGENTS.md` 임포트 + Claude 전용(서브에이전트 구성, 역할별 에이전트, neon 호출 절차). 현재 초안의 옛 계획서 경로·머지 규칙은 이 내용으로 대체
+   - `GEMINI.md`: `@AGENTS.md` 임포트 + neon 역할 한 단락(리뷰만, 코드 수정 금지). 임포트가 안 되면 `.gemini/settings.json`으로 `AGENTS.md` 지정
+   - `.claude/agents/`: `planner.md` `dev-lead.md` `dev.md` `qa.md` (모델·도구 권한, 역할별 읽을 문서와 산출물만. 공통 규칙 반복 안 함). 개발은 병렬일 때 `isolation: worktree`
+   - 역할별 스킬: 기획 `minimal-ui`(HUD·패널), QA `/code-review medium`, 마일스톤마다 `doc-lint`
+   - `.claude/prompts/neon-plan-review.md`
+   - `docs/templates/`: plan, tasks, qa-report / `docs/retro.md` / `CREDITS.md` / `.dev.vars.example`
+   - `.github/pull_request_template.md`, `.github/ISSUE_TEMPLATE/bug.yml`, `config.yml`
 4. **GitHub**
-   - `.github/workflows/ci.yml`: lint · typecheck · test · build (PR·main). Node 버전은 `.nvmrc`로 로컬과 맞춘다
-   - `.github/workflows/deploy.yml`: PR → staging, main 머지 → production
-   - 라벨: 등급 `size:small` `size:large` / 단계 `stage:plan-review` `stage:dev` `stage:qa` `stage:playtest` `stage:code-review` / 승인 `plan-approved` / 이슈 `bug` `playtest` `art-ux` `quality`. 단계 라벨은 에이전트가 단계 넘어갈 때 바꾼다 → GitHub만 봐도 누구 차례인지 보인다
-   - 마일스톤: `docs/content-plan.md` 일정과 맞춘다 — M0 하네스(11/27) · M1 첫 이정표(11/28) · M2 기지와 상호작용(11/29) · M3 공유 기지(12/1) · M4 성능(12/2) · M5 출시(12/4)
-   - **모든 PR·이슈에 라벨과 마일스톤을 단다.** PR은 `size:*` 1개 + `stage:*` 1개 + 마일스톤 필수 → pr-check에서 강제
-   - `.github/workflows/pr-check.yml`: PR 본문 `관련 이슈` 칸 검사(`Closes/Refs #N` 또는 `없음`), `size:*`·`stage:*` 라벨과 마일스톤 유무 검사
-   - 브랜치 보호(main): CI·pr-check 필수 + 사용자 승인 필수, auto-merge 허용 → `size:small`이면 auto-merge 켜는 워크플로우
-   - Codex 웹 리뷰 연결: 사용자가 기존 방식대로 설정
-5. **훅으로 규칙 강제** (`.claude/settings.json`, 커밋되는 프로젝트 설정)
-   - main 브랜치에서 커밋·push, force push 차단
-   - 메인 체크아웃에서 브랜치 전환 차단(worktree 규칙)
+   - `ci.yml`: clean checkout에서 `npm ci` → `format:check` → lint → typecheck → test → build. 전부 필수, `--if-present`·lockfile 유무 생략 없음. Node는 `node-version-file: .nvmrc`
+   - `pr-check.yml`: 트리거 `pull_request: [opened, edited, synchronize, reopened, labeled, unlabeled, milestoned, demilestoned, ready_for_review]`
+     - `관련 이슈` 칸(`Closes/Refs #N` 또는 `없음`), `size:*`·`stage:*` 라벨, 마일스톤 검사
+     - `user-approval` 잡: `user-approved` 라벨이 있을 때만 통과
+     - `synchronize` 시 `user-approved` 자동 제거 + 코멘트
+     - `size:small` + `user-approved`면 auto-merge 켜기
+   - `deploy.yml`: PR → Preview(또는 staging, `concurrency` 그룹), main → production
+   - 라벨(만들어 둠): `size:*` `stage:*` `plan-approved` `bug` `playtest` `art-ux` `quality` + **`user-approved` 추가**
+   - 마일스톤(만들어 둠): M0 하네스 ~ M5 출시
+   - 브랜치 보호: 필수 체크 `ci` `pr-check` `user-approval`, Approve 필수 끔, auto-merge 허용
+5. **핵심 훅** (`.claude/settings.json`)
+   - main에서 커밋·push, force push 차단
+   - 메인 체크아웃에서 브랜치 전환 차단: `git rev-parse --git-dir`과 `--git-common-dir`이 같을 때(=메인 체크아웃)만 막는다. worktree 안에서는 허용
    - `.dev.vars`·시크릿 파일 커밋 차단
-   - 에이전트 턴 종료·사용자 호출 시 herdr 알림
-6. **포맷·린트 설정**: Prettier, oxlint(typescript·react), `tsconfig` strict, `.nvmrc`
-7. **나머지 파일**: `CREDITS.md`, `.dev.vars.example`, `docs/retro.md`
-8. **품질 감사 에이전트**: 역할 정의와 규칙만. 예약 실행은 첫 이정표 뒤에.
+   - 에이전트가 `user-approved` 라벨을 다는 명령 차단
+   - 사용자 호출·턴 종료 시 herdr 알림
 
-9. **프로젝트 스킬** (`.claude/skills/`) — 규칙을 문서 대신 절차로 실행한다
-   - `start-task`: 브랜치·worktree 생성 → 플랜 템플릿 → draft PR(관련 이슈 칸 포함) → `size:*`·`stage:plan-review` 라벨·마일스톤 → neon 플랜 리뷰 호출
-   - `playtest`: `player-sandbox`에서 페르소나 3종 실행 → `docs/playtests/` 저장 → neon 아트/UX 크리틱 → 지적 사항 이슈 등록(라벨·마일스톤·PR 링크)
-   - `retro`: 머지 후 `docs/retro.md`에 한 줄, 같은 문제 반복 여부 확인 → 규칙 승격 제안
-10. **역할에 기존 스킬 연결** (`.claude/agents/*`와 `AGENTS.md`에 명시)
-    - 개발(Sonnet): 서브에이전트 worktree 격리(`isolation: worktree`)로 실행 → 병렬 작업이 서로 안 엉킨다
-    - 기획/디자인: HUD·패널 작업 시 `minimal-ui`
-    - QA: 명세 검증 + `/code-review medium`
-    - 품질 감사: `/simplify` 기준으로 평가하되 **리포트만**(마감 전), 예약 실행은 `/schedule`(첫 이정표 뒤 등록)
-    - 마일스톤마다 `doc-lint`로 문서와 실제 상태 대조
-11. **세션 시작·상태 표시**
-    - SessionStart 훅: 열린 PR, 각 PR의 `stage:*` 라벨·마일스톤, 지금 사용자 차례인 PR을 요약해 보여준다(`gh` 조회, 실패해도 세션은 뜬다)
-    - 상태줄: 현재 브랜치 · PR 번호와 단계 · 마일스톤. `gh` 호출은 캐시해 상태줄이 느려지지 않게 한다
+## 002로 넘기는 것 (다음 PR, 정식 체인으로)
+- `scripts/playtest.sh`와 플레이어 격리 실행: 전용 빈 폴더(`${PLAYER_SANDBOX_DIR:-~/projects/money/player-sandbox}`, 이미 만들어 둠), 실행 전 그 폴더 몫 Claude 메모리 비우기, `--tools ""` + `--strict-mcp-config`로 Playwright MCP만 + `--allowedTools "mcp__playwright__*"`, Playwright `--isolated`, 페르소나만 주입, 폰 페르소나는 모바일 뷰포트(390×844·터치), 스크린샷 `--output-dir` → `docs/playtests/` 수거 → neon 아트 크리틱, headless WebGL이 검은 화면이 아닌지 확인, `--bare`는 과금이라 안 씀
+- 페르소나 3종(폰 캐주얼 게이머 / 3D·웹 관심 PC 개발자 / 게임 거의 안 하는 첫 방문자), `.mcp.json`, `player.md` 에이전트
+- 프로젝트 스킬 `start-task` `playtest` `retro`
+- SessionStart 요약 훅, 상태줄
+- 품질 감사 에이전트(`/simplify` 기준 리포트), 예약 실행은 `/schedule`로 첫 이정표 뒤
+- 템플릿: playtest, audit, persona / 이슈 템플릿 playtest, art-ux, quality / `neon-art-critique.md`
 
 ## 사용자가 해야 할 것 (그때 알림)
-- Cloudflare API 토큰 발급 → GitHub 시크릿 `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`
+- Cloudflare API 토큰 → GitHub 시크릿 `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`
 - 로컬 `npx wrangler login`
-- Gemini CLI 설치 후 `gemini`를 한 번 실행해 구글 계정으로 로그인
+- Gemini CLI 설치 후 `gemini` 한 번 실행해 구글 로그인
 - 레포에 Codex 웹 리뷰 연결
-- 브랜치 보호 설정 확인(gh로 제가 걸 수 있으면 걸고, 결과를 보여줌)
+- (필요하면) auto-merge용 fine-grained PAT → 시크릿 `AUTOMERGE_TOKEN`
+- 브랜치 보호: gh로 제가 걸 수 있으면 걸고 결과를 보여준다
 
 ## 세팅하면서 확인할 것
-- Worker Previews(2026-09)가 DO를 PR별로 분리해 주는지 → 되면 PR별 staging, 안 되면 `staging` 환경 1개
-- herdr 알림을 에이전트 턴 종료와 연결할 수 있는지
+- Worker Previews의 DO 격리 실측: Preview A에서 바꾼 상태가 Preview B·production에 안 보이는지. 되면 PR Preview, 안 되면 단일 `staging`
+- auto-merge 머지가 production 배포를 깨우는지(토큰 방식 결정)
+- herdr 알림을 훅과 연결하는 방법
 - 최신 스택(React 19.3 / R3F 9.8 / drei 10.7 / three 0.187 / Vite 8 / TS 7)과 추가 패키지 호환
-- Gemini CLI가 `GEMINI.md`의 `@` 임포트를 지원하는지, 구글 로그인 무료 한도가 지금도 있는지, 비대화식(`-p`)에서 이미지 입력이 되는지
+- Gemini CLI: `GEMINI.md`의 `@` 임포트, 구글 로그인 무료 한도
 
 ## 하지 않는 것
-- 콘텐츠 기능 구현(다음 PR부터)
-- 품질 감사 예약 실행
+- 콘텐츠 기능 구현
+- 002 항목 전부(위)
 - 일정 확인, 비용·한도 관리(사용자가 직접)
-- Workflow(다중 에이전트 오케스트레이션) 도입 — 첫 기능 PR에서 시도 여부를 정한다(사용자가 해보고 싶어 함)
+- Workflow(다중 에이전트 오케스트레이션) — 첫 기능 PR에서 시도 여부를 정한다
 - 멈춘 뒤의 대체 경로(사용자가 나중에 결정)
 
-
 ## Verification
-- `npm run lint && npm run typecheck && npm test && npm run build` 로컬 통과
-- `wrangler dev`에서 큐브 페이지 + `/ws` 에코 동작
-- 이 PR에서 CI 녹색, staging 배포 URL이 열리고 WS 에코 동작
+- 로컬: `npm ci && npm run format:check && npm run lint && npm run typecheck && npm test && npm run build` 통과
+- `wrangler dev`에서 큐브가 보이고 `/ws` 에코 왕복
+- CI가 실제로 실패를 잡는다: 실패하는 테스트 하나를 넣은 커밋 → 필수 체크 빨간색 → 복구하면 녹색. 포맷 위반도 같은 방식으로 확인
+- pr-check: `관련 이슈` 칸 비우기 / `size:*` 빼기 / 마일스톤 빼기 → 각각 실패, 라벨·본문만 고쳐도 재실행되어 통과
+- 승인: `user-approved`를 단 뒤 새 커밋을 push → 라벨이 자동으로 떨어지고 `user-approval` 체크가 빨간색
+- auto-merge: 더미 `size:small` PR에 `user-approved` → 자동 머지 → production 배포 워크플로우가 실제로 돈다
+- Preview(또는 staging) URL에서 큐브가 보이고 WS 에코 왕복, DO 격리 실측 결과를 PR에 기록
+- 훅: main 커밋, 메인 체크아웃 브랜치 전환, `.dev.vars` 커밋, 에이전트의 `user-approved` 부착이 각각 막히고, worktree 안의 브랜치 작업은 막히지 않는다
+- 세 도구에 "이 프로젝트 규칙과 먼저 읽을 문서가 뭐야?" → 같은 답
+- `gemini -p`로 이 플랜 리뷰 → PR에 `neon review` 코멘트, 리뷰 기록 표에 SHA와 함께 기록
 - main 머지 후 production URL 동작
-- 테스트용 `size:small` 더미 PR로 auto-merge 동작 확인 후 닫기
-- `start-task`로 더미 작업을 만들면 브랜치·worktree·draft PR·라벨·마일스톤이 한 번에 생긴다(확인 후 닫기)
-- 새 세션을 열면 SessionStart 요약이 뜨고, 상태줄에 브랜치·PR 단계·마일스톤이 보인다
-- 훅 확인: main에서 커밋 시도, 메인 체크아웃에서 브랜치 전환 시도, `.dev.vars` 커밋 시도가 각각 막힌다
-- 포맷·린트 위반 코드를 넣은 커밋에서 CI가 실패한다
-- PR 본문 `관련 이슈` 칸을 비우면 pr-check가 실패하고, `Closes #N`이나 `없음`을 쓰면 통과한다
-- `size:*` 라벨이나 마일스톤을 빼면 pr-check가 실패한다
-- `scripts/playtest.sh`로 띄운 플레이어에게 "이 게임 이름과 계획을 아는 대로 말해봐"라고 물으면 모른다고 답한다(정보 차단 확인), 두 번째 실행에서도 첫 실행 내용을 모른다
-- 세 도구에서 "이 프로젝트 규칙과 먼저 읽을 문서가 뭐야?"라고 물으면 같은 답이 나온다
-- `gemini -p`로 이 플랜을 리뷰시켜 PR에 `neon review` 코멘트가 달린다
-- Claude Code에서 `.claude/agents/*` 6종이 인식되고, Playwright MCP로 staging URL 스크린샷 1장 확보
