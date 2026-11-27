@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Persona playtest runner: one isolated `claude -p` per persona, all at once by default.
-// Pure logic lives in playtest-lib.mjs. Usage: scripts/playtest.sh [--serial] <URL> [persona...]
+// Pure logic lives in playtest-lib.mjs. Usage: scripts/playtest.sh [--serial] [--sha <SHA>] <URL> [persona...]
 // Exit code: 0 = every persona complete or incomplete, 1 = at least one failed, 2 = bad usage (nothing launched).
 import { spawn, spawnSync } from 'node:child_process';
 import {
@@ -29,6 +29,7 @@ import {
   classifyRun,
   formatHeader,
   formatMode,
+  buildRunInfo,
   parseArgs,
   parseTarget,
   readDevice,
@@ -242,6 +243,10 @@ async function main() {
   const mode = formatMode({ serial: parsed.serial, staggerSec: config.staggerSec });
   const runDir = join(config.runsDir, runDirName(target.label, new Date()));
   mkdirSync(runDir, { recursive: true });
+  writeFileSync(
+    join(runDir, 'run.json'),
+    `${JSON.stringify(buildRunInfo({ url: parsed.url, startedAt: new Date(), sha: parsed.sha }), null, 2)}\n`,
+  );
 
   const onSignal = async () => {
     interrupted = true;

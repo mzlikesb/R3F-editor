@@ -15,6 +15,8 @@ expect 'chatgpt-codex-connector' '' untrusted
 expect 'github-actions[bot]' '' ci
 expect 'github-actions' '' untrusted
 expect chillingdaisy-worker1 '## neon review · `abc`' neon
+expect chillingdaisy-worker1 '## neon art critique · `abc`' neon
+expect chillingdaisy-worker1 '반영. ## neon art critique' agent
 expect chillingdaisy-worker1 '@codex review — 대상 커밋' agent
 expect chillingdaisy-worker1 '반영했습니다. ## neon review' agent
 expect chillingdaisy-worker1x '## neon review' untrusted

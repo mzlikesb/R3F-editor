@@ -16,6 +16,7 @@ import {
   deviceArgs,
   formatHeader,
   formatMode,
+  buildRunInfo,
   parseArgs,
   parseTarget,
   readDevice,
@@ -87,12 +88,34 @@ test('parseTarget rejects production and look-alikes', () => {
 // ---------- args ----------
 
 test('parseArgs reads --serial, URL and persona names', () => {
-  assert.deepEqual(parseArgs(['http://localhost:8787']), { serial: false, url: 'http://localhost:8787', personas: [] });
+  assert.deepEqual(parseArgs(['http://localhost:8787']), {
+    serial: false,
+    sha: null,
+    url: 'http://localhost:8787',
+    personas: [],
+  });
   assert.deepEqual(parseArgs(['--serial', 'http://localhost:8787', 'pc-dev', 'phone-casual']), {
     serial: true,
+    sha: null,
     url: 'http://localhost:8787',
     personas: ['pc-dev', 'phone-casual'],
   });
+});
+
+test('parseArgs reads --sha in both forms', () => {
+  assert.equal(parseArgs(['--sha', 'abc1234', 'http://localhost:8787']).sha, 'abc1234');
+  assert.equal(parseArgs(['--sha=abc1234', 'http://localhost:8787']).sha, 'abc1234');
+  assert.throws(() => parseArgs(['http://localhost:8787', '--sha']));
+});
+
+test('buildRunInfo keeps url, start time and sha (null when not given)', () => {
+  const t = new Date('2026-11-27T00:20:00Z');
+  assert.deepEqual(buildRunInfo({ url: 'http://x', startedAt: t, sha: 'abc1234' }), {
+    url: 'http://x',
+    startedAt: '2026-11-27T00:20:00.000Z',
+    sha: 'abc1234',
+  });
+  assert.equal(buildRunInfo({ url: 'http://x', startedAt: t }).sha, null);
 });
 
 test('parseArgs throws on missing URL or unknown flag', () => {
