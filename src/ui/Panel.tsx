@@ -1,14 +1,16 @@
 import { useEffect, useRef } from 'react';
 import { holdProgress, type HoldEvent } from '../hold';
-import { selectFaulted, useStore } from '../store';
+import { selectFaults, selectModuleFault, selectOthersHolding, useStore } from '../store';
 import { canRepair } from '../sync';
 import { panelView } from './view';
 
 export function Panel() {
   const selected = useStore((s) => s.selected);
-  const generatorFaulted = useStore(selectFaulted);
-  const fault = useStore((s) => s.sync.base?.fault ?? null);
-  const enabled = useStore((s) => canRepair(s.sync, s.connection));
+  const faults = useStore(selectFaults);
+  const blackout = useStore((s) => s.sync.base?.blackout ?? null);
+  const fault = useStore((s) => (s.selected ? selectModuleFault(s, s.selected) : null));
+  const othersHolding = useStore((s) => (s.selected ? selectOthersHolding(s, s.selected) : 0));
+  const enabled = useStore((s) => fault !== null && canRepair(s.sync, s.connection, fault.id));
   const holdKind = useStore((s) => s.repair.hold.kind);
   const button = useRef<HTMLButtonElement>(null);
   const fill = useRef<HTMLSpanElement>(null);
@@ -63,13 +65,14 @@ export function Panel() {
 
   if (selected === null) return null;
 
-  const view = panelView(selected, generatorFaulted);
+  const view = panelView(selected, { faults, blackout, othersHolding });
+  const repairButton = view.repairFaultId !== null;
 
   const dispatch = (event: HoldEvent) => useStore.getState().dispatchHold(event);
   const label = holdKind === 'holding' ? '계속 누르세요…' : holdKind === 'pending' ? '수리 중…' : '꾹 눌러 수리 (1초)';
 
   return (
-    <aside className={view.repairButton ? 'panel' : 'panel panel-compact'} onContextMenu={(e) => e.preventDefault()}>
+    <aside className={repairButton ? 'panel' : 'panel panel-compact'} onContextMenu={(e) => e.preventDefault()}>
       <div className="panel-head">
         <h2>{view.title}</h2>
         <p className={view.status === 'fault' ? 'status warn' : 'status ok'}>
@@ -84,12 +87,17 @@ export function Panel() {
           ✕
         </button>
       </div>
-      {view.goToFault && (
-        <button type="button" className="goto" onClick={() => useStore.getState().select('generator')}>
-          발전기 고장 — 눌러서 이동
+      {view.goTo && (
+        <button
+          type="button"
+          className="goto"
+          onClick={() => view.goTo && useStore.getState().select(view.goTo.moduleId)}
+        >
+          {view.goTo.label}
         </button>
       )}
-      {view.repairButton && (
+      {view.together && <p className="hint">{view.together}</p>}
+      {repairButton && (
         <button
           ref={button}
           type="button"
@@ -114,7 +122,7 @@ export function Panel() {
           <span className="label">{label}</span>
         </button>
       )}
-      {view.repairButton && !enabled && <p className="hint">연결되면 수리할 수 있어요</p>}
+      {repairButton && !enabled && <p className="hint">연결되면 수리할 수 있어요</p>}
     </aside>
   );
 }

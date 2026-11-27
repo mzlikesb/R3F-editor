@@ -1,154 +1,72 @@
 import { DurableObject } from 'cloudflare:workers';
-import { PING, PONG, parseClientMessage, type ServerMessage } from '../shared/protocol';
-import { broadcast, broadcastEach } from './broadcast';
-import { createRateLimiter } from './rateLimit';
-import { isMine, newAttachment, readSocketId } from './socketId';
-import {
-  countPresence,
-  decideOnAlarm,
-  decideOnConnect,
-  ensureFault,
-  initialState,
-  needsSelfHeal,
-  nextFaultDelayMs,
-  repair,
-  toSnapshot,
-  type BaseState,
-} from './state';
+import { PING, PONG } from '../shared/protocol';
 
-/** Storage key of the whole `BaseState` (one object, one put). */
-const STATE_KEY = 'base';
-/** Key written by plan 002; reused as the `instanceId` so production keeps its id. */
-const INSTANCE_ID_KEY = 'instanceId';
+/** Storage key of the whole `BaseState` from plan 006 on (one object, one put). */
+export const STATE_KEY = 'base:v2';
+/** Plans 003-005 stored `LegacyState` here. Read once to migrate; never written or deleted (rollback). */
+export const LEGACY_STATE_KEY = 'base';
+/** Key written by plan 002; the `instanceId` of a base that never had `base`. Read only. */
+export const INSTANCE_ID_KEY = 'instanceId';
 
-/** The single shared base (plan 003). Rules live in `./state`; this class does the I/O. */
+/**
+ * The single shared base (plan 006). Rules live in `./state`, `./holds`, `./legacy`; this class does
+ * the I/O. Track `server` of `docs/plans/006-tasks.md` writes the bodies; the order of operations
+ * below is the contract the integration tests (`worker/test/base.test.ts`) check.
+ *
+ * - Storage is read on every event (no in-memory copy of `BaseState`), so tests can seed it.
+ * - `fetch` `/ws` upgrade: attachment `newAttachment(uuid, socketProtocol(url))`; load (migrating
+ *   from `LEGACY_STATE_KEY` if `STATE_KEY` is missing); if this socket made connections 0 → 1, run
+ *   `arrive` and save; then send this socket its snapshot (protocol 2: `toSnapshot`, protocol 1:
+ *   `toLegacySnapshot`), broadcast `fault` for each `arrive` fault to the other protocol-2 sockets,
+ *   `presence` to the others, and finish with the alarm rule.
+ * - `fetch` `GET /api/base` / `GET /api/history`: pure reads. No migration write, no `arrive`, no
+ *   alarm. A missing `STATE_KEY` is answered from the migrated or initial state without saving.
+ * - `webSocketMessage`: parse → `admit` (rate limit; `release` always passes) →
+ *   `repair`: `repair()`; on success save, `repaired` to protocol-2 sockets (`mine` per socket),
+ *   `legacyUpdate` to protocol-1 sockets, `releaseHold` of that fault on every socket and an
+ *   `activity` to protocol-2 sockets if any hold was cleared.
+ *   `hold` / `release`: update this socket's attachment (`startHold` / `releaseHold`); if it changed,
+ *   send each protocol-2 socket `activityFor(all holds, its own hold)`.
+ *   Then the alarm rule.
+ * - `alarm`: drop expired holds (`isExpired`, then `activity` if any changed); `decideOnAlarm` →
+ *   `injectFault`, save, `fault` to protocol-2 sockets, `legacyUpdate` to protocol-1 sockets. Then
+ *   the alarm rule.
+ * - `webSocketClose` / `webSocketError`: `presence` to the others; if the closing socket held
+ *   something, `activity` to the others; if connections are now 0, `leave` + save and
+ *   `deleteAlarm()`; else the alarm rule.
+ * - The alarm rule: `decideAlarm({ connections, planned: plannedAlarmAt(state, earliestExpiry(holds)),
+ *   current: await getAlarm() })` → `setAlarm` / `deleteAlarm` / nothing.
+ */
 export class BaseRoom extends DurableObject<Env> {
-  private readonly limiters = new WeakMap<WebSocket, (now: number) => boolean>();
-
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING, PONG));
   }
 
   override async fetch(request: Request): Promise<Response> {
-    if (request.headers.get('Upgrade') !== 'websocket') {
-      if (request.method === 'GET' && new URL(request.url).pathname === '/api/base') {
-        const state = await this.loadState();
-        return Response.json(toSnapshot(state, this.ctx.getWebSockets().length));
-      }
-      return new Response('Expected WebSocket upgrade', { status: 426 });
-    }
-
-    const { 0: client, 1: server } = new WebSocketPair();
-    this.ctx.acceptWebSocket(server);
-    server.serializeAttachment(newAttachment(() => crypto.randomUUID()));
-
-    let state = await this.loadState();
-    const sockets = this.ctx.getWebSockets();
-    server.send(JSON.stringify(toSnapshot(state, sockets.length)));
-    broadcast(
-      sockets.filter((s) => s !== server),
-      JSON.stringify({ type: 'presence', count: sockets.length } satisfies ServerMessage),
-    );
-
-    const facts = { connections: sockets.length, fault: state.fault, hasAlarm: await this.hasAlarm() };
-    const action = decideOnConnect(facts);
-    if (action === 'createFault') {
-      state = ensureFault(state, Date.now(), () => crypto.randomUUID());
-      await this.saveAndAnnounceFault(state);
-    } else if (action === 'scheduleAlarm') {
-      await this.scheduleRefault();
-    }
-
-    return new Response(null, { status: 101, webSocket: client });
+    void request;
+    throw new Error('TODO(server): BaseRoom.fetch');
   }
 
   override async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
-    let allow = this.limiters.get(ws);
-    if (!allow) {
-      allow = createRateLimiter();
-      this.limiters.set(ws, allow);
-    }
-    if (!allow(Date.now())) return;
-
-    const msg = parseClientMessage(message);
-    if (!msg) return;
-
-    const before = await this.loadState();
-    const after = repair(before, msg.faultId);
-    if (after !== before) {
-      await this.ctx.storage.put(STATE_KEY, after);
-      const requesterId = readSocketId(ws.deserializeAttachment());
-      broadcastEach(this.ctx.getWebSockets(), (socket) =>
-        JSON.stringify({
-          type: 'repaired',
-          version: after.version,
-          faultId: msg.faultId,
-          repairs: after.repairs,
-          mine: isMine(requesterId, readSocketId(socket.deserializeAttachment())),
-        } satisfies ServerMessage),
-      );
-    }
-
-    const facts = {
-      connections: this.ctx.getWebSockets().length,
-      fault: after.fault,
-      hasAlarm: await this.hasAlarm(),
-    };
-    if (needsSelfHeal(facts)) await this.scheduleRefault();
+    void ws;
+    void message;
+    throw new Error('TODO(server): BaseRoom.webSocketMessage');
   }
 
   override async webSocketClose(ws: WebSocket, code: number, reason: string): Promise<void> {
-    try {
-      ws.close(code === 1005 || code === 1006 ? 1000 : code, reason);
-    } catch {
-      // already closed
-    }
-    this.announcePresence(ws);
+    void ws;
+    void code;
+    void reason;
+    throw new Error('TODO(server): BaseRoom.webSocketClose');
   }
 
   override async webSocketError(ws: WebSocket): Promise<void> {
-    this.announcePresence(ws);
+    void ws;
+    throw new Error('TODO(server): BaseRoom.webSocketError');
   }
 
   override async alarm(): Promise<void> {
-    const state = await this.loadState();
-    const action = decideOnAlarm({ connections: this.ctx.getWebSockets().length, fault: state.fault });
-    if (action !== 'createFault') return;
-    await this.saveAndAnnounceFault(ensureFault(state, Date.now(), () => crypto.randomUUID()));
-  }
-
-  private announcePresence(closing: WebSocket): void {
-    const count = countPresence(this.ctx.getWebSockets(), closing);
-    broadcast(
-      this.ctx.getWebSockets().filter((s) => s !== closing),
-      JSON.stringify({ type: 'presence', count } satisfies ServerMessage),
-    );
-  }
-
-  private async saveAndAnnounceFault(state: BaseState): Promise<void> {
-    if (!state.fault) return;
-    await this.ctx.storage.put(STATE_KEY, state);
-    broadcast(
-      this.ctx.getWebSockets(),
-      JSON.stringify({ type: 'fault', version: state.version, fault: state.fault } satisfies ServerMessage),
-    );
-  }
-
-  private async hasAlarm(): Promise<boolean> {
-    return (await this.ctx.storage.getAlarm()) !== null;
-  }
-
-  private async scheduleRefault(): Promise<void> {
-    await this.ctx.storage.setAlarm(Date.now() + nextFaultDelayMs(Math.random));
-  }
-
-  private async loadState(): Promise<BaseState> {
-    const stored = await this.ctx.storage.get<BaseState>(STATE_KEY);
-    if (stored) return stored;
-    const legacyId = await this.ctx.storage.get<string>(INSTANCE_ID_KEY);
-    const state = initialState(legacyId ?? crypto.randomUUID());
-    await this.ctx.storage.put(STATE_KEY, state);
-    return state;
+    throw new Error('TODO(server): BaseRoom.alarm');
   }
 }

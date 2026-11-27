@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from 'react';
-import { selectFaulted, useStore } from '../store';
+import { selectAnyFault, selectServerNow, useStore } from '../store';
 import { connectionLabel, healthyLine, lastRepairLine, presenceLine, repairsLine } from './view';
 
 /** Re-reads `마지막 수리 … 12초 전` once a second. */
@@ -14,7 +14,7 @@ export function Hud() {
   const presence = useStore((s) => s.sync.presence);
   const connection = useStore((s) => s.connection);
   const hasBase = useStore((s) => s.sync.base !== null);
-  const faulted = useStore(selectFaulted);
+  const faulted = useStore(selectAnyFault);
   const label = connectionLabel(connection);
   const healthy = healthyLine(hasBase ? { faulted } : null);
   return (
@@ -44,13 +44,13 @@ export function Hud() {
  * re-renders once (the `effect` object changes).
  */
 function LastRepair() {
-  const last = useStore((s) => s.feedback.effect);
+  const last = useStore((s) => s.sync.base?.lastRepair ?? null);
   const line = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const el = line.current;
     if (!el || !last) return;
     const paint = () => {
-      el.textContent = lastRepairLine(last, performance.now());
+      el.textContent = lastRepairLine(last, selectServerNow(useStore.getState(), Date.now()));
     };
     paint();
     const id = setInterval(paint, LAST_REPAIR_TICK_MS);

@@ -1,5 +1,5 @@
-import { PING, PING_INTERVAL_MS, PONG_TIMEOUT_MS, parseServerMessage, type RepairRequest } from '../../shared/protocol';
-import { setRepairSender, useStore } from '../store';
+import { PING, PING_INTERVAL_MS, PONG_TIMEOUT_MS, parseServerMessage, type ClientMessage } from '../../shared/protocol';
+import { setClientSender, useStore } from '../store';
 import { reconnectDelayMs } from './backoff';
 
 /**
@@ -70,7 +70,7 @@ export function startSocket(): () => void {
       if (!msg) return;
       const now = performance.now();
       // `receive` applies the message, runs the hold machine and the repair feedback (plan 005).
-      store().receive(msg, now);
+      store().receive(msg, now, Date.now());
       if (msg.type === 'snapshot') {
         attempt = 0;
         store().setConnection('open');
@@ -84,15 +84,15 @@ export function startSocket(): () => void {
     };
   }
 
-  setRepairSender((req: RepairRequest) => {
-    if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(req));
+  setClientSender((msg: ClientMessage) => {
+    if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
   });
   connect();
 
   return () => {
     stopped = true;
     clearTimeout(retryTimer);
-    setRepairSender(null);
+    setClientSender(null);
     drop();
   };
 }

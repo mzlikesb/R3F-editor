@@ -1,22 +1,44 @@
 /**
- * Socket identity for `repaired.mine` (plan 005 D.11). Pure; `BaseRoom` stores the attachment with
- * `ws.serializeAttachment` when it accepts a socket (it survives hibernation) and compares ids when
- * it broadcasts. Contract with task `share` in `docs/plans/005-tasks.md`.
+ * What `BaseRoom` attaches to every socket (`ws.serializeAttachment`, survives hibernation):
+ * identity for `repaired.mine` (plan 005 D.11), the protocol from the upgrade URL (plan 006 B.12)
+ * and the socket's current hold (plan 006 A.10). Pure. Track `server` implements the TODO bodies.
  */
+import type { Hold } from './holds';
 
-/** What `BaseRoom` attaches to every accepted socket. */
 export interface SocketAttachment {
   id: string;
+  /** From `socketProtocol(url)` at upgrade time. */
+  protocol: 1 | 2;
+  hold: Hold | null;
 }
 
-/** A fresh attachment with id `newId()` (`BaseRoom` passes `() => crypto.randomUUID()`). */
-export function newAttachment(newId: () => string): SocketAttachment {
-  return { id: newId() };
+/** What `readAttachment` gives back; sockets opened before plan 005 carry nothing (`id` null, protocol 1). */
+export interface SocketInfo {
+  id: string | null;
+  protocol: 1 | 2;
+  hold: Hold | null;
+}
+
+/** A fresh attachment with id `newId()` and no hold (`BaseRoom` passes `() => crypto.randomUUID()`). */
+export function newAttachment(newId: () => string, protocol: 1 | 2): SocketAttachment {
+  void newId;
+  void protocol;
+  throw new Error('TODO(server): newAttachment');
+}
+
+/**
+ * Reads a value from `ws.deserializeAttachment()` defensively: `id` as in `readSocketId`;
+ * `protocol` 2 only when it is exactly 2, else 1; `hold` only when it is
+ * `{ faultId: non-empty string, startedAt: finite number }`, else null.
+ */
+export function readAttachment(attachment: unknown): SocketInfo {
+  void attachment;
+  throw new Error('TODO(server): readAttachment');
 }
 
 /**
  * The id in a value read back with `ws.deserializeAttachment()`. Returns null unless it is an object
- * whose `id` is a non-empty string (sockets opened before this deploy have no attachment).
+ * whose `id` is a non-empty string (sockets opened before plan 005 have no attachment).
  */
 export function readSocketId(attachment: unknown): string | null {
   if (typeof attachment !== 'object' || attachment === null || Array.isArray(attachment)) return null;

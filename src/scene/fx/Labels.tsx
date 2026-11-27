@@ -25,13 +25,16 @@ export function FaultBadge({
   id,
   height,
   unit,
-  selected,
+  othersHolding,
+  sensorText,
 }: {
   id: BaseModuleId;
   height: number;
   /** Local units per world unit (1 / module scale), so the lift looks the same on every module. */
   unit: number;
-  selected: BaseModuleId | null;
+  othersHolding: boolean;
+  /** `formatSensor(...)`; the scene track updates it every 0.5 s without re-rendering per frame. */
+  sensorText: string;
 }) {
   const onClick = (e: MouseEvent) => {
     e.stopPropagation();
@@ -40,7 +43,7 @@ export function FaultBadge({
   return (
     <Html position={[0, height + LABEL_LIFT * unit, 0]} center pointerEvents="none" zIndexRange={[0, 0]}>
       <button type="button" className="fx-badge" onClick={onClick}>
-        {badgeText(id, selected)}
+        {badgeText(id, { othersHolding, sensorText })}
       </button>
     </Html>
   );

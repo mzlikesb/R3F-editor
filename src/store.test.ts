@@ -1,224 +1,266 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { GENERATOR, type ServerMessage, type SnapshotMessage } from '../shared/protocol';
-import { TOAST_MS, initialFeedback } from './feedback';
+import type { ClientMessage, FaultMessage, RepairedMessage, SnapshotMessage } from '../shared/protocol';
+import { initialFeedback } from './feedback';
 import { HOLD_MS, initialRepairUi } from './hold';
-import { selectFaulted, selectModuleStatus, setRepairSender, useStore } from './store';
+import {
+  selectActivity,
+  selectAnyFault,
+  selectBlackout,
+  selectFaults,
+  selectModuleFault,
+  selectModuleStatus,
+  selectOthersHolding,
+  selectServerNow,
+  setClientSender,
+  useStore,
+} from './store';
 import { initialSync } from './sync';
 
-describe('store.select', () => {
-  beforeEach(() => {
-    useStore.setState({ selected: GENERATOR, repair: initialRepairUi });
-    setRepairSender(null);
-  });
-
-  it('cancels a hold in progress when the selection moves away', () => {
-    const sent: unknown[] = [];
-    setRepairSender((req) => sent.push(req));
-    const { dispatchHold, select } = useStore.getState();
-    dispatchHold({ type: 'press', faultId: 'f1', now: 0 });
-    expect(useStore.getState().repair.hold.kind).toBe('holding');
-
-    select(null);
-    expect(useStore.getState().repair.hold.kind).toBe('idle');
-
-    // The hold would have completed at 1 s; nothing goes out.
-    useStore.getState().dispatchHold({ type: 'tick', now: 2000 });
-    expect(sent).toEqual([]);
-  });
-
-  it('leaves the hold alone when the same module is selected again', () => {
-    const { dispatchHold, select } = useStore.getState();
-    dispatchHold({ type: 'press', faultId: 'f1', now: 0 });
-    select(GENERATOR);
-    expect(useStore.getState().repair.hold.kind).toBe('holding');
-  });
-});
-
-// ---- plan 005: receive, feedback, selectors ----
-
-const F1 = { id: 'f1', moduleId: GENERATOR, createdAt: 1 } as const;
+const T = 1_800_000_000_000;
+const oxy = { id: 'f1', moduleId: 'oxygen', createdAt: T - 9000 } as const;
+const gen = { id: 'g1', moduleId: 'generator', createdAt: T - 8000 } as const;
 
 function snapshot(overrides: Partial<SnapshotMessage> = {}): SnapshotMessage {
-  return { type: 'snapshot', version: 5, fault: F1, repairs: 2, presence: 2, instanceId: 'inst', ...overrides };
+  return {
+    type: 'snapshot',
+    protocol: 2,
+    version: 5,
+    faults: [oxy],
+    repairs: 2,
+    uptimeStartedAt: T - 60_000,
+    longestUptimeMs: 0,
+    blackout: null,
+    blackouts: [],
+    lastRepair: null,
+    presence: 2,
+    instanceId: 'inst',
+    serverNow: T,
+    ...overrides,
+  };
 }
 
-function repaired(mine: boolean, version = 6, faultId = 'f1'): ServerMessage {
-  return { type: 'repaired', version, faultId, repairs: 3, mine };
+function repaired(mine: boolean, overrides: Partial<RepairedMessage> = {}): RepairedMessage {
+  return {
+    type: 'repaired',
+    version: 6,
+    faultId: 'f1',
+    moduleId: 'oxygen',
+    repairs: 3,
+    mine,
+    at: T + 100,
+    blackoutEnd: null,
+    ...overrides,
+  };
 }
+
+const faultMsg = (overrides: Partial<FaultMessage> = {}): FaultMessage => ({
+  type: 'fault',
+  version: 6,
+  fault: gen,
+  blackoutStart: null,
+  ...overrides,
+});
+
+const s = () => useStore.getState();
+let sent: ClientMessage[] = [];
+
+beforeEach(() => {
+  useStore.setState({
+    sync: initialSync,
+    connection: 'open',
+    selected: null,
+    historyOpen: false,
+    repair: initialRepairUi,
+    feedback: initialFeedback,
+  });
+  sent = [];
+  setClientSender((msg) => sent.push(msg));
+});
 
 describe('store.receive', () => {
-  beforeEach(() => {
-    useStore.setState({
-      sync: initialSync,
-      selected: null,
-      repair: initialRepairUi,
-      feedback: initialFeedback,
-    });
-    setRepairSender(null);
-  });
-
-  const s = () => useStore.getState();
-
   it('applies messages to the synced base', () => {
-    s().receive(snapshot(), 0);
-    expect(s().sync.base?.fault).toEqual(F1);
-    s().receive(repaired(false), 10);
-    expect(s().sync.base?.fault).toBeNull();
+    s().receive(snapshot(), 0, T);
+    expect(s().sync.base?.faults).toEqual([oxy]);
+    s().receive(repaired(false), 10, T);
+    expect(s().sync.base?.faults).toEqual([]);
     expect(s().sync.base?.repairs).toBe(3);
   });
 
-  it('shows my repair: toast, burst effect, and the pending hold ends', () => {
-    s().receive(snapshot(), 0);
+  it('my repair: toast, effect on that module, the pending hold ends', () => {
+    s().receive(snapshot(), 0, T);
+    s().select('oxygen');
     s().dispatchHold({ type: 'press', faultId: 'f1', now: 0 });
     s().dispatchHold({ type: 'tick', now: HOLD_MS });
     expect(s().repair.hold.kind).toBe('pending');
 
-    s().receive(repaired(true), HOLD_MS + 50);
+    s().receive(repaired(true), HOLD_MS + 50, T);
     expect(s().repair.hold.kind).toBe('idle');
-    expect(s().feedback.toast?.kind).toBe('mine');
-    expect(s().feedback.effect).toEqual({ outcome: 'mine', seq: 1, at: HOLD_MS + 50 });
+    expect(s().feedback.toast).toMatchObject({ kind: 'mine', moduleId: 'oxygen' });
+    expect(s().feedback.effect).toEqual({ outcome: 'mine', moduleId: 'oxygen', seq: 1, at: HOLD_MS + 50 });
   });
 
-  it('a pending tab that lost the race hears "someone fixed it first"', () => {
-    s().receive(snapshot(), 0);
+  it('a tab holding the same fault hears "someone was a step ahead"', () => {
+    s().receive(snapshot(), 0, T);
     s().dispatchHold({ type: 'press', faultId: 'f1', now: 0 });
-    s().dispatchHold({ type: 'tick', now: HOLD_MS });
-
-    s().receive(repaired(false), HOLD_MS + 50);
-    expect(s().repair.hold.kind).toBe('idle');
-    expect(s().feedback.toast?.kind).toBe('beaten');
-    expect(s().feedback.effect?.outcome).toBe('beaten');
-  });
-
-  it('a tab still holding (before sending) is released with "someone fixed it first"', () => {
-    s().receive(snapshot(), 0);
-    s().dispatchHold({ type: 'press', faultId: 'f1', now: 0 });
-
-    s().receive(repaired(false), 400);
+    s().receive(repaired(false), 400, T);
     expect(s().repair.hold.kind).toBe('idle');
     expect(s().feedback.toast?.kind).toBe('beaten');
   });
 
-  it('an idle tab hears "someone fixed the generator"', () => {
-    s().receive(snapshot(), 0);
-    s().receive(repaired(false), 400);
-    expect(s().feedback.toast?.kind).toBe('other');
-    expect(s().feedback.effect?.outcome).toBe('other');
+  it('an idle tab hears "someone repaired <module>"', () => {
+    s().receive(snapshot(), 0, T);
+    s().receive(repaired(false), 400, T);
+    expect(s().feedback.toast).toMatchObject({ kind: 'other', moduleId: 'oxygen' });
   });
 
-  it('playtest pc-dev: pressing only after someone else\'s repair arrived is "other", not "beaten"', () => {
-    // Persona timeline (2026-11-27, PR #45): another tab's repaired arrived ~0.6 s before this
-    // tab's pointerdown. The button was already gone, so the press never started a hold.
-    s().receive(snapshot(), 0);
-    s().receive(repaired(false), 50_600);
-    expect(s().feedback.toast?.kind).toBe('other');
-    expect(s().repair.hold.kind).toBe('idle');
+  it('a live fault toasts with its module; faults in the arrival snapshot do not', () => {
+    s().receive(snapshot({ faults: [oxy, gen] }), 0, T);
+    expect(s().feedback.toast).toBeNull();
+    s().receive(faultMsg({ fault: { id: 'c1', moduleId: 'comms', createdAt: T } }), 500, T);
+    expect(s().feedback.toast).toMatchObject({ kind: 'fault', moduleId: 'comms' });
   });
 
-  it('a press is holding at once, so a repaired 1 ms later is still "beaten"', () => {
-    s().receive(snapshot(), 0);
-    s().dispatchHold({ type: 'press', faultId: 'f1', now: 1000 });
+  it('ignores a stale repaired: no toast, no effect, no hold change', () => {
+    s().receive(snapshot({ version: 10 }), 0, T);
+    s().dispatchHold({ type: 'press', faultId: 'f1', now: 0 });
+    s().receive(repaired(true, { version: 9 }), 100, T);
+    expect(s().feedback.toast).toBeNull();
+    expect(s().feedback.effect).toBeNull();
     expect(s().repair.hold.kind).toBe('holding');
-    s().receive(repaired(false), 1001);
-    expect(s().feedback.toast?.kind).toBe('beaten');
   });
 
-  it('remembers the last repair seen in this session, not one from before arrival', () => {
-    s().receive(snapshot({ fault: null, repairs: 7 }), 0);
-    expect(s().feedback.effect).toBeNull();
-    s().receive({ type: 'fault', version: 6, fault: F1 }, 10);
-    s().receive(repaired(true, 7), 500);
-    expect(s().feedback.effect).toMatchObject({ outcome: 'mine', at: 500 });
-  });
-
-  it('ignores a stale repaired: no toast, no effect', () => {
-    s().receive(snapshot({ version: 10 }), 0);
-    s().receive(repaired(true, 9), 100);
-    expect(s().feedback.toast).toBeNull();
-    expect(s().feedback.effect).toBeNull();
-    expect(s().sync.base?.fault).toEqual(F1);
-  });
-
-  it('reconnecting with a snapshot after sending only syncs state, with no repair effect', () => {
-    s().receive(snapshot(), 0);
+  it('#15-4: a snapshot without the held fault cancels the hold and sends release', () => {
+    s().receive(snapshot(), 0, T);
     s().dispatchHold({ type: 'press', faultId: 'f1', now: 0 });
-    s().dispatchHold({ type: 'tick', now: HOLD_MS });
-
-    s().receive(snapshot({ version: 6, fault: null, repairs: 3 }), HOLD_MS + 3000);
+    sent = [];
+    s().receive(snapshot({ version: 6, faults: [] }), 300, T);
     expect(s().repair.hold.kind).toBe('idle');
-    expect(s().sync.base?.fault).toBeNull();
-    expect(s().feedback.effect).toBeNull();
-    expect(s().feedback.toast).toBeNull();
+    expect(sent).toEqual([{ type: 'release', faultId: 'f1' }]);
   });
 
-  it('toasts a re-fault after the base was healthy, but not a fault already there on arrival', () => {
-    s().receive(snapshot(), 0);
-    expect(s().feedback.toast).toBeNull();
-
-    s().receive(repaired(false), 100);
-    s().dispatchFeedback({ type: 'tick', now: 100 + TOAST_MS });
-    expect(s().feedback.toast).toBeNull();
-
-    s().receive({ type: 'fault', version: 7, fault: { ...F1, id: 'f2' } }, 30_000);
-    expect(s().feedback.toast?.kind).toBe('refault');
+  it('#15-1: a snapshot from another base is taken whatever its version', () => {
+    s().receive(snapshot({ version: 50 }), 0, T);
+    s().receive(snapshot({ version: 1, instanceId: 'other', faults: [] }), 10, T);
+    expect(s().sync.base?.instanceId).toBe('other');
+    expect(selectAnyFault(s())).toBe(false);
   });
 
-  it('does not toast the first-visit fault right after a healthy first snapshot', () => {
-    s().receive(snapshot({ fault: null }), 0);
-    s().receive({ type: 'fault', version: 6, fault: F1 }, 5);
-    expect(s().feedback.toast).toBeNull();
-  });
-
-  it('presence alone changes no feedback', () => {
-    s().receive(snapshot(), 0);
-    const before = s().feedback;
-    s().receive({ type: 'presence', count: 4 }, 10);
-    expect(s().feedback).toBe(before);
-    expect(s().sync.presence).toBe(4);
+  it('sets the server clock from the snapshot', () => {
+    s().receive(snapshot({ serverNow: T + 4000 }), 0, T);
+    expect(selectServerNow(s(), T + 1000)).toBe(T + 5000);
   });
 });
 
-describe('store.select and the hint', () => {
-  beforeEach(() => {
-    useStore.setState({ sync: initialSync, selected: null, repair: initialRepairUi, feedback: initialFeedback });
-  });
-
-  it('dismisses the hint for good once any module is tapped', () => {
-    useStore.getState().select('greenhouse');
-    expect(useStore.getState().feedback.hintDismissed).toBe(true);
-    useStore.getState().select(null);
-    expect(useStore.getState().feedback.hintDismissed).toBe(true);
-  });
-
-  it('does not dismiss the hint when the selection is cleared', () => {
-    useStore.getState().select(null);
-    expect(useStore.getState().feedback.hintDismissed).toBe(false);
+describe('store.markIncompatible', () => {
+  it('locks repairs', () => {
+    s().receive(snapshot(), 0, T);
+    s().markIncompatible();
+    expect(s().sync.incompatible).toBe(true);
   });
 });
 
-describe('store.setLoaded', () => {
-  it('starts not loaded and latches once the scene is in', () => {
-    useStore.setState({ loaded: false });
-    expect(useStore.getState().loaded).toBe(false);
-    useStore.getState().setLoaded();
-    expect(useStore.getState().loaded).toBe(true);
+describe('store.select and holds (#15-4)', () => {
+  it('cancels a hold when the selection moves away, sending release, and nothing completes', () => {
+    s().receive(snapshot(), 0, T);
+    s().select('oxygen');
+    s().dispatchHold({ type: 'press', faultId: 'f1', now: 0 });
+    expect(sent).toEqual([{ type: 'hold', faultId: 'f1' }]);
+
+    s().select(null);
+    expect(s().repair.hold.kind).toBe('idle');
+    s().dispatchHold({ type: 'tick', now: 2000 });
+    expect(sent).toEqual([
+      { type: 'hold', faultId: 'f1' },
+      { type: 'release', faultId: 'f1' },
+    ]);
+  });
+
+  it('leaves the hold alone when the same module is selected again', () => {
+    s().select('oxygen');
+    s().dispatchHold({ type: 'press', faultId: 'f1', now: 0 });
+    s().select('oxygen');
+    expect(s().repair.hold.kind).toBe('holding');
+  });
+
+  it('dismisses the hint once any module is tapped, not on clearing', () => {
+    s().select(null);
+    expect(s().feedback.hintDismissed).toBe(false);
+    s().select('greenhouse');
+    expect(s().feedback.hintDismissed).toBe(true);
+  });
+});
+
+describe('record panel and repair panel', () => {
+  it('never open together', () => {
+    s().select('oxygen');
+    s().openHistory(true);
+    expect(s().historyOpen).toBe(true);
+    expect(s().selected).toBeNull();
+
+    s().select('comms');
+    expect(s().historyOpen).toBe(false);
+    expect(s().selected).toBe('comms');
+
+    s().openHistory(true);
+    s().openHistory(false);
+    expect(s().historyOpen).toBe(false);
+  });
+
+  it('opening the record panel mid-hold cancels the hold', () => {
+    s().receive(snapshot(), 0, T);
+    s().select('oxygen');
+    s().dispatchHold({ type: 'press', faultId: 'f1', now: 0 });
+    s().openHistory(true);
+    expect(s().repair.hold.kind).toBe('idle');
+    expect(sent.at(-1)).toEqual({ type: 'release', faultId: 'f1' });
   });
 });
 
 describe('selectors', () => {
-  beforeEach(() => {
-    useStore.setState({ sync: initialSync, selected: null, repair: initialRepairUi, feedback: initialFeedback });
+  it('report faults per module, stable between unrelated messages', () => {
+    expect(selectFaults(s())).toEqual([]);
+    expect(selectModuleStatus(s(), 'oxygen')).toBe('ok');
+
+    s().receive(snapshot({ faults: [oxy, gen] }), 0, T);
+    const faults = selectFaults(s());
+    expect(faults).toEqual([oxy, gen]);
+    expect(selectModuleFault(s(), 'generator')).toEqual(gen);
+    expect(selectModuleFault(s(), 'comms')).toBeNull();
+    expect(selectModuleStatus(s(), 'oxygen')).toBe('fault');
+    expect(selectModuleStatus(s(), 'habitat')).toBe('ok');
+    expect(selectAnyFault(s())).toBe(true);
+
+    s().receive({ type: 'presence', count: 5 }, 10, T);
+    expect(selectFaults(s())).toBe(faults);
   });
 
-  it('reports the fault on the generator only', () => {
-    const s = useStore.getState();
-    expect(selectFaulted(s)).toBe(false);
-    expect(selectModuleStatus(s, 'generator')).toBe('ok');
+  it('report the blackout', () => {
+    s().receive(snapshot(), 0, T);
+    expect(selectBlackout(s())).toBe(false);
+    s().receive(snapshot({ version: 6, blackout: { id: 'b1', startedAt: T }, uptimeStartedAt: null }), 0, T);
+    expect(selectBlackout(s())).toBe(true);
+  });
 
-    s.receive(snapshot(), 0);
-    const now = useStore.getState();
-    expect(selectFaulted(now)).toBe(true);
-    expect(selectModuleStatus(now, 'generator')).toBe('fault');
-    expect(selectModuleStatus(now, 'habitat')).toBe('ok');
+  it("(b) others holding is exactly what the server sent; this tab's own hold is never subtracted", () => {
+    s().receive(snapshot({ faults: [oxy, gen] }), 0, T);
+    s().select('oxygen');
+    s().dispatchHold({ type: 'press', faultId: 'f1', now: 0 });
+
+    s().receive({ type: 'activity', holds: { f1: 1 } }, 10, T);
+    expect(selectOthersHolding(s(), 'oxygen')).toBe(1);
+    expect(selectOthersHolding(s(), 'generator')).toBe(0);
+    expect(selectOthersHolding(s(), 'comms')).toBe(0);
+
+    s().receive({ type: 'activity', holds: {} }, 20, T);
+    expect(selectOthersHolding(s(), 'oxygen')).toBe(0);
+    expect(selectActivity(s())).toEqual({});
+  });
+});
+
+describe('store.setLoaded', () => {
+  it('latches once the scene is in', () => {
+    useStore.setState({ loaded: false });
+    s().setLoaded();
+    expect(s().loaded).toBe(true);
   });
 });

@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { effectsFor } from '../../feedback';
-import { isRepairable } from '../../modules';
-import { selectModuleStatus, useStore } from '../../store';
+import { selectAnyFault, selectModuleStatus, selectOthersHolding, useStore } from '../../store';
 import type { ModuleFxProps } from '../moduleTypes';
 import { Glow } from './Glow';
 import { FaultBadge, NameTag } from './Labels';
-import { labelKind } from './labelRules';
+import { labelPlan } from './labelRules';
 import { FloorRing, RingPing, SweepRing } from './Rings';
 import { Sparks } from './Sparks';
 import { StatusLight } from './StatusLight';
@@ -29,7 +28,8 @@ const NO_TOKENS: Tokens = { sweep: 0, burst: 0, ping: 0 };
 export function ModuleFx({ id, handle }: ModuleFxProps) {
   const faulted = useStore((s) => selectModuleStatus(s, id)) === 'fault';
   const selected = useStore((s) => s.selected);
-  const faultedModule = useStore((s) => s.sync.base?.fault?.moduleId ?? null);
+  const anyFault = useStore(selectAnyFault);
+  const othersHolding = useStore((s) => selectOthersHolding(s, id)) > 0;
   const effect = useStore((s) => s.feedback.effect);
 
   // A repair that was already there at mount does not play. Adjusting state while rendering
@@ -38,7 +38,7 @@ export function ModuleFx({ id, handle }: ModuleFxProps) {
   const [tokens, setTokens] = useState<Tokens>(NO_TOKENS);
   if (effect && effect.seq !== seen) {
     setSeen(effect.seq);
-    if (isRepairable(id)) {
+    if (effect.moduleId === id) {
       const fx = effectsFor(effect.outcome);
       setTokens({
         sweep: fx.sweep ? effect.seq : 0,
@@ -53,7 +53,9 @@ export function ModuleFx({ id, handle }: ModuleFxProps) {
 
   const height = handle?.height ?? 1;
   const radius = handle?.radius ?? 0.6;
-  const label = labelKind(id, { selected, faulted: faultedModule });
+  // TODO(scene): one shared plan for all modules (faults, blackout, holding from the store).
+  const plan = labelPlan({ faults: [], selected, blackout: false, holding: [] });
+  const label = faulted && anyFault ? 'badge' : plan.tag === id ? 'tag' : null;
   // The model's parent is the module group, the only scaled ancestor (`scene/Module.tsx`).
   const unit = 1 / (handle?.model.parent?.scale.x || 1);
 
@@ -64,18 +66,14 @@ export function ModuleFx({ id, handle }: ModuleFxProps) {
           <FloorRing radius={radius} fault={faulted} />
           {faulted ? null : <StatusLight height={height} />}
           {label === 'badge' ? (
-            <FaultBadge id={id} height={height} unit={unit} selected={selected} />
+            <FaultBadge id={id} height={height} unit={unit} othersHolding={othersHolding} sensorText="" />
           ) : label === 'tag' ? (
             <NameTag id={id} height={height} unit={unit} />
           ) : null}
-          {isRepairable(id) ? (
-            <>
-              <SweepRing radius={radius} height={height} token={tokens.sweep} />
-              <RingPing radius={radius} token={tokens.ping} />
-              <Sparks radius={radius} height={height} token={tokens.burst} />
-              <Glow radius={radius} height={height} token={tokens.burst} />
-            </>
-          ) : null}
+          <SweepRing radius={radius} height={height} token={tokens.sweep} />
+          <RingPing radius={radius} token={tokens.ping} />
+          <Sparks radius={radius} height={height} token={tokens.burst} />
+          <Glow radius={radius} height={height} token={tokens.burst} />
         </>
       ) : null}
     </group>

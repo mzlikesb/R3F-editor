@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_CLIENT_MESSAGES_PER_SECOND } from '../shared/protocol';
-import { createRateLimiter } from './rateLimit';
+import { admit, createRateLimiter } from './rateLimit';
 
 describe('createRateLimiter', () => {
   it('allows 5 messages in a second and ignores the 6th', () => {
@@ -28,5 +28,23 @@ describe('createRateLimiter', () => {
   it('allows a steady 4 per second indefinitely', () => {
     const allow = createRateLimiter();
     for (let t = 0; t < 10_000; t += 250) expect(allow(t)).toBe(true);
+  });
+});
+
+describe('admit (plan 006 A.10, neon (b))', () => {
+  it('limits hold and repair, never release', () => {
+    const allow = createRateLimiter();
+    const results = [0, 1, 2, 3, 4].map((t) => admit('hold', allow, t));
+    expect(results).toEqual([true, true, true, true, true]);
+    expect(admit('hold', allow, 5)).toBe(false);
+    expect(admit('repair', allow, 6)).toBe(false);
+    expect(admit('release', allow, 7)).toBe(true);
+  });
+
+  it('a release does not use up the budget', () => {
+    const allow = createRateLimiter();
+    for (let t = 0; t < 10; t++) expect(admit('release', allow, t)).toBe(true);
+    for (let t = 10; t < 15; t++) expect(admit('hold', allow, t)).toBe(true);
+    expect(admit('hold', allow, 15)).toBe(false);
   });
 });
