@@ -68,12 +68,12 @@ export function segments(line: string): string[] {
 }
 
 /**
- * Under the HUD while something is broken and it is not dark yet: `고장 2/3 · 3개면 정전`, so the
+ * Under the HUD while something is broken and it is not dark yet: `고장 2개 · 3개가 되면 정전`, so the
  * count means something. Null when healthy or in a blackout (the blackout banner says it).
  */
 export function faultCountLine(faultCount: number, blackout: Blackout | null): string | null {
   if (blackout !== null || faultCount <= 0) return null;
-  return `고장 ${faultCount}/${MAX_FAULTS} · ${MAX_FAULTS}개면 정전`;
+  return `고장 ${faultCount}개 · ${MAX_FAULTS}개가 되면 정전`;
 }
 
 /**
@@ -93,7 +93,7 @@ export function connectionLabel(status: ConnectionStatus): string | null {
 
 /** Under the HUD while nothing is broken (and a base is known). */
 export function healthyLine(base: { faulted: boolean } | null): string | null {
-  return base && !base.faulted ? '기지 정상 · 고장 나면 알려 드려요' : null;
+  return base && !base.faulted ? '기지 정상 · 고장이 나면 이 화면에 떠요' : null;
 }
 
 /** Top of the HUD during a blackout (plan 006 C.18), else null. */

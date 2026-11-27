@@ -1,6 +1,26 @@
 /* Labels hang from their bottom edge at the anchor point, centered horizontally. */
 .fx-anchor {
+  position: relative;
+  padding-bottom: 9px; /* room for the leader line */
   transform: translate(-50%, -100%);
+  transition: opacity 0.2s ease;
+}
+
+/* The leader line: from the label down to the module it names. */
+.fx-anchor::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 1px;
+  height: 9px;
+  background: rgba(244, 246, 248, 0.6);
+  pointer-events: none;
+}
+
+/* Behind another module from here: faint, so it is not read as that module's label. */
+.fx-anchor.fx-dim {
+  opacity: 0.35;
 }
 
 .fx-tag,
@@ -112,6 +132,9 @@
   .fx-badge,
   .fx-dot {
     animation: none;
+  }
+  .fx-anchor {
+    transition: none;
   }
   .fx-flash {
     animation-duration: 0.2s;

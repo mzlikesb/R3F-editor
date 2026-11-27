@@ -114,10 +114,10 @@ export function sensorRange(moduleId: ModuleId): { min: number; max: number } {
   };
 }
 
-/** `출력 96kW · 정상 120kW`: the value with the healthy level, so the number means something. */
+/** `출력 96kW · 기준 120kW`: the value with the healthy level, so the number means something. */
 export function sensorReading(moduleId: ModuleId, value: number): string {
   const spec = SENSORS[moduleId];
-  return `${spec.short} ${formatSensor(moduleId, value)} · 정상 ${formatSensor(moduleId, spec.nominal)}`;
+  return `${spec.short} ${formatSensor(moduleId, value)} · 기준 ${formatSensor(moduleId, spec.nominal)}`;
 }
 
 /** A little past the healthy wobble, so rounding never flags a healthy value. */

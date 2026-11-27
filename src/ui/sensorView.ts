@@ -36,7 +36,7 @@ export function trendPoints(moduleId: ModuleId, values: readonly number[], width
   return values.map((v, i) => `${round((i / last) * width)},${round(((max - v) / (max - min)) * height)}`).join(' ');
 }
 
-/** Panel line: `산소 92% · 정상 98%` (`sensorReading`). */
+/** Panel line: `산소 92% · 기준 98%` (`sensorReading`). */
 export function sensorLine(moduleId: ModuleId, fault: Fault | null, serverNow: number): string {
   return sensorReading(moduleId, sensorValue(moduleId, fault, serverNow));
 }

@@ -92,11 +92,11 @@ describe('formatSensor', () => {
 
 describe('sensorReading (playtest #47: what the number means)', () => {
   it('puts the healthy level next to the value', () => {
-    expect(sensorReading('generator', 96.4)).toBe('출력 96kW · 정상 120kW');
-    expect(sensorReading('oxygen', 92)).toBe('산소 92% · 정상 98%');
-    expect(sensorReading('greenhouse', 30.25)).toBe('온도 30.3℃ · 정상 22.0℃');
-    expect(sensorReading('comms', 40)).toBe('신호 40% · 정상 94%');
-    expect(sensorReading('habitat', 90)).toBe('기압 90.0kPa · 정상 101.0kPa');
+    expect(sensorReading('generator', 96.4)).toBe('출력 96kW · 기준 120kW');
+    expect(sensorReading('oxygen', 92)).toBe('산소 92% · 기준 98%');
+    expect(sensorReading('greenhouse', 30.25)).toBe('온도 30.3℃ · 기준 22.0℃');
+    expect(sensorReading('comms', 40)).toBe('신호 40% · 기준 94%');
+    expect(sensorReading('habitat', 90)).toBe('기압 90.0kPa · 기준 101.0kPa');
   });
 
   it('is short enough for a badge line on a phone', () => {
