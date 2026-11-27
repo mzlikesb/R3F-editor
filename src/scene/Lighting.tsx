@@ -6,12 +6,10 @@ import { selectBlackout, useStore } from '../store';
 import { EmergencyLight } from './EmergencyLight';
 import { SceneErrorBoundary } from './ErrorBoundary';
 import { SHADOW_MAP_SIZE } from './quality';
-import { TIER } from './qualityStore';
+import { getTier } from './qualityStore';
 
 const AMBIENT = 0.25;
 const DIRECTIONAL = 2.2;
-/** Fixed by the device tier for the session: changing it would rebuild the shadow map. */
-const SHADOW_SIZE = SHADOW_MAP_SIZE[TIER];
 /** Used when the HDRI fails: the environment light is gone, so the direct lights carry the scene. */
 const AMBIENT_NO_ENV = 0.9;
 const DIRECTIONAL_NO_ENV = 3.2;
@@ -26,6 +24,8 @@ const RESTORE_RATE = 2.5;
  * If the HDRI cannot load, its boundary raises the direct lights instead of failing the scene.
  */
 export function Lighting() {
+  // Fixed by the device tier for the session: changing it would rebuild the shadow map.
+  const shadowSize = SHADOW_MAP_SIZE[getTier()];
   const [envFailed, setEnvFailed] = useState(false);
   const level = useRef(1);
   const ambient = useRef<AmbientLight>(null);
@@ -54,7 +54,7 @@ export function Lighting() {
         position={[10, 16, 8]}
         intensity={sunBase}
         castShadow
-        shadow-mapSize={[SHADOW_SIZE, SHADOW_SIZE]}
+        shadow-mapSize={[shadowSize, shadowSize]}
         shadow-camera-left={-16}
         shadow-camera-right={16}
         shadow-camera-top={16}
