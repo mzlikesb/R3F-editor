@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { nearestAzimuth, outwardAzimuth, polarPose, wrapAngle } from './cameraPath';
+import {
+  nearestAzimuth,
+  outwardAzimuth,
+  overviewDirAt,
+  overviewDistanceAt,
+  overviewDistanceMax,
+  polarPose,
+  wrapAngle,
+} from './cameraPath';
+import { overviewFov, project } from './framing';
+import { OVERVIEW_DIR, OVERVIEW_MARGIN, OVERVIEW_POINTS, OVERVIEW_TARGET } from './layout';
 
 const deg = (d: number) => (d * Math.PI) / 180;
 
@@ -62,5 +72,45 @@ describe('polarPose', () => {
     const p = polarPose(3, 4);
     expect(p.distance).toBeCloseTo(5);
     expect(p.polar).toBeCloseTo(Math.atan2(3, 4));
+  });
+});
+
+describe('overview return poses', () => {
+  const sizes: [number, number][] = [
+    [390, 844],
+    [1280, 800],
+  ];
+  it('fits every overview point on screen from any azimuth', () => {
+    for (const [w, h] of sizes) {
+      const fov = overviewFov(w / h);
+      for (let i = 0; i < 16; i++) {
+        const az = (i / 16) * Math.PI * 2 - Math.PI;
+        const d = overviewDistanceAt(az, fov, w, h);
+        const spec = {
+          target: OVERVIEW_TARGET,
+          dir: overviewDirAt(az),
+          fovDeg: fov,
+          width: w,
+          height: h,
+          margin: OVERVIEW_MARGIN,
+        };
+        for (const p of OVERVIEW_POINTS) {
+          const n = project(spec, d, p);
+          const x = ((n.x + 1) / 2) * w;
+          const y = ((1 - n.y) / 2) * h;
+          expect(x).toBeGreaterThanOrEqual(OVERVIEW_MARGIN.side - 0.5);
+          expect(x).toBeLessThanOrEqual(w - OVERVIEW_MARGIN.side + 0.5);
+          expect(y).toBeGreaterThanOrEqual(OVERVIEW_MARGIN.top - 0.5);
+          expect(y).toBeLessThanOrEqual(h - OVERVIEW_MARGIN.bottom + 0.5);
+        }
+        expect(d).toBeLessThanOrEqual(overviewDistanceMax(fov, w, h) + 1e-6);
+      }
+    }
+  });
+  it('keeps the original direction at azimuth 0', () => {
+    const d = overviewDirAt(0);
+    expect(d.x).toBeCloseTo(0);
+    expect(d.z).toBeCloseTo(OVERVIEW_DIR.z);
+    expect(d.y).toBe(OVERVIEW_DIR.y);
   });
 });
