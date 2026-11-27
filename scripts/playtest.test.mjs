@@ -241,3 +241,12 @@ test('SIGINT to the runner cleans up players and temp folders', { timeout: T }, 
   assert.ok(!existsSync(log(r.logs, 'hang').cwd));
   assert.ok(r.ms < 8000, `took ${r.ms}ms`);
 });
+
+test('prints the run folder with the home directory shortened to ~', { timeout: T }, async () => {
+  const home = mkdtempSync(join(tmpdir(), 'pt-home-'));
+  const r = await run([LOCAL, 'success'], { env: { HOME: home, PLAYTEST_RUNS_DIR: join(home, 'runs') } });
+  assert.equal(r.code, 0, r.stderr);
+  const last = r.stdout.trim().split('\n').at(-1);
+  assert.match(last, /^~\/runs\/local-\d{8}-\d{6}$/);
+  assert.ok(!r.stdout.includes(home));
+});

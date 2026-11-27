@@ -353,6 +353,18 @@ test('classifyRun: API error (e.g. 429) is a failure, not success', () => {
   assert.match(r.reason, /429/);
 });
 
+test('classifyRun: time limit wins when claude still emits a result after SIGTERM', () => {
+  for (const result of [
+    { type: 'result', subtype: 'success', is_error: false, result: 'REPORT', duration_ms: 1, usage: u(1, 1) },
+    { type: 'result', subtype: 'error_during_execution', is_error: true },
+  ]) {
+    const r = classifyRun({ events: [init, text('a', '보는 중'), result], timedOut: true, exitCode: 1, abort: null });
+    assert.equal(r.status, 'incomplete', result.subtype);
+    assert.equal(r.reason, '시간 상한', result.subtype);
+    assert.match(r.report, /보는 중/);
+  }
+});
+
 test('classifyRun: runner abort (isolation) wins over anything else', () => {
   const r = classifyRun({
     events: [init, { type: 'result', subtype: 'success', is_error: false, result: 'x' }],

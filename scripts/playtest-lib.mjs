@@ -284,7 +284,7 @@ export function classifyRun({ events, timedOut, exitCode, abort }) {
       const status = result.api_error_status != null ? ` ${result.api_error_status}` : '';
       return failed(`API 오류${status}`);
     }
-    if (result.subtype === 'success') {
+    if (result.subtype === 'success' && !timedOut) {
       if (result.is_error) return failed('오류 결과');
       return {
         status: 'complete',
@@ -296,6 +296,7 @@ export function classifyRun({ events, timedOut, exitCode, abort }) {
       };
     }
     if (result.subtype === 'error_max_turns') return incomplete('턴 상한');
+    if (timedOut) return incomplete('시간 상한'); // a result after our SIGTERM does not make the run complete
     return incomplete(String(result.subtype));
   }
   if (timedOut) return incomplete('시간 상한');

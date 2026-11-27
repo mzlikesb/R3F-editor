@@ -270,7 +270,8 @@ async function main() {
   }
 
   for (const r of results) process.stdout.write(`${r.name}: ${r.status}${r.reason ? `(${r.reason})` : ''}\n`);
-  process.stdout.write(`${runDir}\n`);
+  const home = homedir();
+  process.stdout.write(`${runDir.startsWith(`${home}/`) ? `~${runDir.slice(home.length)}` : runDir}\n`);
   if (interrupted) process.exit(130);
   process.exit(results.some((r) => r.status === 'failed') ? 1 : 0);
 }
