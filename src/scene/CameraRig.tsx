@@ -4,8 +4,16 @@ import { useThree } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
 import { Box3, PerspectiveCamera, Vector3 } from 'three';
 import { useStore } from '../store';
-import { fitDistance, overviewFov } from './framing';
-import { BOUNDS, LAYOUT, OVERVIEW_DIR, OVERVIEW_MARGIN, OVERVIEW_POINTS, OVERVIEW_TARGET } from './layout';
+import {
+  nearestAzimuth,
+  outwardAzimuth,
+  overviewDirAt,
+  overviewDistanceAt,
+  overviewDistanceMax,
+  polarPose,
+} from './cameraPath';
+import { overviewFov } from './framing';
+import { BOUNDS, LAYOUT, OVERVIEW_DIR, OVERVIEW_TARGET } from './layout';
 
 const PHONE = '(max-width: 600px)';
 /** A portrait phone sees a much narrower slice horizontally, so focus from further away. */
@@ -33,13 +41,9 @@ export function CameraRig() {
   const selected = useStore((s) => s.selected);
   const width = useThree((s) => s.size.width);
   const height = useThree((s) => s.size.height);
-  const { fov, overviewDistance } = useMemo(() => {
+  const { fov, maxDistance } = useMemo(() => {
     const f = overviewFov(width / Math.max(1, height));
-    const d = fitDistance(
-      { target: OVERVIEW_TARGET, dir: OVERVIEW_DIR, fovDeg: f, width, height, margin: OVERVIEW_MARGIN },
-      OVERVIEW_POINTS,
-    );
-    return { fov: f, overviewDistance: d };
+    return { fov: f, maxDistance: overviewDistanceMax(f, width, height) };
   }, [width, height]);
 
   useEffect(() => {
@@ -62,33 +66,54 @@ export function CameraRig() {
       cam.fov = fov;
       cam.updateProjectionMatrix();
     }
-    const d = overviewDistance;
-
+    // A selection change turns the camera the short way from where it is now: the target, azimuth,
+    // polar angle and distance all ease together over one smoothTime. A jump (first frame, resize)
+    // snaps to the fixed pose instead.
+    if (animate) void c.normalizeRotations();
+    const az = c.azimuthAngle;
     if (selected === null) {
-      const len = Math.hypot(OVERVIEW_DIR.x, OVERVIEW_DIR.y, OVERVIEW_DIR.z);
       const t = OVERVIEW_TARGET;
+      const { polar } = polarPose(Math.hypot(OVERVIEW_DIR.x, OVERVIEW_DIR.z), OVERVIEW_DIR.y);
+      // Fit for the azimuth we keep: the fit distance depends on the viewing direction.
+      const dist = overviewDistanceAt(az, fov, width, height);
       void c.setFocalOffset(0, 0, 0, animate);
+      if (animate) {
+        void c.setTarget(t.x, t.y, t.z, true);
+        void c.rotateTo(az, polar, true);
+        void c.dollyTo(dist, true);
+        return;
+      }
+      const dir = overviewDirAt(az);
+      const len = Math.hypot(dir.x, dir.y, dir.z);
       void c.setLookAt(
-        t.x + (OVERVIEW_DIR.x / len) * d,
-        t.y + (OVERVIEW_DIR.y / len) * d,
-        t.z + (OVERVIEW_DIR.z / len) * d,
+        t.x + (dir.x / len) * dist,
+        t.y + (dir.y / len) * dist,
+        t.z + (dir.z / len) * dist,
         t.x,
         t.y,
         t.z,
-        animate,
+        false,
       );
       return;
     }
     const l = LAYOUT[selected];
+    const fd = l.focusDistance * (phone ? PHONE_FOCUS_SCALE : 1);
+    const cy = phone ? fd * 1.15 : fd * 0.55;
+    const { polar, distance } = polarPose(fd, cy);
+    const offset = (phone ? FOCUS_OFFSET.phone : FOCUS_OFFSET.desktop) * distance;
+    void c.setFocalOffset(0, offset, 0, animate);
+    if (animate) {
+      const pref = outwardAzimuth(l.x, l.z, az);
+      void c.setTarget(l.x, FOCUS_Y, l.z, true);
+      void c.rotateTo(nearestAzimuth(az, pref), polar, true);
+      void c.dollyTo(distance, true);
+      return;
+    }
     const len = Math.hypot(l.x, l.z);
     const dx = len > 0.01 ? l.x / len : 0;
     const dz = len > 0.01 ? l.z / len : 1;
-    const fd = l.focusDistance * (phone ? PHONE_FOCUS_SCALE : 1);
-    const cy = phone ? fd * 1.15 : fd * 0.55;
-    const offset = (phone ? FOCUS_OFFSET.phone : FOCUS_OFFSET.desktop) * Math.hypot(fd, cy);
-    void c.setFocalOffset(0, offset, 0, animate);
-    void c.setLookAt(l.x + dx * fd, cy, l.z + dz * fd, l.x, FOCUS_Y, l.z, animate);
-  }, [selected, width, height, fov, overviewDistance]);
+    void c.setLookAt(l.x + dx * fd, cy, l.z + dz * fd, l.x, FOCUS_Y, l.z, false);
+  }, [selected, width, height, fov]);
 
   return (
     <CameraControls
@@ -96,7 +121,7 @@ export function CameraRig() {
       makeDefault
       maxPolarAngle={Math.PI * 0.47}
       minDistance={3}
-      maxDistance={Math.max(MIN_MAX_DISTANCE, overviewDistance * 1.25)}
+      maxDistance={Math.max(MIN_MAX_DISTANCE, maxDistance * 1.25)}
       smoothTime={0.35}
     />
   );
