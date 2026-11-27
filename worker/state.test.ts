@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { GENERATOR, HISTORY_BLACKOUTS, MAX_FAULTS, MODULE_IDS, type Fault, type ModuleId } from '../shared/protocol';
 import {
+  FIRST_FAULT_WAIT_MS,
   MIN_UNATTENDED_MS,
   REFAULT_MAX_MS,
   REFAULT_MIN_MS,
@@ -417,9 +418,50 @@ describe('arrive (0 -> 1): unattended time', () => {
     for (const lastSavedAt of [T - 1000, T - 3_600_000]) {
       // A next-fault time left in the past while nobody was here must not fire on arrival.
       const { state: s } = arrive(state({ lastSavedAt, nextFaultAt: T - 100_000 }), T, rng([0]));
-      expectNextFaultWithinRange(s, T);
+      expect(s.nextFaultAt).not.toBeNull();
+      expect(s.nextFaultAt!).toBeGreaterThanOrEqual(T + FIRST_FAULT_WAIT_MS);
+      expect(s.nextFaultAt!).toBeLessThanOrEqual(T + REFAULT_MAX_MS);
       expect(decideOnAlarm(s, 1, T + 2500)).toBe('none');
     }
+  });
+
+  it('a healthy base pulls the first fault in to 5 s, so nobody waits 20-40 s for something to do', () => {
+    // Playtest #47: arriving to a base with nothing broken, all three left before the first fault.
+    for (const lastSavedAt of [T - 1000, T - 30_000]) {
+      for (const r of [0, 0.5, 0.99]) {
+        const { state: s, injected } = arrive(state({ lastSavedAt, faults: [] }), T, rng([r]));
+        expect(injected).toEqual([]);
+        expect(s.faults).toEqual([]);
+        expect(s.nextFaultAt).toBe(T + FIRST_FAULT_WAIT_MS);
+        expect(decideOnAlarm(s, 1, T + FIRST_FAULT_WAIT_MS - 1)).toBe('none');
+        expect(decideOnAlarm(s, 1, T + FIRST_FAULT_WAIT_MS)).toBe('injectFault');
+      }
+    }
+  });
+
+  it('not an immediate fault: refreshing still hands out nothing on arrival, only a 5 s wait', () => {
+    let cur = state({ lastSavedAt: T - 1000 });
+    for (let i = 0; i < 10; i++) {
+      const at = T + i * 2000;
+      const { state: s, injected } = arrive(cur, at, rng());
+      expect(injected).toEqual([]);
+      expect(s.nextFaultAt).toBe(at + FIRST_FAULT_WAIT_MS);
+      cur = leave(s, at + 1000);
+    }
+    expect(cur.faults).toEqual([]);
+  });
+
+  it('with a fault already there (left behind or unattended) the 20-40 s rhythm is kept', () => {
+    const left = arrive(state({ lastSavedAt: T - 1000, faults: [fault('oxygen')] }), T, rng([0.5]));
+    expectNextFaultWithinRange(left.state, T);
+    const unattended = arrive(state({ lastSavedAt: T - 3_600_000 }), T, rng([0.5]));
+    expect(unattended.injected.length).toBeGreaterThan(0);
+    expectNextFaultWithinRange(unattended.state, T);
+  });
+
+  it('the wait is shorter than the usual rhythm and longer than the 2.5 s arrival guard', () => {
+    expect(FIRST_FAULT_WAIT_MS).toBeLessThan(REFAULT_MIN_MS);
+    expect(FIRST_FAULT_WAIT_MS).toBeGreaterThan(2500);
   });
 
   it('saves now and bumps the version once per added fault', () => {

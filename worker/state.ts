@@ -36,6 +36,12 @@ export const UNATTENDED_FAULT_CAP = 2;
  * Longer than `REFAULT_MAX_MS`, so whenever it applies at least one fault is due anyway ("최소 1개").
  */
 export const MIN_UNATTENDED_MS = 60_000;
+/**
+ * Arriving (0 → 1) to a base with no fault pulls the next fault in to at most this far out
+ * (playtest #47: visitors left before the first 20-40 s fault). Not an immediate fault, so a
+ * refresh still hands out nothing on arrival; it only shortens the wait.
+ */
+export const FIRST_FAULT_WAIT_MS = 5_000;
 
 /**
  * A random healthy module. The `MAX_FAULTS`-th fault goes to the generator while it is healthy.
@@ -249,6 +255,7 @@ export interface ArriveResult {
  *   nothing is added. No blackout can start here.
  * - `uptimeStartedAt` and an ongoing blackout are left as they are.
  * - `nextFaultAt = now + delay` below `MAX_FAULTS`, else null. `version + injected.length`.
+ * - Still no fault after that: `nextFaultAt = min(nextFaultAt, now + FIRST_FAULT_WAIT_MS)`.
  * Always returns a new state (`lastSavedAt = now`).
  */
 export function arrive(state: BaseState, now: number, rng: Rng): ArriveResult {
@@ -269,11 +276,17 @@ export function arrive(state: BaseState, now: number, rng: Rng): ArriveResult {
       ...state,
       faults,
       version: state.version + injected.length,
-      nextFaultAt: faults.length >= MAX_FAULTS ? null : now + nextFaultDelayMs(rng.rand),
+      nextFaultAt: nextFaultOnArrival(faults.length, now, rng),
       lastSavedAt: now,
     },
     injected,
   };
+}
+
+function nextFaultOnArrival(faultCount: number, now: number, rng: Rng): number | null {
+  if (faultCount >= MAX_FAULTS) return null;
+  const next = now + nextFaultDelayMs(rng.rand);
+  return faultCount === 0 ? Math.min(next, now + FIRST_FAULT_WAIT_MS) : next;
 }
 
 /** Connections went 1 → 0: only `lastSavedAt = now`, so the stay is not counted as unattended. */

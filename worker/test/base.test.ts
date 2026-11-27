@@ -14,7 +14,7 @@ import {
 } from '../../shared/protocol';
 import { v1ParseServerMessage, v1Replay, type V1ServerMessage } from '../../shared/testdata/v1';
 import { LEGACY_STATE_KEY, STATE_KEY } from '../BaseRoom';
-import { MIN_UNATTENDED_MS, type BaseState, type LegacyState } from '../state';
+import { FIRST_FAULT_WAIT_MS, MIN_UNATTENDED_MS, type BaseState, type LegacyState } from '../state';
 
 const TIMEOUT_MS = 2000;
 /** How long to wait before concluding that a message is not coming. */
@@ -266,7 +266,8 @@ describe('connecting (protocol 2)', () => {
     expect(a.rejected).toEqual([]);
   });
 
-  it('a brand-new base starts healthy and schedules the first fault 20-40 s out', async () => {
+  it('a brand-new base starts healthy and schedules the first fault 5 s out', async () => {
+    const before = Date.now();
     const a = await Client.connect();
     const snap = await a.waitFor(isSnapshot);
     expect(snap.faults).toEqual([]);
@@ -274,8 +275,9 @@ describe('connecting (protocol 2)', () => {
     expect(a.messages.filter(isFault)).toEqual([]);
     const alarm = await getAlarm();
     expect(alarm).not.toBeNull();
-    expect(alarm!).toBeGreaterThanOrEqual(Date.now() + 20_000 - 1000);
-    expect(alarm!).toBeLessThanOrEqual(Date.now() + 40_000 + 1000);
+    expect(alarm!).toBeGreaterThanOrEqual(before + FIRST_FAULT_WAIT_MS);
+    expect(alarm!).toBeLessThanOrEqual(Date.now() + FIRST_FAULT_WAIT_MS);
+    expect(alarm).toBe((await readState())!.nextFaultAt);
   });
 
   it('keeps the same instanceId across connections', async () => {
@@ -603,6 +605,37 @@ describe('unattended time (0 -> 1)', () => {
     await quiet();
     expect(snap.faults).toEqual([]);
     expect(b.faults()).toEqual([]);
+  });
+
+  it('a healthy base, arriving again: no fault on arrival, the first one due within 5 s', async () => {
+    const a = await Client.connect();
+    await a.waitFor(isSnapshot);
+    a.close();
+    await quiet();
+    // A next-fault time far away (a 40 s draw) is pulled in.
+    await seed({ faults: [], nextFaultAt: Date.now() + 40_000 });
+    const before = Date.now();
+    const b = await Client.connect();
+    const snap = await b.waitFor(isSnapshot);
+    expect(snap.faults).toEqual([]);
+    const s = (await readState())!;
+    expect(s.nextFaultAt!).toBeGreaterThanOrEqual(before + FIRST_FAULT_WAIT_MS);
+    expect(s.nextFaultAt!).toBeLessThanOrEqual(Date.now() + FIRST_FAULT_WAIT_MS);
+    expect(await getAlarm()).toBe(s.nextFaultAt);
+    // Fired early (as by a hold expiry), the alarm adds nothing; once due, the fault reaches everyone.
+    expect(await runDurableObjectAlarm(stub())).toBe(true);
+    await quiet();
+    expect(b.faults()).toEqual([]);
+    await fireFault();
+    await b.waitFor(isFault);
+  });
+
+  it('a second visitor does not pull the next fault in', async () => {
+    const a = await Client.connect();
+    await a.waitFor(isSnapshot);
+    await seed({ faults: [], nextFaultAt: Date.now() + 30_000 });
+    await fresh();
+    expect((await readState())!.nextFaultAt!).toBeGreaterThan(Date.now() + 20_000);
   });
 
   it('(a) the threshold is measured from the last save, not from the fault time', async () => {
