@@ -20,6 +20,9 @@ interface RingProps {
 }
 
 const PING_COLOR = new Color('#9fe3ff');
+/** Floor ring opacity range over one pulse. */
+const FLOOR_RING_MIN = 0.45;
+const FLOOR_RING_MAX = 0.95;
 
 /** Red ring pulsing outward from a faulted module on the ground. Only drawn while `fault`. */
 export function FloorRing({ radius, fault }: { radius: number; fault: boolean }) {
@@ -38,7 +41,8 @@ export function FloorRing({ radius, fault }: { radius: number; fault: boolean })
     const s = radius * (1.15 + phase * 1.3);
     m.visible = true;
     m.scale.set(s, s, 1);
-    setOpacity(material, 0.7 * (1 - phase) * (1 - phase));
+    // Never fades out completely: the ground is close in tone, so keep a visible floor.
+    setOpacity(material, FLOOR_RING_MIN + (FLOOR_RING_MAX - FLOOR_RING_MIN) * (1 - phase) * (1 - phase));
   });
 
   return (
