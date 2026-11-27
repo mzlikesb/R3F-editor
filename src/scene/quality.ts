@@ -143,6 +143,12 @@ export const FAIL_WINDOW_MS = 10000;
  */
 export const BACKOFF_START_MS = 30000;
 export const BACKOFF_MAX_MS = 480000;
+/**
+ * Frame-capped devices (a 30 Hz low-power Safari): dropping a stage cannot raise the FPS. If the
+ * mean once the cooldown ends is not at least this much above the mean at the drop, the drop is
+ * undone and no drop goes below that stage until the FPS clears `up` (the cap is gone).
+ */
+export const DROP_GAIN = 1.1;
 
 export interface QualityState {
   stage: number;
@@ -157,10 +163,15 @@ export interface QualityState {
   lastUpAt: number;
   upBlockedUntil: number;
   backoffMs: number;
+  /** The last drop, until its effect is checked: the stage it left and the FPS then. */
+  dropCheck: { from: number; fps: number } | null;
+  /** No drop from this stage or below (null: none). Set by a drop that did nothing. */
+  floor: number | null;
 }
 
 export type QualityEvent =
-  | { type: 'sample'; t: number; fps: number }
+  /** `forced`: the `?perf` toggle's FPS, not a measurement; a drop's effect is not checked. */
+  | { type: 'sample'; t: number; fps: number; forced?: boolean }
   | { type: 'hidden'; t: number }
   | { type: 'visible'; t: number }
   /** The `?perf` toggle changed: what happened before says nothing about the real FPS. */
@@ -179,6 +190,8 @@ export function initialQuality(t0: number): QualityState {
     lastUpAt: -Infinity,
     upBlockedUntil: -Infinity,
     backoffMs: BACKOFF_START_MS,
+    dropCheck: null,
+    floor: null,
   };
 }
 
@@ -214,24 +227,44 @@ export function stepQuality(s: QualityState, e: QualityEvent, ladder: Ladder, th
         lastUpAt: -Infinity,
         upBlockedUntil: -Infinity,
         backoffMs: BACKOFF_START_MS,
+        dropCheck: null,
+        floor: null,
       };
     case 'sample':
-      return sample(s, e.t, e.fps, ladder, th);
+      return sample(s, e.t, e.fps, e.forced === true, ladder, th);
   }
 }
 
-function sample(s: QualityState, t: number, fps: number, ladder: Ladder, th: Thresholds): QualityState {
+function sample(
+  s: QualityState,
+  t: number,
+  fps: number,
+  forced: boolean,
+  ladder: Ladder,
+  th: Thresholds,
+): QualityState {
   if (s.hidden || t < s.ignoreUntil || !Number.isFinite(fps)) return { ...s, ...NO_TIMERS };
 
   const probeLevel = (th.down + th.up) / 2;
+  // While ups are blocked their holds do not run: once unblocked, a full hold is needed again.
+  const upBlocked = t < s.upBlockedUntil;
   const belowSince = fps < th.down ? (s.belowSince ?? t) : null;
-  const aboveSince = fps > th.up ? (s.aboveSince ?? t) : null;
-  const calmSince = fps >= probeLevel ? (s.calmSince ?? t) : null;
-  const next = { ...s, belowSince, aboveSince, calmSince };
+  const aboveSince = !upBlocked && fps > th.up ? (s.aboveSince ?? t) : null;
+  const calmSince = !upBlocked && fps >= probeLevel ? (s.calmSince ?? t) : null;
+  const floor = fps > th.up ? null : s.floor;
+  const next = { ...s, belowSince, aboveSince, calmSince, floor };
   if (t - s.lastChangeAt < COOLDOWN_MS) return next;
 
+  if (s.dropCheck !== null) {
+    const { from, fps: before } = s.dropCheck;
+    if (forced || fps >= before * DROP_GAIN) return { ...next, dropCheck: null };
+    // The drop bought nothing: undo it (not an up, so it is never a failed up) and stop dropping.
+    return { ...next, ...NO_TIMERS, stage: from, lastChangeAt: t, dropCheck: null, floor: from };
+  }
+
   const down = lower(ladder.stages, s.stage);
-  if (belowSince !== null && t - belowSince >= DOWN_HOLD_MS && down !== null) {
+  const floored = floor !== null && s.stage >= floor;
+  if (belowSince !== null && t - belowSince >= DOWN_HOLD_MS && down !== null && !floored) {
     const failedUp = t - s.lastUpAt <= FAIL_WINDOW_MS;
     return {
       ...next,
@@ -241,11 +274,12 @@ function sample(s: QualityState, t: number, fps: number, ladder: Ladder, th: Thr
       lastUpAt: -Infinity,
       upBlockedUntil: failedUp ? t + s.backoffMs : s.upBlockedUntil,
       backoffMs: failedUp ? Math.min(s.backoffMs * 2, BACKOFF_MAX_MS) : s.backoffMs,
+      dropCheck: { from: s.stage, fps },
     };
   }
 
   const up = higher(ladder.stages, s.stage);
-  if (up === null || t < s.upBlockedUntil) return next;
+  if (up === null || upBlocked) return next;
   const byThreshold = aboveSince !== null && t - aboveSince >= UP_HOLD_MS;
   const byProbe = calmSince !== null && t - calmSince >= PROBE_MS;
   if (byThreshold || byProbe) {

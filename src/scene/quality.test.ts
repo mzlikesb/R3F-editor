@@ -7,6 +7,7 @@ import {
   RESUME_IGNORE_MS,
   SAMPLE_MS,
   THRESHOLDS,
+  UP_HOLD_MS,
   WARMUP_MS,
   buildLadder,
   detectTier,
@@ -36,11 +37,12 @@ function run(
   fps: (stage: number, t: number) => number,
   ladder: Ladder = FULL,
   th: Thresholds = DESK,
+  forced = false,
 ): Run {
   let state = start;
   const changes: [number, number][] = [];
   for (let t = from; t < to; t += SAMPLE_MS) {
-    const next = stepQuality(state, { type: 'sample', t, fps: fps(state.stage, t) }, ladder, th);
+    const next = stepQuality(state, { type: 'sample', t, fps: fps(state.stage, t), forced }, ladder, th);
     if (next.stage !== state.stage) changes.push([t, next.stage]);
     state = next;
   }
@@ -158,8 +160,8 @@ describe('stepQuality: down', () => {
     expect(changes).toEqual([]);
     expect(run(ready(), T0, T0 + 4100, fps).changes).toEqual([[T0 + 4000, 1]]);
   });
-  it('steps down in order, no faster than the cooldown, and stops at the last stage', () => {
-    const r = run(ready(), T0, T0 + 60000, () => 10);
+  it('forced: steps down in order, no faster than the cooldown, and stops at the last stage', () => {
+    const r = run(ready(), T0, T0 + 60000, () => 10, FULL, DESK, true);
     expect(r.changes.map((c) => c[1])).toEqual([1, 2, 3, 4]);
     const ts = times(r);
     for (let i = 1; i < ts.length; i++) {
@@ -199,7 +201,7 @@ describe('stepQuality: warmup and hidden tab', () => {
 describe('stepQuality: up and hysteresis', () => {
   /** Dropped to stage `n` by 10 fps, then the FPS turns to `fps`. */
   function droppedTo(n: number): QualityState {
-    const r = run(ready(), T0, T0 + 60000, (stage) => (stage < n ? 10 : 52));
+    const r = run(ready(), T0, T0 + 60000, (stage) => (stage < n ? 10 : 52), FULL, DESK, true);
     expect(r.state.stage).toBe(n);
     return stepQuality(r.state, { type: 'override', t: T0 + 60000 }, FULL, DESK);
   }
@@ -269,6 +271,12 @@ describe('stepQuality: up and hysteresis', () => {
     const ts = times(r);
     expect(at(ts, 3) - at(ts, 2)).toBeGreaterThanOrEqual(BACKOFF_START_MS);
   });
+  it('no up timer runs while blocked: after the backoff a full 6 s hold is needed', () => {
+    const r = run(ready(), T0, T0 + 200000, (stage) => (stage === 0 ? 40 : 60));
+    const ts = times(r);
+    expect(r.changes.slice(0, 4).map((c) => c[1])).toEqual([1, 0, 1, 0]);
+    expect(at(ts, 3) - at(ts, 2)).toBeGreaterThanOrEqual(BACKOFF_START_MS + UP_HOLD_MS);
+  });
   it('a drop long after an up is not a failure', () => {
     // Up at 60, then 70 s later the FPS falls.
     const s = run(ready(), T0, T0 + 2100, () => 30).state;
@@ -293,11 +301,45 @@ describe('stepQuality: up and hysteresis', () => {
   });
 });
 
+describe('stepQuality: frame-capped devices', () => {
+  it('a desktop stuck at 30 fps drops once, sees no gain, goes back and stays', () => {
+    const r = run(ready(), T0, T0 + 600000, () => 30);
+    expect(r.changes.map((c) => c[1])).toEqual([1, 0]);
+    expect(r.state.floor).toBe(0);
+    expect(r.state.stage).toBe(0);
+  });
+  it('a mobile capped at 20 does the same', () => {
+    const r = run(ready(), T0, T0 + 600000, () => 20, FULL, MOBILE);
+    expect(r.changes.map((c) => c[1])).toEqual([1, 0]);
+  });
+  it('keeps the drops that helped and undoes the first that did not', () => {
+    const byStage = [40, 45, 49, 49, 49];
+    const r = run(ready(), T0, T0 + 600000, (stage) => at(byStage, stage));
+    // 40 -> 45 is +12.5 %; 45 -> 49 is under +10 %, so back to 1.
+    expect(r.changes.map((c) => c[1])).toEqual([1, 2, 1]);
+    expect(r.state.stage).toBe(1);
+  });
+  it('the floor lifts once the FPS clears the up threshold', () => {
+    let r = run(ready(), T0, T0 + 60000, () => 30);
+    expect(r.state.floor).toBe(0);
+    r = run(r.state, T0 + 60000, T0 + 70000, () => 60);
+    expect(r.state.floor).toBeNull();
+    // Now a load that dropping does help with is handled again.
+    r = run(r.state, T0 + 70000, T0 + 90000, (stage) => (stage === 0 ? 40 : 60));
+    expect(r.state.stage).toBe(1);
+  });
+  it('override clears the floor', () => {
+    const r = run(ready(), T0, T0 + 60000, () => 30);
+    const s = stepQuality(r.state, { type: 'override', t: T0 + 60000 }, FULL, DESK);
+    expect(s.floor).toBeNull();
+  });
+});
+
 describe('stepQuality: forced toggle round trip', () => {
   it('forced low walks down in order; released, it walks back up in order', () => {
     let forced = true;
     const fps = () => (forced ? 5 : 60);
-    let r = run(ready(), T0, T0 + 30000, fps);
+    let r = run(ready(), T0, T0 + 30000, fps, FULL, DESK, true);
     expect(r.changes.map((c) => c[1])).toEqual([1, 2, 3, 4]);
     forced = false;
     const s = stepQuality(r.state, { type: 'override', t: T0 + 30000 }, FULL, DESK);

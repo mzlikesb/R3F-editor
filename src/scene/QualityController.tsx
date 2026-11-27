@@ -59,7 +59,7 @@ export function QualityController() {
         apply({ type: 'override', t });
       }
       const fps = force ? FORCED_FPS : meter.average(WINDOW_SEC);
-      if (fps !== null) apply({ type: 'sample', t, fps });
+      if (fps !== null) apply({ type: 'sample', t, fps, forced: force });
     }, SAMPLE_MS);
     document.addEventListener('visibilitychange', onVisibility);
     return () => {
