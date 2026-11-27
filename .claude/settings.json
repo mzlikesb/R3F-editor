@@ -5,7 +5,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cd \"$CLAUDE_PROJECT_DIR\" && scripts/agent-env.sh --quiet || echo '\uc5d0\uc774\uc804\ud2b8 \uacc4\uc815 \uc124\uc815\uc774 \ub9de\uc9c0 \uc54a\ub294\ub2e4. \uc704 FAIL \ud56d\ubaa9\uc744 \uace0\uce58\uae30 \uc804\uc5d0\ub294 push\u00b7PR\u00b7\ucf54\uba58\ud2b8\uac00 \ud6c5\uc5d0\uc11c \ub9c9\ud78c\ub2e4(AGENTS.md \"\uc5d0\uc774\uc804\ud2b8 \uc138\uc158 \uc124\uc815\").'"
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && scripts/agent-env.sh --quiet || echo '에이전트 계정 설정이 맞지 않는다. 위 FAIL 항목을 고치기 전에는 push·PR·코멘트가 훅에서 막힌다(AGENTS.md \"에이전트 세션 설정\").'"
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/session-summary.sh"
           }
         ]
       }
@@ -61,5 +65,9 @@
         ]
       }
     ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/statusline.sh"
   }
 }

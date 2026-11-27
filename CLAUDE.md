@@ -21,6 +21,8 @@ neon은 리뷰만 한다. **훅이 자동으로 부른다**(`scripts/hooks/neon-
 
 - 기획: HUD·패널 UI를 다룰 때 `minimal-ui`
 - 기획: `stage:playtest`에서 `playtest`
+- 기획: PR 머지 후 `retro`
+- 기획: 작업 착수 시 `start-task`
 - QA: `/code-review medium`
 - 마일스톤이 끝날 때마다 `doc-lint`로 문서 주장을 실상태와 대조한다
 
