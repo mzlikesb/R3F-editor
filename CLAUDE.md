@@ -18,6 +18,7 @@ neon은 리뷰만 한다. **훅이 자동으로 부른다**(`scripts/hooks/neon-
 3. 실패하면 스크립트가 `skipped(사유)` 코멘트를 남긴다. PR 본문 `리뷰 기록` 표에 대상 SHA와 판정(또는 skipped)을 적고 다음 단계로 진행한다
 4. 아트/UX 크리틱은 플레이테스트 뒤에 `scripts/neon-art-critique.sh <PR 번호> <결과 폴더> [테스트한 SHA]`로 부른다(`playtest` 스킬 4단계). `agy`가 스크린샷 파일을 경로로 열어 보고, 결과는 `## neon art critique · <테스트한 SHA> · <결과 폴더 이름>` 코멘트로 올라간다. 이 머리줄은 훅이 막지 않으므로(훅 규칙을 늘리지 않는다) 직접 달지 말고 스크립트만 쓴다
 5. 플랜 리뷰 3턴 뒤에도 neon 지적이 오면 플랜을 다시 고치지 않고 `tasks.md`로 넘긴다(`AGENTS.md` 워크플로우의 3턴 규칙)
+5. small PR이 `src/scene/`·`src/ui/`·`src/index.css`를 바꿨으면 Preview 배포 뒤 `scripts/snapshot-critique.sh <PR 번호> <Preview URL> [SHA]`로 부른다. 페르소나 없이 헤드리스 Chromium이 폰(390x844)·PC(1280x800) 스크린샷(첫 화면·고장 모듈 선택)을 찍어 `~/.local/share/outpost-playtests/pr-N-snap-<시각>/`에 두고 위 스크립트로 코멘트를 단다. production URL은 거절한다. playwright는 레포 밖(`~/.cache/outpost-snapshot`)에 설치한다
 
 ## 역할별 스킬
 

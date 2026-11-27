@@ -55,3 +55,7 @@ scripts/playtest.sh https://pr-N-outpost.<계정>.workers.dev
 - 판정과 이슈 번호는 3단계 요약 코멘트에도 한 줄 적는다
 
 같은 PR에서 고친 뒤 다시 돌리면 1~4를 처음부터 다시 한다(새 결과 폴더, 새 코멘트).
+
+## small PR
+
+small PR은 페르소나 플레이테스트를 돌리지 않는다. `src/scene/`·`src/ui/`·`src/index.css`를 바꿨다면 Preview 배포 뒤 `scripts/snapshot-critique.sh N <Preview URL> [SHA]` 한 번으로 폰·PC 스크린샷 아트 크리틱을 PR 코멘트로 남기고(4단계와 같은 코멘트), 지적은 `art-ux` 이슈로 올리거나 바로 반영한다.

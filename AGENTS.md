@@ -176,6 +176,7 @@ README·UI·커밋 메시지는 작품 자체로 설명한다.
 - **small**: CI + pr-check 통과, Codex 리뷰, 사용자 Approve → auto-merge
 - **large**: 위 + 플랜 승인 + QA 통과 + (플레이 가능한 기능이 있는 PR이면) Preview 확인 + 사용자 머지
 - 플레이 가능한 기능이 있는 PR은 Preview에서 페르소나 플레이테스트(`scripts/playtest.sh`)를 돌리고, 리포트·시간·토큰을 PR 코멘트로 남긴 뒤 **사용자가 폰·PC로 직접** Preview를 확인한다. 페르소나 플레이테스트를 계속 쓸지는 첫 실행 결과를 보고 사용자가 정한다. 같은 결과 폴더로 `scripts/neon-art-critique.sh`(neon 아트/UX 크리틱)를 돌려 PR 코멘트로 남긴다
+- `src/scene/`·`src/ui/`·`src/index.css`를 바꾼 **small PR**은 Codex 리뷰 전에 Preview 폰 스크린샷 아트 크리틱을 1회 돌려 PR 코멘트로 남긴다(`scripts/snapshot-critique.sh`, 페르소나 플레이테스트는 large만). 지적은 기획이 반영하거나 이슈로 올린다
 - 공통: 테스트 대상(서버 로직·UI 로직)은 테스트가 있다, 성능 예산 확인 결과를 PR 본문에 적는다, 리뷰 기록 표가 채워져 있다
 
 ### 외부 입력 (공개 레포)
