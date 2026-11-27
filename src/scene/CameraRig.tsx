@@ -6,6 +6,8 @@ import { useStore } from '../store';
 import { BOUNDS, LAYOUT, OVERVIEW } from './layout';
 
 const PHONE = '(max-width: 600px)';
+/** A portrait phone sees a much narrower slice horizontally, so focus from further away. */
+const PHONE_FOCUS_SCALE = 1.7;
 
 /**
  * One CameraControls: orbit/zoom/pan by hand, smooth focus on the selected module, back to the whole
@@ -38,7 +40,7 @@ export function CameraRig() {
     const len = Math.hypot(l.x, l.z);
     const dx = len > 0.01 ? l.x / len : 0;
     const dz = len > 0.01 ? l.z / len : 1;
-    const d = l.focusDistance;
+    const d = l.focusDistance * (phone ? PHONE_FOCUS_SCALE : 1);
     const ty = phone ? -0.8 : 0.8;
     const cy = phone ? d * 1.15 : d * 0.55;
     void c.setLookAt(l.x + dx * d, cy, l.z + dz * d, l.x, ty, l.z, animate);

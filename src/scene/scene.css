@@ -16,10 +16,11 @@
   opacity: 0;
 }
 
+/* Inside drei <Html fullscreen>, whose wrapper is transformed: `fixed` would be relative to it. */
 .perf-hud {
-  position: fixed;
+  position: absolute;
   left: 8px;
-  bottom: 8px;
+  top: 8px;
   padding: 4px 8px;
   border-radius: 6px;
   background: rgba(0, 0, 0, 0.6);

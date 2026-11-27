@@ -22,9 +22,9 @@ export interface ModuleHandle {
    * not touch them again.
    */
   materials: readonly MeshStandardMaterial[];
-  /** Model height in world units (top of the bounding box), for badges, name tags and the sweep ring. */
+  /** Model height in the module group's local units (top of the bounding box), for badges, name tags and the sweep ring. */
   height: number;
-  /** Horizontal radius in world units (bounding box), for the floor ring and the ring ping. */
+  /** Horizontal radius in the module group's local units (bounding box), for the floor ring and the ring ping. */
   radius: number;
 }
 

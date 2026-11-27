@@ -8,10 +8,10 @@
 | --- | ------------------------------------------------ | ---- | ----------------------- | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ---- |
 | T0  | 에셋 사전 확인(플랜 A.1 "먼저 확인", neon 4턴 a) | 리드 | —                       | 아래 "T0 결과"                                | —                                                                                                                                            | 완료 |
 | T1  | 뼈대·인터페이스·선작성 테스트                    | 리드 | 아래 "리드가 만든 것"   | format·lint·typecheck 통과, 테스트는 의도대로 실패 | 아래 각 트랙                                                                                                                                 | 완료 |
-| S   | 기지 장면·에셋 파이프라인·카메라·로딩·`?perf`    | 개발 | "파일 소유" S           | 아래 "S 수용 기준"                            | `src/scene/tap.test.ts`, `test:hooks`의 디코더 일치 검사(S가 추가)                                                                           | 대기 |
-| F   | 상태 표현·손맛 연출                              | 개발 | "파일 소유" F           | 아래 "F 수용 기준"                            | (렌더링·연출이라 TDD 대상 아님. 판정은 D의 `effectsFor`를 그대로 쓴다)                                                                       | 대기 |
-| D   | `mine`·판정·store·HUD·패널·토스트·힌트           | 개발 | "파일 소유" D           | 아래 "D 수용 기준"                            | `shared/protocol.test.ts`, `worker/socketId.test.ts`, `worker/test/base.test.ts`, `src/hold.test.ts`, `src/feedback.test.ts`, `src/store.test.ts`, `src/sync.test.ts`, `src/ui/view.test.ts` | 대기 |
-| M   | 병합·의도 확인                                   | 리드 | —                       | 아래 "M 확인"                                 | 전체                                                                                                                                         | 대기 |
+| S   | 기지 장면·에셋 파이프라인·카메라·로딩·`?perf`    | 개발 | "파일 소유" S           | 아래 "S 수용 기준"                            | `src/scene/tap.test.ts`, `test:hooks`의 디코더 일치 검사(S가 추가)                                                                           | 완료 |
+| F   | 상태 표현·손맛 연출                              | 개발 | "파일 소유" F           | 아래 "F 수용 기준"                            | (렌더링·연출이라 TDD 대상 아님. 판정은 D의 `effectsFor`를 그대로 쓴다)                                                                       | 완료 |
+| D   | `mine`·판정·store·HUD·패널·토스트·힌트           | 개발 | "파일 소유" D           | 아래 "D 수용 기준"                            | `shared/protocol.test.ts`, `worker/socketId.test.ts`, `worker/test/base.test.ts`, `src/hold.test.ts`, `src/feedback.test.ts`, `src/store.test.ts`, `src/sync.test.ts`, `src/ui/view.test.ts` | 완료 |
+| M   | 병합·의도 확인                                   | 리드 | —                       | 아래 "M 확인"                                 | 전체                                                                                                                                         | 완료 |
 
 ## T0 결과 (2026-11-27)
 
@@ -143,3 +143,36 @@ CSS: 각 트랙은 자기 CSS 파일을 자기 컴포넌트에서 import한다(S
 - `format:check`·`lint`·`typecheck`·`npm test`·`test:hooks`·`build` 통과
 - 파일 소유 표 밖 변경이 없는지 `git diff --stat`으로 확인
 - 의도 확인: 내 수리/남의 수리/먼저 고쳐짐 연출이 플랜 C.10 표대로 갈리는지, 빈 곳 탭·드래그·배지 탭, HDRI·GLB 실패 대체(`public/hdri` 경로를 잠시 틀리게 해서 확인), 정적 에셋 합계, `?perf` 드로우콜(정지·연출 순간)
+
+## M 결과 (2026-11-27)
+
+병합 순서 D → S → F(트랙별 커밋 하나씩), 그 뒤 리드 수정 커밋. 파일 소유 표 밖 변경 없음(`CREDITS.md`는 S 몫인데 비어 있어 리드가 채웠다).
+
+리드가 고친 것:
+
+- `Module.tsx`: `handle.height`·`radius`를 `Box3.setFromObject`(월드 좌표, 부모 행렬 갱신 여부에 따라 값이 달라짐) 대신 모델 group 자기 좌표로 계산한다. `ModuleFx`가 그리는 모듈 group 로컬 좌표와 맞는다. GLB 실패 뒤 대체 도형이 한 프레임 늦게 들어오면 배율(발전기 3배)이 두 번 걸리던 경로를 막는다. `moduleTypes.ts` 주석도 "로컬 단위"로 고쳤다
+- `CameraRig.tsx`: 폰(390×844)에서 발전기를 포커스하면 모델이 화면을 꽉 채웠다. 폰 포커스 거리를 1.7배로 늘렸다
+- `scene.css`: `?perf` 표시가 drei `Html fullscreen`의 transform 때문에 화면 가운데에 떴다. `position: absolute; top/left`로 왼쪽 위에 둔다
+
+검사: `format:check`·`lint`·`typecheck` 통과, `npm test` 13파일 152개, `test:worker` 5파일 64개, `test:hooks` 52개 + `draco-check` 통과, `build` 통과.
+
+로컬 확인(`npm run build` → `wrangler dev`, Playwright headless Chromium + SwiftShader):
+
+| 시나리오 | 결과 |
+| --- | --- |
+| 탭 2개, A가 홀드 수리 | A `내가 고쳤어요 +1` + 흰 플래시, B `누군가 발전기를 고쳤어요`(플래시 없음), HUD 양쪽 0회→1회 |
+| 재고장 | `발전기가 다시 고장 났어요` 토스트 + 배지 |
+| 두 탭 동시 홀드 완료 | 한쪽만 `내가 고쳤어요 +1`, 다른 쪽 `누군가 먼저 고쳤어요`, HUD +1만(1→2) |
+| 390×844 겹침 | HUD·배지·힌트·패널·토스트 bounding box 서로 안 겹침. 배지 탭 → 발전기 패널 열림·힌트 사라짐 |
+| 드래그 후 손 떼기 / 빈 곳 탭 | 드래그 뒤 선택 유지(패널 그대로), 빈 땅 탭 → 선택 해제 |
+| `/models/**` 차단 | 발전기 큐브·나머지 원기둥으로 대체, 바위 사라짐, 로딩 문구 사라짐, 수리 성공 |
+| `/hdri/**` 차단 | 기본 조명(강도 올림)으로 렌더, 로딩 문구 사라짐 |
+| 남의 수리 링 핑 | 폰 화면에서 바닥 물결 링 확인 |
+| 오리진 | `/draco/`·`/hdri/`·`/models/` 모두 같은 오리진, 외부 요청 없음 |
+| `gltf-transform inspect` | 9개 GLB 전부 `KHR_draco_mesh_compression` |
+
+`?perf`(SwiftShader 소프트웨어 렌더라 FPS는 참고값만): 드로우콜 정지 전체 시점 31~32(그림자 패스 포함), 발전기 포커스 27, 내 수리 연출 순간 28~29, 남의 수리(폰) 28~30, 모델 차단 시 18. 삼각형 약 3.3k~4.5k. 데스크톱·폰 실기 FPS는 Preview `?perf`에서 확인한다.
+
+용량: 정적 에셋 652,243B(GLB 9개 25,904B · HDRI 375,463B · 디코더 250,876B, 예산 3MB). 압축 전 GLB 98,164B. 초기 JS gzip 373.95KB(예산 600KB).
+
+남은 것: 배치·배율·카메라 거리·폰 전체 시점은 눈으로 맞춘 초기값이다(`layout.ts`). 폰 전체 시점에서 거주 돔·통신탑이 화면 가장자리에 잘린다. Preview 플레이테스트에서 본다.

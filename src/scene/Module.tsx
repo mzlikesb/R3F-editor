@@ -1,6 +1,6 @@
 import { useGLTF } from '@react-three/drei';
 import { Suspense, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
-import { Box3, Color, Mesh, MeshStandardMaterial, Vector3, type Group } from 'three';
+import { Box3, Color, Matrix4, Mesh, MeshStandardMaterial, Vector3, type Group } from 'three';
 import type { BaseModuleId } from '../modules';
 import { useStore } from '../store';
 import { SceneErrorBoundary } from './ErrorBoundary';
@@ -105,7 +105,28 @@ function initMaterial(m: MeshStandardMaterial) {
 }
 
 const box = new Box3();
+const part = new Box3();
 const size = new Vector3();
+const toModel = new Matrix4();
+const rel = new Matrix4();
+
+/**
+ * Bounds in the model group's own space (= the module group's local units, where `ModuleFx` draws).
+ * Not `Box3.setFromObject`: that is in world space and depends on whether the parent's world matrix
+ * has been updated yet (a fallback swapped in after a frame would get scaled bounds).
+ */
+function localBounds(model: Group): Box3 {
+  model.updateWorldMatrix(true, true);
+  toModel.copy(model.matrixWorld).invert();
+  box.makeEmpty();
+  model.traverse((o) => {
+    if (!(o instanceof Mesh)) return;
+    if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+    part.copy(o.geometry.boundingBox).applyMatrix4(rel.multiplyMatrices(toModel, o.matrixWorld));
+    box.union(part);
+  });
+  return box;
+}
 
 /** Builds the handle for `feel` once the model group is in the scene. */
 function useHandle(
@@ -116,9 +137,9 @@ function useHandle(
   useLayoutEffect(() => {
     const model = group.current;
     if (!model) return;
-    box.setFromObject(model);
-    box.getSize(size);
-    onHandle({ model, materials, height: box.max.y, radius: Math.max(size.x, size.z) / 2 });
+    const b = localBounds(model);
+    b.getSize(size);
+    onHandle({ model, materials, height: b.max.y, radius: Math.max(size.x, size.z) / 2 });
   }, [group, materials, onHandle]);
 }
 
