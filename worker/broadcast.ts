@@ -11,10 +11,15 @@ export interface SocketLike {
  * (a throwing `close` is swallowed too) and the rest still receive. Returns how many sends succeeded.
  */
 export function broadcast(sockets: Iterable<SocketLike>, data: string): number {
+  return broadcastEach(sockets, () => data);
+}
+
+/** Like `broadcast`, but `dataFor(socket)` builds each socket's own message. */
+export function broadcastEach<T extends SocketLike>(sockets: Iterable<T>, dataFor: (socket: T) => string): number {
   let sent = 0;
   for (const socket of sockets) {
     try {
-      socket.send(data);
+      socket.send(dataFor(socket));
       sent++;
     } catch {
       try {

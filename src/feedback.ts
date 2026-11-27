@@ -1,0 +1,149 @@
+/**
+ * What the player is told and shown around a repair (plan 005 B.8, C.10, D.11-13). Pure; the store
+ * feeds it and keeps the result. Track `share` implements it; track `feel` only reads
+ * `FeedbackState.effect` and `effectsFor`. Contract in `docs/plans/005-tasks.md`.
+ */
+import type { HoldState } from './hold';
+
+/** Toasts show this long (ms). */
+export const TOAST_MS = 3000;
+
+/**
+ * A fault counts as a "re-fault" (toast `발전기가 다시 고장 났어요`) only when this client saw the
+ * base healthy over WS for at least this long first. The first-visit fault arrives a few ms after
+ * the first snapshot and must not toast (plan 005 D.13: no toast for a fault already there on arrival).
+ */
+export const REFAULT_TOAST_MIN_HEALTHY_MS = 2000;
+
+/**
+ * Who a `repaired` was for, from this client's view.
+ * - `mine`: `mine: true` (my request counted)
+ * - `beaten`: `mine: false` while I was holding or pending on that fault
+ * - `other`: `mine: false` otherwise
+ */
+export type RepairOutcome = 'mine' | 'beaten' | 'other';
+
+export type ToastKind = RepairOutcome | 'refault';
+
+export const TOAST_TEXT: Record<ToastKind, string> = {
+  mine: '내가 고쳤어요 +1',
+  beaten: '같이 눌렀는데 다른 사람이 한발 먼저 고쳤어요',
+  other: '누군가 발전기를 고쳤어요',
+  refault: '발전기가 다시 고장 났어요',
+};
+
+export interface Toast {
+  kind: ToastKind;
+  /** Hidden from this time (ms). */
+  until: number;
+}
+
+/** Which repair effects to play (plan 005 C.9, C.10, D.11). */
+export interface RepairEffects {
+  /** Red→green emissive blend and the ring that sweeps up the module. Every repair. */
+  sweep: boolean;
+  /** White flash, scale punch, sparks, glow sprite. Only my repair. */
+  burst: boolean;
+  /** Ring rippling flat across the ground. Only someone else's repair (`beaten` or `other`). */
+  ringPing: boolean;
+}
+
+/** The latest repair to animate. `seq` goes up by one per repair, so the scene can react exactly once. */
+export interface RepairEffect {
+  outcome: RepairOutcome;
+  seq: number;
+  /** `performance.now()` when the `repaired` arrived. */
+  at: number;
+}
+
+export interface FeedbackState {
+  /** At most one toast; a new one replaces the current one (latest wins). */
+  toast: Toast | null;
+  /** When this client last saw the base become healthy over WS; null while faulted or before any WS state. */
+  healthySince: number | null;
+  /** Set once any module was tapped this session; the hint never shows again. */
+  hintDismissed: boolean;
+  /**
+   * The latest repair seen over WS in this session (never one from before arrival: snapshots do not
+   * set it). Also what the HUD's `마지막 수리` line reads.
+   */
+  effect: RepairEffect | null;
+}
+
+export const initialFeedback: FeedbackState = { toast: null, healthySince: null, hintDismissed: false, effect: null };
+
+export type FeedbackEvent =
+  /** A `repaired` that changed the base (not a stale version), already classified. */
+  | { type: 'repaired'; outcome: RepairOutcome; now: number }
+  /** After every WS message was applied: is the base faulted now? */
+  | { type: 'base'; faulted: boolean; now: number }
+  /** Any module (or the fault badge) was tapped. */
+  | { type: 'moduleTapped' }
+  /** Timer tick; hides an expired toast. */
+  | { type: 'tick'; now: number };
+
+/** Classifies a `repaired` from the hold state *before* `reduceHold` handles it. */
+export function classifyRepaired(hold: HoldState, msg: { faultId: string; mine: boolean }): RepairOutcome {
+  if (msg.mine) return 'mine';
+  const busyOnIt = (hold.kind === 'holding' || hold.kind === 'pending') && hold.faultId === msg.faultId;
+  return busyOnIt ? 'beaten' : 'other';
+}
+
+export function effectsFor(outcome: RepairOutcome): RepairEffects {
+  const mine = outcome === 'mine';
+  return { sweep: true, burst: mine, ringPing: !mine };
+}
+
+/**
+ * - `repaired`: toast for the outcome (replacing any toast), `effect` with the next `seq`.
+ * - `base` faulted=false: start `healthySince` if not set. faulted=true: if `healthySince` is set and
+ *   at least `REFAULT_TOAST_MIN_HEALTHY_MS` old, toast `refault`; then clear `healthySince`.
+ * - `moduleTapped`: `hintDismissed` = true.
+ * - `tick`: drop the toast once `now >= until`.
+ * Returns `state` itself when nothing changes.
+ */
+export function reduceFeedback(state: FeedbackState, event: FeedbackEvent): FeedbackState {
+  switch (event.type) {
+    case 'repaired':
+      return {
+        ...state,
+        toast: { kind: event.outcome, until: event.now + TOAST_MS },
+        effect: { outcome: event.outcome, seq: (state.effect?.seq ?? 0) + 1, at: event.now },
+      };
+    case 'base': {
+      if (!event.faulted) {
+        return state.healthySince === null ? { ...state, healthySince: event.now } : state;
+      }
+      if (state.healthySince === null) return state;
+      const refault = event.now - state.healthySince >= REFAULT_TOAST_MIN_HEALTHY_MS;
+      return {
+        ...state,
+        healthySince: null,
+        toast: refault ? { kind: 'refault', until: event.now + TOAST_MS } : state.toast,
+      };
+    }
+    case 'moduleTapped':
+      return state.hintDismissed ? state : { ...state, hintDismissed: true };
+    case 'tick':
+      return state.toast && event.now >= state.toast.until ? { ...state, toast: null } : state;
+  }
+}
+
+/**
+ * The bottom hint `고장 난 모듈을 눌러 보세요`: only once the base has loaded, while faulted, until a
+ * module is tapped.
+ */
+export function hintVisible(faulted: boolean, state: FeedbackState, loaded: boolean): boolean {
+  return loaded && faulted && !state.hintDismissed;
+}
+
+export type BottomItem = 'panel' | 'toast' | 'hint';
+
+/**
+ * Bottom-of-screen order, closest to the edge first (plan 005 D.12): panel > toast > hint. Only the
+ * visible ones, so a toast takes the panel's slot when there is no panel, and sits above it otherwise.
+ */
+export function bottomStack(visible: { panel: boolean; toast: boolean; hint: boolean }): BottomItem[] {
+  const order: BottomItem[] = ['panel', 'toast', 'hint'];
+  return order.filter((item) => visible[item]);
+}

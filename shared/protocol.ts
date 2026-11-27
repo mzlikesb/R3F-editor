@@ -66,6 +66,11 @@ export interface RepairedMessage {
   faultId: string;
   /** Total repairs after this one. */
   repairs: number;
+  /**
+   * True only on the socket whose request made this repair count (plan 005 D.11); false on every
+   * other socket, and on any socket without an id. A message without `mine` parses as false.
+   */
+  mine: boolean;
 }
 
 /** Open sockets right now. Not versioned: the client always takes the latest value. */
@@ -140,7 +145,7 @@ export function parseServerMessage(raw: string): ServerMessage | null {
     case 'repaired':
       if (!isCount(m.version) || !isCount(m.repairs)) return null;
       if (typeof m.faultId !== 'string' || m.faultId === '') return null;
-      return { type: 'repaired', version: m.version, faultId: m.faultId, repairs: m.repairs };
+      return { type: 'repaired', version: m.version, faultId: m.faultId, repairs: m.repairs, mine: m.mine === true };
     case 'presence':
       if (!isCount(m.count)) return null;
       return { type: 'presence', count: m.count };

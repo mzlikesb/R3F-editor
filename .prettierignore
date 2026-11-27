@@ -4,3 +4,6 @@ package-lock.json
 worker/worker-configuration.d.ts
 .wrangler
 *.md
+public/draco
+public/hdri
+public/models

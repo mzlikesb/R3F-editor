@@ -22,7 +22,7 @@ describe('applyServerMessage', () => {
   });
 
   it('applies repaired: no fault, new total, new version', () => {
-    const s = applyServerMessage(synced(), { type: 'repaired', version: 6, faultId: 'f1', repairs: 3 });
+    const s = applyServerMessage(synced(), { type: 'repaired', version: 6, faultId: 'f1', repairs: 3, mine: false });
     expect(s.base?.fault).toBeNull();
     expect(s.base?.repairs).toBe(3);
     expect(s.base?.version).toBe(6);
@@ -40,13 +40,15 @@ describe('applyServerMessage', () => {
     const s = synced({ version: 10 });
     expect(applyServerMessage(s, snapshot({ version: 9, fault: null, repairs: 0 })).base).toEqual(s.base);
     expect(applyServerMessage(s, { type: 'fault', version: 9, fault: F2 }).base).toEqual(s.base);
-    expect(applyServerMessage(s, { type: 'repaired', version: 9, faultId: 'f1', repairs: 99 }).base).toEqual(s.base);
+    expect(
+      applyServerMessage(s, { type: 'repaired', version: 9, faultId: 'f1', repairs: 99, mine: false }).base,
+    ).toEqual(s.base);
   });
 
   it('applies messages in version order even when they arrive out of order', () => {
     let s = synced({ version: 5, fault: F1, repairs: 2 });
     s = applyServerMessage(s, { type: 'fault', version: 7, fault: F2 });
-    s = applyServerMessage(s, { type: 'repaired', version: 6, faultId: 'f1', repairs: 3 });
+    s = applyServerMessage(s, { type: 'repaired', version: 6, faultId: 'f1', repairs: 3, mine: false });
     expect(s.base?.fault).toEqual(F2);
     expect(s.base?.version).toBe(7);
   });
@@ -68,7 +70,7 @@ describe('applyServerMessage', () => {
   it('does not mutate its input', () => {
     const s = synced();
     const copy = structuredClone(s);
-    applyServerMessage(s, { type: 'repaired', version: 6, faultId: 'f1', repairs: 3 });
+    applyServerMessage(s, { type: 'repaired', version: 6, faultId: 'f1', repairs: 3, mine: false });
     applyServerMessage(s, { type: 'presence', count: 9 });
     expect(s).toEqual(copy);
   });

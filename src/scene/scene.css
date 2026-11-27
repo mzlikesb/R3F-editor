@@ -1,0 +1,39 @@
+.loading {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.4s ease;
+}
+
+.loading-text {
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: rgba(10, 12, 16, 0.78);
+  color: #f2f5f9;
+  font-size: 15px;
+  letter-spacing: 0.02em;
+}
+
+.loading-done {
+  opacity: 0;
+}
+
+/* Inside drei <Html fullscreen>, whose wrapper is transformed: `fixed` would be relative to it. */
+.perf-hud {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #9fe6b0;
+  font:
+    12px/1.4 ui-monospace,
+    monospace;
+  white-space: pre;
+  pointer-events: none;
+}

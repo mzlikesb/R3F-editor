@@ -233,6 +233,54 @@ describe('repair', () => {
     expect((await fetchBase()).repairs).toBe(before + 1);
   });
 
+  it('marks repaired as mine only on the socket whose request counted', async () => {
+    const a = await Client.connect();
+    const fault = await a.waitForFault();
+    const b = await Client.connect();
+    await b.waitFor(isSnapshot);
+    const c = await Client.connect();
+    await c.waitFor(isSnapshot);
+
+    a.send({ type: 'repair', faultId: fault.id });
+    const [ra, rb, rc] = await Promise.all([a.waitFor(isRepaired), b.waitFor(isRepaired), c.waitFor(isRepaired)]);
+    expect(ra.mine).toBe(true);
+    expect(rb.mine).toBe(false);
+    expect(rc.mine).toBe(false);
+  });
+
+  it('gives mine to exactly one socket when two repair the same fault', async () => {
+    const a = await Client.connect();
+    const fault = await a.waitForFault();
+    const b = await Client.connect();
+    await b.waitFor(isSnapshot);
+
+    a.send({ type: 'repair', faultId: fault.id });
+    b.send({ type: 'repair', faultId: fault.id });
+    await Promise.all([a.waitFor(isRepaired), b.waitFor(isRepaired)]);
+    await quiet();
+
+    const all = [...a.messages.filter(isRepaired), ...b.messages.filter(isRepaired)];
+    expect(all).toHaveLength(2);
+    expect(all.filter((r) => r.mine)).toHaveLength(1);
+  });
+
+  it('never marks mine on a socket without an id, even when it sent the repair', async () => {
+    const a = await Client.connect();
+    const fault = await a.waitForFault();
+    const b = await Client.connect();
+    await b.waitFor(isSnapshot);
+    // Sockets opened before this deploy carry no attachment.
+    await runInDurableObject(stub(), (_instance, state) => {
+      for (const ws of state.getWebSockets()) ws.serializeAttachment(null);
+    });
+
+    a.send({ type: 'repair', faultId: fault.id });
+    const [ra, rb] = await Promise.all([a.waitFor(isRepaired), b.waitFor(isRepaired)]);
+    expect(ra.mine).toBe(false);
+    expect(rb.mine).toBe(false);
+    expect(ra.repairs).toBe(rb.repairs);
+  });
+
   it('ignores a repair for an unknown fault id', async () => {
     const a = await Client.connect();
     await a.waitForFault();

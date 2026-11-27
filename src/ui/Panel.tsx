@@ -1,23 +1,21 @@
 import { useEffect, useRef } from 'react';
-import { GENERATOR } from '../../shared/protocol';
 import { holdProgress, type HoldEvent } from '../hold';
-import { useStore } from '../store';
+import { selectFaulted, useStore } from '../store';
 import { canRepair } from '../sync';
-
-const NOTICE_TEXT = { success: '수리 완료', beaten: '누군가 먼저 고쳤어요' } as const;
+import { panelView } from './view';
 
 export function Panel() {
-  const selected = useStore((s) => s.selected === GENERATOR);
+  const selected = useStore((s) => s.selected);
+  const generatorFaulted = useStore(selectFaulted);
   const fault = useStore((s) => s.sync.base?.fault ?? null);
   const enabled = useStore((s) => canRepair(s.sync, s.connection));
   const holdKind = useStore((s) => s.repair.hold.kind);
-  const noticeKind = useStore((s) => s.repair.notice?.kind ?? null);
   const button = useRef<HTMLButtonElement>(null);
   const fill = useRef<HTMLSpanElement>(null);
 
-  // While anything is time-driven (hold, pending, notice), tick every frame and paint the fill
+  // While the hold is time-driven (holding, pending), tick every frame and paint the fill
   // directly on the element so no React state changes per frame.
-  const busy = holdKind !== 'idle' || noticeKind !== null;
+  const busy = holdKind !== 'idle';
   useEffect(() => {
     if (!busy) return;
     const el = fill.current;
@@ -52,42 +50,71 @@ export function Panel() {
     };
   }, []);
 
-  if (!selected) return null;
+  // Esc closes the panel like the ✕ (desktop players reach for it).
+  const open = selected !== null;
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') useStore.getState().select(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open]);
+
+  if (selected === null) return null;
+
+  const view = panelView(selected, generatorFaulted);
 
   const dispatch = (event: HoldEvent) => useStore.getState().dispatchHold(event);
   const label = holdKind === 'holding' ? '계속 누르세요…' : holdKind === 'pending' ? '수리 중…' : '꾹 눌러 수리 (1초)';
 
   return (
-    <aside className="panel" onContextMenu={(e) => e.preventDefault()}>
-      <h2>발전기</h2>
-      <p className={fault ? 'status warn' : 'status ok'}>{fault ? '⚠ 고장' : '정상'}</p>
-      <button
-        ref={button}
-        type="button"
-        className="repair"
-        disabled={!enabled}
-        onPointerDown={(e) => {
-          // `disabled` alone is not enough: some browsers still deliver pointer events.
-          if (!enabled || !fault || e.button > 0) return;
-          e.currentTarget.setPointerCapture(e.pointerId);
-          dispatch({ type: 'press', faultId: fault.id, now: performance.now() });
-        }}
-        onPointerUp={() => dispatch({ type: 'release', now: performance.now() })}
-        onPointerCancel={() => dispatch({ type: 'cancel', now: performance.now() })}
-        onPointerMove={(e) => {
-          const r = e.currentTarget.getBoundingClientRect();
-          const inside = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
-          if (!inside) dispatch({ type: 'cancel', now: performance.now() });
-        }}
-        onContextMenu={(e) => e.preventDefault()}
-      >
-        <span ref={fill} className="fill" />
-        <span className="label">{label}</span>
-      </button>
-      {fault && !enabled && <p className="hint">연결되면 수리할 수 있어요</p>}
-      <p className="notice" aria-live="polite">
-        {noticeKind ? NOTICE_TEXT[noticeKind] : ''}
-      </p>
+    <aside className={view.repairButton ? 'panel' : 'panel panel-compact'} onContextMenu={(e) => e.preventDefault()}>
+      <div className="panel-head">
+        <h2>{view.title}</h2>
+        <p className={view.status === 'fault' ? 'status warn' : 'status ok'}>
+          {view.status === 'fault' ? '⚠ 고장' : '정상'}
+        </p>
+        <button
+          type="button"
+          className="panel-close"
+          aria-label="닫기"
+          onClick={() => useStore.getState().select(null)}
+        >
+          ✕
+        </button>
+      </div>
+      {view.goToFault && (
+        <button type="button" className="goto" onClick={() => useStore.getState().select('generator')}>
+          발전기 고장 — 눌러서 이동
+        </button>
+      )}
+      {view.repairButton && (
+        <button
+          ref={button}
+          type="button"
+          className="repair"
+          disabled={!enabled}
+          onPointerDown={(e) => {
+            // `disabled` alone is not enough: some browsers still deliver pointer events.
+            if (!enabled || !fault || e.button > 0) return;
+            e.currentTarget.setPointerCapture(e.pointerId);
+            dispatch({ type: 'press', faultId: fault.id, now: performance.now() });
+          }}
+          onPointerUp={() => dispatch({ type: 'release', now: performance.now() })}
+          onPointerCancel={() => dispatch({ type: 'cancel', now: performance.now() })}
+          onPointerMove={(e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            const inside = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+            if (!inside) dispatch({ type: 'cancel', now: performance.now() });
+          }}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          <span ref={fill} className="fill" />
+          <span className="label">{label}</span>
+        </button>
+      )}
+      {view.repairButton && !enabled && <p className="hint">연결되면 수리할 수 있어요</p>}
     </aside>
   );
 }

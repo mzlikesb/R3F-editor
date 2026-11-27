@@ -31,3 +31,6 @@ dist-ssr
 .wrangler/
 playwright-report/
 test-results/
+
+# Asset originals (scripts/compress.sh downloads them; only its outputs in public/ are committed)
+assets-src/
