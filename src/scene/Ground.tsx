@@ -31,7 +31,8 @@ function fadeGeometry(): RingGeometry {
  * The planet surface: an opaque disc under all the scenery and a transparent rim that fades out.
  * Most of the ground stays opaque (no blending); only the rim blends, and it is drawn first among
  * transparent objects (`renderOrder`) so the fault rings and glows lying on the ground are never
- * painted over. Both receive shadows and ignore raycasts (a tap there is empty space).
+ * painted over; it writes no depth. Only the disc receives shadows (the rim is outside the shadow
+ * camera). Neither takes raycasts (a tap there is empty space).
  */
 export function Ground() {
   const disc = useMemo(() => new CircleGeometry(GROUND_RADIUS, SEGMENTS), []);
@@ -41,8 +42,8 @@ export function Ground() {
       <mesh geometry={disc} receiveShadow raycast={noRaycast}>
         <meshStandardMaterial color={COLOR} roughness={1} metalness={0} />
       </mesh>
-      <mesh geometry={rim} receiveShadow raycast={noRaycast} renderOrder={-1}>
-        <meshStandardMaterial color={COLOR} roughness={1} metalness={0} vertexColors transparent />
+      <mesh geometry={rim} raycast={noRaycast} renderOrder={-1}>
+        <meshStandardMaterial color={COLOR} roughness={1} metalness={0} vertexColors transparent depthWrite={false} />
       </mesh>
     </group>
   );

@@ -74,9 +74,10 @@ function stepLights(mesh: InstancedMesh, state: PanelLights, nowMs: number) {
 
 /**
  * The solar panel field north of the base (plan 007 A.2): one InstancedMesh for the panels and one
- * for their lights, so two draw calls. Panels only receive shadows; nothing here takes taps. The
- * lights are a basic material coloured per instance; they go dark together in a blackout and come
- * back from the generator outwards, the colour buffer uploaded only while that happens.
+ * for their lights, so two draw calls. Panels neither cast nor receive shadows (they lie outside the
+ * shadow camera); nothing here takes taps. The lights are a basic material coloured per instance;
+ * they go dark together in a blackout and come back from the generator outwards, the colour buffer
+ * uploaded only while that happens.
  */
 export function SolarPanels() {
   const panels = useRef<InstancedMesh>(null);
@@ -122,12 +123,7 @@ export function SolarPanels() {
 
   return (
     <>
-      <instancedMesh
-        ref={panels}
-        args={[res.panelGeometry, res.panelMaterial, PANELS.length]}
-        receiveShadow
-        raycast={noRaycast}
-      />
+      <instancedMesh ref={panels} args={[res.panelGeometry, res.panelMaterial, PANELS.length]} raycast={noRaycast} />
       <instancedMesh ref={lights} args={[res.lightGeometry, res.lightMaterial, PANELS.length]} raycast={noRaycast} />
     </>
   );

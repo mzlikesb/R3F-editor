@@ -147,8 +147,9 @@ export interface GridRule {
 }
 
 /**
- * Deterministic rows (plan 007 A.2): every grid point whose jittered footprint fits inside the arc and
- * the annulus and clears the avoided circles by `gap`. Pure: same seed, same field. Neighbours stay
+ * Deterministic rows (plan 007 A.2): every grid point whose jittered centre lies inside the arc and
+ * whose footprint fits inside the annulus and clears the avoided circles by `gap` (a footprint may
+ * reach slightly past the arc's side edges). Pure: same seed, same field. Neighbours stay
  * `gap` apart as long as `spacing - 2 * jitter >= 2 * radius + gap` (the tests check it).
  */
 export function gridScatter(seed: number, rule: GridRule): Placement[] {
