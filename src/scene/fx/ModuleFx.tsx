@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { effectsFor } from '../../feedback';
-import { isRepairable } from '../../modules';
-import { selectModuleStatus, useStore } from '../../store';
+import { selectBlackout, selectModuleFault, selectOthersHolding, selectReady, useStore } from '../../store';
+import { floorRingRange } from '../layout';
 import type { ModuleFxProps } from '../moduleTypes';
 import { Glow } from './Glow';
-import { FaultBadge, NameTag } from './Labels';
-import { labelKind } from './labelRules';
-import { FloorRing, RingPing, SweepRing } from './Rings';
+import { FaultBadge, FaultDot, NameTag } from './Labels';
+import { useLabelPlan } from './labelPlanContext';
+import { FloorRing, HoldingRing, RingPing, SweepRing } from './Rings';
 import { Sparks } from './Sparks';
 import { StatusLight } from './StatusLight';
 import { useEmissive } from './useEmissive';
@@ -17,20 +17,26 @@ interface Tokens {
   sweep: number;
   burst: number;
   ping: number;
+  afterglow: number;
 }
 
-const NO_TOKENS: Tokens = { sweep: 0, burst: 0, ping: 0 };
+const NO_TOKENS: Tokens = { sweep: 0, burst: 0, ping: 0, afterglow: 0 };
 
 /**
  * Everything that shows a module's state, drawn inside the module's group (local origin = module
  * ground center): emissive pulse and red→green blend, status light, name tag / fault badge, floor
- * ring, sweep ring, punch, sparks, glow, ring ping (plan 005 B, C, D.11).
+ * ring, sweep ring, punch, sparks, glow, ring ping (plan 005 B, C, D.11), and the afterglow of
+ * someone else's repair. The status light waits for the base: green before the first snapshot
+ * would claim a healthy base (playtest #47).
  */
 export function ModuleFx({ id, handle }: ModuleFxProps) {
-  const faulted = useStore((s) => selectModuleStatus(s, id)) === 'fault';
-  const selected = useStore((s) => s.selected);
-  const faultedModule = useStore((s) => s.sync.base?.fault?.moduleId ?? null);
+  const fault = useStore((s) => selectModuleFault(s, id));
+  const faulted = fault !== null;
+  const blackout = useStore(selectBlackout);
+  const plan = useLabelPlan();
+  const othersHolding = useStore((s) => selectOthersHolding(s, id)) > 0;
   const effect = useStore((s) => s.feedback.effect);
+  const ready = useStore(selectReady);
 
   // A repair that was already there at mount does not play. Adjusting state while rendering
   // (instead of in an effect) starts the one-shots in the same pass the new `seq` arrives.
@@ -38,22 +44,24 @@ export function ModuleFx({ id, handle }: ModuleFxProps) {
   const [tokens, setTokens] = useState<Tokens>(NO_TOKENS);
   if (effect && effect.seq !== seen) {
     setSeen(effect.seq);
-    if (isRepairable(id)) {
+    if (effect.moduleId === id) {
+      // Repair effects play only on the module that was repaired.
       const fx = effectsFor(effect.outcome);
       setTokens({
         sweep: fx.sweep ? effect.seq : 0,
         burst: fx.burst ? effect.seq : 0,
         ping: fx.ringPing ? effect.seq : 0,
+        afterglow: fx.afterglow ? effect.seq : 0,
       });
     }
   }
 
-  useEmissive(handle, faulted, tokens.sweep);
+  useEmissive(handle, faulted, tokens.sweep, id, blackout, tokens.afterglow);
   usePunch(handle, tokens.burst);
 
   const height = handle?.height ?? 1;
   const radius = handle?.radius ?? 0.6;
-  const label = labelKind(id, { selected, faulted: faultedModule });
+  const label = plan.badge === id ? 'badge' : plan.dots.includes(id) ? 'dot' : plan.tag === id ? 'tag' : null;
   // The model's parent is the module group, the only scaled ancestor (`scene/Module.tsx`).
   const unit = 1 / (handle?.model.parent?.scale.x || 1);
 
@@ -61,21 +69,20 @@ export function ModuleFx({ id, handle }: ModuleFxProps) {
     <group>
       {handle ? (
         <>
-          <FloorRing radius={radius} fault={faulted} />
-          {faulted ? null : <StatusLight height={height} />}
-          {label === 'badge' ? (
-            <FaultBadge id={id} height={height} unit={unit} selected={selected} />
+          <FloorRing range={floorRingRange(id)} fault={faulted} />
+          {faulted || !ready ? null : <StatusLight height={height} />}
+          {othersHolding ? <HoldingRing height={height} radius={radius} /> : null}
+          {label === 'badge' && fault ? (
+            <FaultBadge id={id} fault={fault} height={height} unit={unit} othersHolding={othersHolding} />
+          ) : label === 'dot' ? (
+            <FaultDot id={id} height={height} unit={unit} />
           ) : label === 'tag' ? (
             <NameTag id={id} height={height} unit={unit} />
           ) : null}
-          {isRepairable(id) ? (
-            <>
-              <SweepRing radius={radius} height={height} token={tokens.sweep} />
-              <RingPing radius={radius} token={tokens.ping} />
-              <Sparks radius={radius} height={height} token={tokens.burst} />
-              <Glow radius={radius} height={height} token={tokens.burst} />
-            </>
-          ) : null}
+          <SweepRing radius={radius} height={height} token={tokens.sweep} />
+          <RingPing radius={radius} token={tokens.ping} />
+          <Sparks radius={radius} height={height} token={tokens.burst} />
+          <Glow radius={radius} height={height} token={tokens.burst} />
         </>
       ) : null}
     </group>

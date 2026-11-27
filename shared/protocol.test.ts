@@ -1,25 +1,156 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_CLIENT_MESSAGE_BYTES, parseClientMessage, parseServerMessage } from './protocol';
+import {
+  MAX_CLIENT_MESSAGE_BYTES,
+  MAX_FAULTS,
+  MODULE_IDS,
+  PROTOCOL_VERSION,
+  isIncompatibleSnapshot,
+  parseClientMessage,
+  parseServerMessage,
+  socketProtocol,
+  type FaultMessage,
+  type RepairedMessage,
+  type SnapshotMessage,
+} from './protocol';
 
-const fault = { id: 'f1', moduleId: 'generator', createdAt: 1000 };
+const fault = { id: 'f1', moduleId: 'oxygen', createdAt: 1000 } as const;
+const gen = { id: 'g1', moduleId: 'generator', createdAt: 900 } as const;
 
-describe('parseServerMessage', () => {
-  it('parses each server message type', () => {
-    const snapshot = { type: 'snapshot', version: 3, fault, repairs: 2, presence: 1, instanceId: 'abc' };
-    expect(parseServerMessage(JSON.stringify(snapshot))).toEqual(snapshot);
+const snapshot: SnapshotMessage = {
+  type: 'snapshot',
+  protocol: 2,
+  version: 3,
+  faults: [gen, fault],
+  repairs: 2,
+  uptimeStartedAt: 500,
+  longestUptimeMs: 60_000,
+  blackout: null,
+  blackouts: [{ id: 'b1', startedAt: 100, endedAt: 400 }],
+  lastRepair: { moduleId: 'comms', at: 450 },
+  presence: 1,
+  instanceId: 'abc',
+  serverNow: 2000,
+};
 
-    const noFault = { ...snapshot, fault: null };
-    expect(parseServerMessage(JSON.stringify(noFault))).toEqual(noFault);
+const json = (v: unknown) => JSON.stringify(v);
 
-    const faultMsg = { type: 'fault', version: 4, fault };
-    expect(parseServerMessage(JSON.stringify(faultMsg))).toEqual(faultMsg);
+describe('constants', () => {
+  it('matches the plan', () => {
+    expect(PROTOCOL_VERSION).toBe(2);
+    expect(MAX_FAULTS).toBe(3);
+    expect(MODULE_IDS).toEqual(['generator', 'oxygen', 'greenhouse', 'comms', 'habitat']);
+  });
+});
 
-    const repaired = { type: 'repaired', version: 5, faultId: 'f1', repairs: 3, mine: true };
-    expect(parseServerMessage(JSON.stringify(repaired))).toEqual(repaired);
-    expect(parseServerMessage(JSON.stringify({ ...repaired, mine: false }))).toEqual({ ...repaired, mine: false });
+describe('parseServerMessage: snapshot', () => {
+  it('parses a full snapshot', () => {
+    expect(parseServerMessage(json(snapshot))).toEqual(snapshot);
+  });
 
-    const presence = { type: 'presence', count: 2 };
-    expect(parseServerMessage(JSON.stringify(presence))).toEqual(presence);
+  it('parses a blackout snapshot (no uptime, a blackout in progress, no last repair)', () => {
+    const dark = {
+      ...snapshot,
+      uptimeStartedAt: null,
+      blackout: { id: 'b2', startedAt: 1500 },
+      blackouts: [{ id: 'b2', startedAt: 1500, endedAt: null }],
+      lastRepair: null,
+    };
+    expect(parseServerMessage(json(dark))).toEqual(dark);
+  });
+
+  it('drops unknown fields', () => {
+    expect(parseServerMessage(json({ ...snapshot, extra: 1, faults: [{ ...gen, extra: true }, fault] }))).toEqual(
+      snapshot,
+    );
+  });
+
+  it('rejects a snapshot of another protocol or with broken fields', () => {
+    expect(parseServerMessage(json({ ...snapshot, protocol: 1 }))).toBeNull();
+    expect(parseServerMessage(json({ ...snapshot, protocol: 3 }))).toBeNull();
+    const { protocol: _p, ...noProtocol } = snapshot;
+    expect(parseServerMessage(json(noProtocol))).toBeNull();
+    expect(parseServerMessage(json({ ...snapshot, faults: [{ ...fault, moduleId: 'kitchen' }] }))).toBeNull();
+    expect(parseServerMessage(json({ ...snapshot, faults: null }))).toBeNull();
+    expect(parseServerMessage(json({ ...snapshot, serverNow: '2000' }))).toBeNull();
+    expect(parseServerMessage(json({ ...snapshot, blackouts: [{ id: 'b', startedAt: 1, endedAt: 'x' }] }))).toBeNull();
+    expect(parseServerMessage(json({ ...snapshot, blackout: { id: '' } }))).toBeNull();
+  });
+
+  it('rejects the protocol-1 snapshot shape', () => {
+    const v1 = { type: 'snapshot', version: 3, fault: gen, repairs: 2, presence: 1, instanceId: 'abc' };
+    expect(parseServerMessage(json(v1))).toBeNull();
+  });
+});
+
+describe('parseServerMessage: events', () => {
+  it('parses a fault with and without a blackout start', () => {
+    const plain: FaultMessage = { type: 'fault', version: 4, fault, blackoutStart: null };
+    expect(parseServerMessage(json(plain))).toEqual(plain);
+    const { blackoutStart: _b, ...missing } = plain;
+    expect(parseServerMessage(json(missing))).toEqual(plain);
+
+    const dark: FaultMessage = {
+      type: 'fault',
+      version: 5,
+      fault: gen,
+      blackoutStart: {
+        blackout: { id: 'b2', startedAt: 3000 },
+        uptimeStartedAt: null,
+        longestUptimeMs: 90_000,
+        record: { id: 'b2', startedAt: 3000, endedAt: null },
+      },
+    };
+    expect(parseServerMessage(json(dark))).toEqual(dark);
+    expect(
+      parseServerMessage(json({ ...dark, blackoutStart: { ...dark.blackoutStart, uptimeStartedAt: 5 } })),
+    ).toBeNull();
+  });
+
+  it('parses a repaired with and without a blackout end', () => {
+    const plain: RepairedMessage = {
+      type: 'repaired',
+      version: 6,
+      faultId: 'f1',
+      moduleId: 'oxygen',
+      repairs: 3,
+      mine: true,
+      at: 4000,
+      blackoutEnd: null,
+    };
+    expect(parseServerMessage(json(plain))).toEqual(plain);
+
+    const end: RepairedMessage = {
+      ...plain,
+      faultId: 'g1',
+      moduleId: 'generator',
+      blackoutEnd: { blackoutId: 'b2', endedAt: 4000, uptimeStartedAt: 4000, longestUptimeMs: 90_000 },
+    };
+    expect(parseServerMessage(json(end))).toEqual(end);
+    expect(parseServerMessage(json({ ...end, blackoutEnd: { blackoutId: 'b2' } }))).toBeNull();
+  });
+
+  it('reads only the boolean true as mine', () => {
+    const base = { type: 'repaired', version: 6, faultId: 'f1', moduleId: 'oxygen', repairs: 3, at: 4000 };
+    for (const mine of [undefined, 'true', 1, null, {}]) {
+      expect((parseServerMessage(json({ ...base, mine })) as RepairedMessage).mine).toBe(false);
+    }
+  });
+
+  it('parses activity, keeping counts of one or more', () => {
+    expect(parseServerMessage(json({ type: 'activity', holds: { f1: 1, g1: 2 } }))).toEqual({
+      type: 'activity',
+      holds: { f1: 1, g1: 2 },
+    });
+    expect(parseServerMessage(json({ type: 'activity', holds: { f1: 0 } }))).toEqual({ type: 'activity', holds: {} });
+    expect(parseServerMessage(json({ type: 'activity', holds: {} }))).toEqual({ type: 'activity', holds: {} });
+    expect(parseServerMessage(json({ type: 'activity', holds: { f1: -1 } }))).toBeNull();
+    expect(parseServerMessage(json({ type: 'activity', holds: { f1: '1' } }))).toBeNull();
+    expect(parseServerMessage(json({ type: 'activity' }))).toBeNull();
+  });
+
+  it('parses presence', () => {
+    expect(parseServerMessage(json({ type: 'presence', count: 2 }))).toEqual({ type: 'presence', count: 2 });
+    expect(parseServerMessage(json({ type: 'presence', count: '2' }))).toBeNull();
   });
 
   it('rejects malformed or unknown input', () => {
@@ -27,35 +158,40 @@ describe('parseServerMessage', () => {
     expect(parseServerMessage('null')).toBeNull();
     expect(parseServerMessage('[]')).toBeNull();
     expect(parseServerMessage('{"type":"other"}')).toBeNull();
-    expect(parseServerMessage('{"type":"echo","data":"hi","instanceId":"abc"}')).toBeNull();
-    expect(parseServerMessage('{"type":"repaired","version":"5","faultId":"f1","repairs":3}')).toBeNull();
-    expect(parseServerMessage('{"type":"presence","count":"2"}')).toBeNull();
     expect(parseServerMessage('{"type":"fault","version":4,"fault":null}')).toBeNull();
-    expect(parseServerMessage('{"type":"snapshot","version":3,"repairs":2,"presence":1}')).toBeNull();
+    expect(parseServerMessage(json({ type: 'repaired', version: 6, faultId: 'f1', repairs: 3, at: 1 }))).toBeNull();
   });
 });
 
-describe('parseServerMessage repaired.mine', () => {
-  const base = { type: 'repaired', version: 5, faultId: 'f1', repairs: 3 };
-
-  it('reads a missing mine as false (older servers)', () => {
-    expect(parseServerMessage(JSON.stringify(base))).toEqual({ ...base, mine: false });
+describe('isIncompatibleSnapshot', () => {
+  it('is true for a snapshot this build cannot read', () => {
+    expect(isIncompatibleSnapshot(json({ ...snapshot, protocol: 3 }))).toBe(true);
+    expect(isIncompatibleSnapshot(json({ type: 'snapshot', version: 1, fault: null, repairs: 0 }))).toBe(true);
+    expect(isIncompatibleSnapshot(json({ ...snapshot, faults: 'x' }))).toBe(true);
   });
 
-  it('counts only the boolean true as mine', () => {
-    for (const mine of ['true', 1, null, {}]) {
-      expect(parseServerMessage(JSON.stringify({ ...base, mine }))).toEqual({ ...base, mine: false });
-    }
+  it('is false for a good snapshot and for anything that is not a snapshot', () => {
+    expect(isIncompatibleSnapshot(json(snapshot))).toBe(false);
+    expect(isIncompatibleSnapshot(json({ type: 'presence', count: 1 }))).toBe(false);
+    expect(isIncompatibleSnapshot('pong')).toBe(false);
+    expect(isIncompatibleSnapshot('{"type":"unknown"}')).toBe(false);
+  });
+});
+
+describe('socketProtocol', () => {
+  it('is 2 only for ?protocol=2', () => {
+    expect(socketProtocol(new URL('https://x.dev/ws?protocol=2'))).toBe(2);
+    expect(socketProtocol(new URL('https://x.dev/ws'))).toBe(1);
+    expect(socketProtocol(new URL('https://x.dev/ws?protocol=1'))).toBe(1);
+    expect(socketProtocol(new URL('https://x.dev/ws?protocol=abc'))).toBe(1);
   });
 });
 
 describe('parseClientMessage', () => {
-  it('parses a repair request and drops extra fields', () => {
-    expect(parseClientMessage('{"type":"repair","faultId":"f1"}')).toEqual({ type: 'repair', faultId: 'f1' });
-    expect(parseClientMessage('{"type":"repair","faultId":"f1","extra":1}')).toEqual({
-      type: 'repair',
-      faultId: 'f1',
-    });
+  it('parses repair, hold and release, dropping extra fields', () => {
+    for (const type of ['repair', 'hold', 'release'] as const) {
+      expect(parseClientMessage(json({ type, faultId: 'f1', extra: 1 }))).toEqual({ type, faultId: 'f1' });
+    }
   });
 
   it('ignores malformed, unknown, and binary messages', () => {
@@ -64,8 +200,8 @@ describe('parseClientMessage', () => {
     expect(parseClientMessage('"repair"')).toBeNull();
     expect(parseClientMessage('{"type":"other","faultId":"f1"}')).toBeNull();
     expect(parseClientMessage('{"type":"repair"}')).toBeNull();
-    expect(parseClientMessage('{"type":"repair","faultId":1}')).toBeNull();
-    expect(parseClientMessage('{"type":"repair","faultId":""}')).toBeNull();
+    expect(parseClientMessage('{"type":"hold","faultId":1}')).toBeNull();
+    expect(parseClientMessage('{"type":"release","faultId":""}')).toBeNull();
     expect(parseClientMessage('ping')).toBeNull();
     expect(parseClientMessage(new ArrayBuffer(8))).toBeNull();
   });
@@ -80,7 +216,6 @@ describe('parseClientMessage', () => {
 
     expect(parseClientMessage(wrap('a'.repeat(MAX_CLIENT_MESSAGE_BYTES - overhead + 1)))).toBeNull();
 
-    // Fewer than 256 UTF-16 code units but more than 256 UTF-8 bytes.
     const multibyte = wrap('가'.repeat(80));
     expect(multibyte.length).toBeLessThanOrEqual(MAX_CLIENT_MESSAGE_BYTES);
     expect(parseClientMessage(multibyte)).toBeNull();

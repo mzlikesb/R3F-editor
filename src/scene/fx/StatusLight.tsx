@@ -6,8 +6,10 @@ import type { Group } from 'three';
 const LIGHT_RADIUS = 0.17;
 /** World-space gap between the model's top and the dot. */
 const LIFT = 0.3;
-/** World-space size of the soft glow behind the dot. */
-const GLOW_SIZE = 0.95;
+/** World-space size of the soft glow behind the dot (smaller since neon: a near module's glow was loud). */
+const GLOW_SIZE = 0.75;
+/** World-space height of the glow's top above the model's top: name tags hang above this. */
+export const STATUS_LIGHT_TOP = LIFT + GLOW_SIZE / 2;
 
 const LIGHT_GEOMETRY = new SphereGeometry(1, 12, 8);
 const LIGHT_MATERIAL = new MeshBasicMaterial({ color: '#4ade80', toneMapped: false });

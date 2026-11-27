@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { TOAST_TEXT, type Toast as ToastState } from '../feedback';
+import { toastText, type Toast as ToastState } from '../feedback';
 import { useStore } from '../store';
 
 /** The current toast; a timer sends `tick` when it expires (plan 005 D.12). */
@@ -14,8 +14,8 @@ export function Toast({ toast }: { toast: ToastState }) {
   }, [until]);
 
   return (
-    <p className={toast.kind === 'refault' ? 'toast toast-warn' : 'toast'} role="status">
-      {TOAST_TEXT[toast.kind]}
+    <p className={toast.kind === 'fault' ? 'toast toast-warn' : 'toast'} role="status">
+      {toastText(toast)}
     </p>
   );
 }

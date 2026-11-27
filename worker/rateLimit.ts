@@ -1,5 +1,5 @@
-/** Per-socket message rate limit (plan 003). Contract with task S in `docs/plans/003-tasks.md`. */
-import { MAX_CLIENT_MESSAGES_PER_SECOND } from '../shared/protocol';
+/** Per-socket message rate limit (plans 003, 006 A.10). Track `server` implements the TODO body. */
+import { MAX_CLIENT_MESSAGES_PER_SECOND, type ClientMessage } from '../shared/protocol';
 
 /**
  * Returns a limiter for one socket. Each call is one message at `now` (ms) and returns whether it
@@ -17,4 +17,14 @@ export function createRateLimiter(
     allowed.push(now);
     return true;
   };
+}
+
+/**
+ * Whether a parsed message is handled (plan 006 A.10): `release` always, without using the
+ * socket's budget, so a hold is never stuck by the limit; `hold` and `repair` only when `allow(now)`.
+ * A `hold` turned away here is not recorded as a hold (neon (b)).
+ */
+export function admit(type: ClientMessage['type'], allow: (now: number) => boolean, now: number): boolean {
+  if (type === 'release') return true;
+  return allow(now);
 }

@@ -1,11 +1,13 @@
 import { useProgress } from '@react-three/drei';
 import { useEffect, useState } from 'react';
-import { useStore } from '../store';
+import { selectReady, useStore } from '../store';
 import '../scene/scene.css';
 
 /**
- * `기지를 불러오는 중…` over the canvas while models and the HDRI load (plan 005 A.4). It is plain HTML
- * outside the canvas and never blocks input; the HUD and panel work regardless of loading.
+ * `기지를 불러오는 중…` over the canvas while models and the HDRI load (plan 005 A.4) and until the
+ * first snapshot is in (playtest #47: the HUD said `기지 정상` under it). Until then it is the only
+ * thing that speaks: the HUD, name tags and status lights wait for `selectReady`. Plain HTML outside
+ * the canvas; it never blocks input.
  */
 export function Loading() {
   const { active, progress } = useProgress();
@@ -16,8 +18,10 @@ export function Loading() {
   useEffect(() => {
     if (done) useStore.getState().setLoaded();
   }, [done]);
+  const ready = useStore(selectReady);
+  const hidden = done && ready;
   return (
-    <div className={done ? 'loading loading-done' : 'loading'} aria-hidden={done} role="status">
+    <div className={hidden ? 'loading loading-done' : 'loading'} aria-hidden={hidden} role="status">
       <span className="loading-text">기지를 불러오는 중…</span>
     </div>
   );

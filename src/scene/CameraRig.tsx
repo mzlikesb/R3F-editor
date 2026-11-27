@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { Box3, PerspectiveCamera, Vector3 } from 'three';
 import { useStore } from '../store';
 import { fitDistance, overviewFov } from './framing';
-import { BOUNDS, LAYOUT, OVERVIEW_DIR, OVERVIEW_POINTS, OVERVIEW_TARGET } from './layout';
+import { BOUNDS, LAYOUT, OVERVIEW_DIR, OVERVIEW_MARGIN, OVERVIEW_POINTS, OVERVIEW_TARGET } from './layout';
 
 const PHONE = '(max-width: 600px)';
 /** A portrait phone sees a much narrower slice horizontally, so focus from further away. */
@@ -19,8 +19,6 @@ const FOCUS_Y = 0.8;
  * it above the bottom panel.
  */
 const FOCUS_OFFSET = { desktop: -0.06, phone: -0.08 } as const;
-/** Pixels the overview keeps free: HUD on top, hint/toast at the bottom. */
-const OVERVIEW_MARGIN = { side: 12, top: 130, bottom: 70 } as const;
 const MIN_MAX_DISTANCE = 38;
 
 /**

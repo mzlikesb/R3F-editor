@@ -1,7 +1,7 @@
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
 import type { Mesh } from 'three';
-import { Color } from 'three';
+import { Color, RingGeometry } from 'three';
 import {
   createRingMaterial,
   FAULT_COLOR,
@@ -24,8 +24,11 @@ const PING_COLOR = new Color('#9fe3ff');
 const FLOOR_RING_MIN = 0.45;
 const FLOOR_RING_MAX = 0.95;
 
-/** Red ring pulsing outward from a faulted module on the ground. Only drawn while `fault`. */
-export function FloorRing({ radius, fault }: { radius: number; fault: boolean }) {
+/**
+ * Red ring pulsing outward from a faulted module on the ground, from `range.from` to `range.to`
+ * (local units, `layout.floorRingRange`: it never reaches a neighbour's ring). Only drawn while `fault`.
+ */
+export function FloorRing({ range, fault }: { range: { from: number; to: number }; fault: boolean }) {
   const mesh = useRef<Mesh>(null);
   const material = useMemo(() => createRingMaterial(FAULT_COLOR), []);
   useEffect(() => () => material.dispose(), [material]);
@@ -38,7 +41,7 @@ export function FloorRing({ radius, fault }: { radius: number; fault: boolean })
       return;
     }
     const phase = (state.clock.elapsedTime % 1.8) / 1.8;
-    const s = radius * (1.15 + phase * 1.3);
+    const s = range.from + (range.to - range.from) * phase;
     m.visible = true;
     m.scale.set(s, s, 1);
     // Never fades out completely: the ground is close in tone, so keep a visible floor.
@@ -115,5 +118,36 @@ export function RingPing({ radius, token }: { radius: number; token: number }) {
       position-y={0.03}
       visible={false}
     />
+  );
+}
+
+/** A three-quarter arc, so its spin reads as "in progress". Shared by every holding ring. */
+const HOLD_GEOMETRY = new RingGeometry(0.8, 1, 40, 1, 0, Math.PI * 1.5);
+const HOLD_MATERIAL = createRingMaterial(new Color('#ffd166'));
+HOLD_MATERIAL.opacity = 0.9;
+const HOLD_SPIN = 2.4;
+/**
+ * The ring circles the module's body at this share of its height, this much wider than its
+ * footprint. Above the top it rose into the badge or `⚠` dot (which sit `LABEL_LIFT` above the top)
+ * and hid behind them, most of all on a phone.
+ */
+const HOLD_HEIGHT_SHARE = 0.55;
+const HOLD_RADIUS_SCALE = 1.3;
+
+/**
+ * A spinning arc around a module's body while someone else is repairing it. One mesh; geometry and
+ * material are shared by all modules. `radius` and `height` are the module's, in its local units.
+ */
+export function HoldingRing({ height, radius }: { height: number; radius: number }) {
+  const mesh = useRef<Mesh>(null);
+  useFrame((_, delta) => {
+    const m = mesh.current;
+    if (m) m.rotation.z -= delta * HOLD_SPIN;
+  });
+  const s = radius * HOLD_RADIUS_SCALE;
+  return (
+    <group position-y={height * HOLD_HEIGHT_SHARE} rotation-x={-Math.PI / 2} scale={[s, s, 1]}>
+      <mesh ref={mesh} geometry={HOLD_GEOMETRY} material={HOLD_MATERIAL} raycast={() => null} />
+    </group>
   );
 }

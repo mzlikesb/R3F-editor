@@ -8,8 +8,7 @@ import { Loading } from './ui/Loading';
 import { ScreenFlash } from './ui/ScreenFlash';
 
 /**
- * Composition only (plan 005). Owned by the dev lead: each track fills its own component, none
- * edits this file. Order is paint order: canvas, then overlays on top.
+ * Composition only. Order is paint order: canvas, then overlays on top.
  */
 export function App() {
   useEffect(() => {

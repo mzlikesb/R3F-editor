@@ -7,7 +7,7 @@ export async function loadBase(): Promise<void> {
     const res = await fetch('/api/base');
     if (!res.ok) return;
     const msg = parseServerMessage(await res.text());
-    if (msg?.type === 'snapshot') useStore.getState().applyRest(msg);
+    if (msg?.type === 'snapshot') useStore.getState().applyRest(msg, Date.now());
   } catch {
     // Offline or parser not ready: nothing to show yet.
   }

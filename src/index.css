@@ -19,34 +19,101 @@ body {
   overflow-wrap: break-word;
 }
 
+/*
+ * Full width between 16 px gutters, content centered. (A `left: 50%` box shrink-wraps to half the
+ * screen, which broke the HUD into five lines on a 390 px phone: playtest #47.)
+ */
 .hud-wrap {
   position: fixed;
   top: 12px;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 16px;
+  right: 16px;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  max-width: calc(100vw - 32px);
   pointer-events: none;
 }
 
 .hud {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 100%;
   padding: 6px 16px;
+  border: 0;
   border-radius: 16px;
   background: rgba(16, 18, 22, 0.8);
+  color: inherit;
+  font: inherit;
   text-align: center;
+  pointer-events: auto;
+  cursor: pointer;
 }
 
-.hud-repairs {
+.hud-line {
+  display: block;
+}
+
+.hud-top {
   font-size: 15px;
   font-weight: 600;
 }
 
+/* `기록` with a list mark: the HUD opens the record panel. */
+.hud-cue {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #c9ced6;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  vertical-align: 1px;
+}
+
+.hud-cue-icon {
+  flex: none;
+}
+
+/* One part of a HUD line between ` · `: wraps only between parts. */
+.seg {
+  white-space: nowrap;
+}
+
+.banner {
+  box-sizing: border-box;
+  max-width: 100%;
+  margin: 0;
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 12px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.banner-blackout {
+  background: rgba(120, 24, 24, 0.9);
+  color: #ffd9d9;
+}
+
+.banner-update {
+  min-height: 36px;
+  background: #2a3a55;
+  color: #dbe7ff;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
 .hud-people {
   font-size: 13px;
-  color: #aeb4bd;
+  color: #e1e5ea;
 }
 
 /* Plays again whenever the element's key changes: a short grow-and-return, no count-up. */
@@ -67,9 +134,10 @@ body {
   }
 }
 
+/* People and the last repair are the only signs of others: bright, not muted grey (principle 1). */
 .hud-last {
-  font-size: 12px;
-  color: #8f97a3;
+  font-size: 13px;
+  color: #cfe8d8;
 }
 
 .healthy {
@@ -80,6 +148,11 @@ body {
   font-size: 12px;
   color: #8fd4a6;
   text-align: center;
+}
+
+.healthy.faults {
+  color: #ffb3a8;
+  font-weight: 600;
 }
 
 .ok {
@@ -107,9 +180,11 @@ body {
   box-sizing: border-box;
   width: 100%;
   max-width: 360px;
-  padding: 16px;
+  padding: 12px 16px 14px;
   border-radius: 12px;
-  background: rgba(24, 27, 33, 0.92);
+  /* Opaque: rings and rocks behind it made the trend hard to read (neon). */
+  background: rgb(24, 27, 33);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
   pointer-events: auto;
   /* Long-press defenses: no text selection, callout, or browser gestures while holding. */
   touch-action: none;
@@ -118,19 +193,11 @@ body {
   -webkit-touch-callout: none;
 }
 
-.panel-compact {
-  padding: 4px 4px 4px 16px;
-}
-
 .panel-head {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 12px;
-}
-
-.panel-compact .panel-head {
-  margin-bottom: 0;
+  margin-bottom: 6px;
 }
 
 .panel h2 {
@@ -158,17 +225,8 @@ body {
   cursor: pointer;
 }
 
-.panel-compact .panel-close {
-  margin: 0 0 0 auto;
-}
-
 .panel-close:active {
   background: rgba(255, 255, 255, 0.08);
-}
-
-.panel-compact .goto {
-  margin: 0 12px 12px 0;
-  width: calc(100% - 12px);
 }
 
 .repair {
@@ -204,6 +262,64 @@ body {
 
 .repair .label {
   position: relative;
+}
+
+.sensor-line {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.trend {
+  display: block;
+  width: 100%;
+  height: 26px;
+}
+
+.trend-tall {
+  height: 40px;
+  margin-bottom: 8px;
+}
+
+.trend-base {
+  stroke: rgba(255, 255, 255, 0.28);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.trend-line {
+  fill: none;
+  stroke: #6fcf8f;
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.trend-outside {
+  fill: none;
+  stroke: #ff5a5a;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.record-row {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.record-sub {
+  margin: 12px 0 4px;
+  font-size: 13px;
+  color: #aeb4bd;
+}
+
+.record-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  color: #aeb4bd;
 }
 
 .hint {

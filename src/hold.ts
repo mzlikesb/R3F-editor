@@ -1,9 +1,9 @@
 /**
- * Repair-button hold state machine (plan 003): idle -> holding -> pending -> idle.
- * Pure; `ui/Panel.tsx` and `net/socket.ts` feed it events, the store keeps the result, and
- * `send` is the repair request to put on the socket. Contract with task C in `docs/plans/003-tasks.md`.
+ * Repair-button hold state machine (plans 003, 006 A.10, #15-4): idle -> holding -> pending -> idle.
+ * Pure; `ui/Panel.tsx` and the store feed it events, the store keeps the result, and `send` is the
+ * message to put on the socket. Track `client` implements the TODO body.
  */
-import type { RepairRequest } from '../shared/protocol';
+import type { ClientMessage } from '../shared/protocol';
 
 /** Hold this long to send the repair. */
 export const HOLD_MS = 1000;
@@ -14,70 +14,79 @@ export type HoldState =
   | { kind: 'holding'; faultId: string; startedAt: number }
   | { kind: 'pending'; faultId: string; sentAt: number };
 
-/**
- * Plan 005: what to say after a repair is no longer kept here. `feedback.ts` classifies the
- * `repaired` message (mine / beaten / other) from the hold state *before* this reducer runs, and
- * shows it as a toast.
- */
 export interface RepairUi {
   hold: HoldState;
 }
 
 export const initialRepairUi: RepairUi = { hold: { kind: 'idle' } };
 
-/** All times are ms from the same clock (`performance.now()` or `Date.now()`). */
+/** All times are ms from the same clock (`performance.now()`). */
 export type HoldEvent =
-  /** Pointer down on an enabled button for the current fault. */
+  /** Pointer down on an enabled button for the fault `faultId`. */
   | { type: 'press'; faultId: string; now: number }
   /** Pointer up. */
   | { type: 'release'; now: number }
-  /** Pointer left the button area (checked on pointermove), pointercancel, blur, or tab hidden. */
+  /** Pointer left the button, pointercancel, blur, tab hidden, or the selection moved away. */
   | { type: 'cancel'; now: number }
   /** The socket closed (status left `open`). */
   | { type: 'disconnect'; now: number }
-  /** A `repaired` message arrived (after it was applied to the store). Ends a hold or a pending repair of that fault. */
+  /** A `repaired` arrived (after it was applied to the store). */
   | { type: 'repaired'; faultId: string; now: number }
   /** A WS `snapshot` arrived (e.g. after a reconnect). */
   | { type: 'snapshot'; now: number }
-  /** Animation-frame or timer tick: completes a hold, times out a pending repair. */
+  /** After any versioned message: the faults that exist now. The button of a missing fault is gone. */
+  | { type: 'faults'; ids: readonly string[]; now: number }
+  /** Animation-frame tick: completes a hold, times out a pending repair. */
   | { type: 'tick'; now: number };
 
 export interface HoldResult {
   ui: RepairUi;
-  /** The request to send now, if this event completed a hold. */
-  send: RepairRequest | null;
+  /** The message to send now, if any. */
+  send: ClientMessage | null;
 }
 
+/**
+ * - `press` (idle): holding, send `hold{faultId}`.
+ * - `release` / `cancel` (holding): idle, send `release{faultId}`. `disconnect` (holding): idle, nothing to send.
+ * - `tick` (holding, `HOLD_MS` passed): pending, send `repair{faultId}`. (pending, `PENDING_TIMEOUT_MS` passed): idle.
+ * - `repaired` of the held or pending fault: idle, nothing (the server already cleared every hold on it).
+ * - `snapshot` (pending): idle.
+ * - `faults` without the held fault: idle, send `release`; without the pending fault: idle.
+ * Everything else keeps `ui` itself (same reference) and sends nothing.
+ */
 export function reduceHold(ui: RepairUi, event: HoldEvent): HoldResult {
-  const { hold } = ui;
+  const hold = ui.hold;
   const keep: HoldResult = { ui, send: null };
+  const idle: RepairUi = initialRepairUi;
   switch (event.type) {
     case 'press':
-      return hold.kind === 'idle'
-        ? { ui: { ...ui, hold: { kind: 'holding', faultId: event.faultId, startedAt: event.now } }, send: null }
-        : keep;
+      if (hold.kind !== 'idle') return keep;
+      return {
+        ui: { hold: { kind: 'holding', faultId: event.faultId, startedAt: event.now } },
+        send: { type: 'hold', faultId: event.faultId },
+      };
     case 'release':
     case 'cancel':
+      if (hold.kind !== 'holding') return keep;
+      return { ui: idle, send: { type: 'release', faultId: hold.faultId } };
     case 'disconnect':
-      return hold.kind === 'holding' ? { ui: { ...ui, hold: { kind: 'idle' } }, send: null } : keep;
+      return hold.kind === 'holding' ? { ui: idle, send: null } : keep;
     case 'repaired':
-      return (hold.kind === 'holding' || hold.kind === 'pending') && hold.faultId === event.faultId
-        ? { ui: { ...ui, hold: { kind: 'idle' } }, send: null }
-        : keep;
+      return hold.kind !== 'idle' && hold.faultId === event.faultId ? { ui: idle, send: null } : keep;
     case 'snapshot':
-      return hold.kind === 'pending' ? { ui: { ...ui, hold: { kind: 'idle' } }, send: null } : keep;
-    case 'tick': {
+      return hold.kind === 'pending' ? { ui: idle, send: null } : keep;
+    case 'faults':
+      if (hold.kind === 'idle' || event.ids.includes(hold.faultId)) return keep;
+      return { ui: idle, send: hold.kind === 'holding' ? { type: 'release', faultId: hold.faultId } : null };
+    case 'tick':
       if (hold.kind === 'holding' && event.now - hold.startedAt >= HOLD_MS) {
         return {
-          ui: { ...ui, hold: { kind: 'pending', faultId: hold.faultId, sentAt: event.now } },
+          ui: { hold: { kind: 'pending', faultId: hold.faultId, sentAt: event.now } },
           send: { type: 'repair', faultId: hold.faultId },
         };
       }
-      if (hold.kind === 'pending' && event.now - hold.sentAt >= PENDING_TIMEOUT_MS) {
-        return { ui: { ...ui, hold: { kind: 'idle' } }, send: null };
-      }
+      if (hold.kind === 'pending' && event.now - hold.sentAt >= PENDING_TIMEOUT_MS) return { ui: idle, send: null };
       return keep;
-    }
   }
 }
 
