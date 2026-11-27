@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { MODULE_IDS, type Fault, type ModuleId } from '../../../shared/protocol';
-import { badgeText, holdingModules, labelPlan, type LabelInput } from './labelRules';
+import { badgeText, dotText, holdingModules, labelPlan, type LabelInput } from './labelRules';
 
 const T = 1_800_000_000_000;
 const f = (moduleId: ModuleId, age: number): Fault => ({ id: `f-${moduleId}`, moduleId, createdAt: T - age });
 
 function plan(overrides: Partial<LabelInput>) {
-  return labelPlan({ faults: [], selected: null, blackout: false, holding: [], ...overrides });
+  return labelPlan({ ready: true, faults: [], selected: null, blackout: false, holding: [], ...overrides });
 }
 
 describe('labelPlan: nothing broken (005 rule)', () => {
@@ -14,6 +14,15 @@ describe('labelPlan: nothing broken (005 rule)', () => {
     expect(plan({})).toEqual({ badge: null, dots: [], tag: 'generator' });
     expect(plan({ selected: 'habitat' })).toEqual({ badge: null, dots: [], tag: 'habitat' });
     expect(plan({ selected: 'generator' })).toEqual({ badge: null, dots: [], tag: 'generator' });
+  });
+});
+
+describe('labelPlan: loading (playtest #47)', () => {
+  it('shows no label until the scene and the base are in, so no tag sits on the loading badge', () => {
+    const none = { badge: null, dots: [], tag: null };
+    expect(plan({ ready: false })).toEqual(none);
+    expect(plan({ ready: false, selected: 'habitat' })).toEqual(none);
+    expect(plan({ ready: false, faults: [f('oxygen', 1)] })).toEqual(none);
   });
 });
 
@@ -91,8 +100,20 @@ describe('holdingModules', () => {
 });
 
 describe('badgeText', () => {
-  it('shows the sensor value, or that someone is repairing it', () => {
-    expect(badgeText('oxygen', { othersHolding: false, sensorText: '92%' })).toBe('⚠ 산소 탱크 고장 · 92%');
-    expect(badgeText('oxygen', { othersHolding: true, sensorText: '92%' })).toBe('⚠ 산소 탱크 고장 · 누군가 고치는 중');
+  it('says what to do (M2 call to action), or that someone is repairing it', () => {
+    expect(badgeText('generator', { othersHolding: false, panelOpen: false })).toBe('⚠ 발전기 고장 · 눌러서 수리');
+    expect(badgeText('oxygen', { othersHolding: true, panelOpen: false })).toBe('⚠ 산소 탱크 고장 · 누군가 고치는 중');
+  });
+
+  it('drops the call to action while its panel is open (the panel button says how)', () => {
+    expect(badgeText('oxygen', { othersHolding: false, panelOpen: true })).toBe('⚠ 산소 탱크 고장');
+    expect(badgeText('oxygen', { othersHolding: true, panelOpen: true })).toBe('⚠ 산소 탱크 고장 · 누군가 고치는 중');
+  });
+});
+
+describe('dotText', () => {
+  it('names the module next to the mark, so a dot says which one is broken', () => {
+    expect(dotText('habitat')).toBe('⚠ 거주 돔');
+    expect(dotText('comms')).toBe('⚠ 통신탑');
   });
 });

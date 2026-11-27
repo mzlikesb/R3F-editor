@@ -7,14 +7,16 @@ import {
   blackoutBanner,
   connectionLabel,
   formatDuration,
+  faultCountLine,
   healthyLine,
   historyView,
-  hudTopLine,
+  hudReady,
   lastRepairLine,
   panelView,
-  presenceLine,
-  repairsLine,
+  peopleLine,
+  segments,
   togetherLine,
+  uptimeLine,
   updateBanner,
 } from './view';
 
@@ -49,19 +51,15 @@ describe('agoText', () => {
 });
 
 describe('HUD top line (uptime)', () => {
-  const running = { uptimeStartedAt: T - (3 * HOUR + 12 * MIN), longestUptimeMs: HOUR, blackout: null, repairs: 7 };
+  const running = { uptimeStartedAt: T - (3 * HOUR + 12 * MIN), longestUptimeMs: HOUR, blackout: null };
 
-  it('shows uptime and repairs together', () => {
-    expect(hudTopLine(running, T)).toBe('가동 3시간 12분 · 함께 고친 횟수 7회');
+  it('shows the uptime', () => {
+    expect(uptimeLine(running, T)).toBe('가동 3시간 12분');
   });
 
   it('in a blackout says the record broke and shows the longest', () => {
-    const dark = { uptimeStartedAt: null, longestUptimeMs: 5 * HOUR, blackout: { id: 'b', startedAt: T }, repairs: 7 };
-    expect(hudTopLine(dark, T)).toBe('가동 기록 끊김 · 최장 5시간 · 함께 고친 횟수 7회');
-  });
-
-  it('shows only the count before the first snapshot', () => {
-    expect(hudTopLine(null, T)).toBe('함께 고친 횟수 –회');
+    const dark = { uptimeStartedAt: null, longestUptimeMs: 5 * HOUR, blackout: { id: 'b', startedAt: T } };
+    expect(uptimeLine(dark, T)).toBe('가동 기록 끊김 · 최장 5시간');
   });
 
   it('longest is never shorter than the current run', () => {
@@ -71,15 +69,55 @@ describe('HUD top line (uptime)', () => {
   });
 });
 
-describe('HUD lines kept from 005', () => {
-  it('reads the same', () => {
-    expect(repairsLine(12)).toBe('함께 고친 횟수 12회');
-    expect(presenceLine(3)).toBe('지금 3명이 같이 지키는 중');
-    expect(presenceLine(1)).toBe('지금은 나 혼자 지키는 중');
+describe('HUD people line (playtest #47: short enough for a phone)', () => {
+  it('repairs and people on one line', () => {
+    expect(peopleLine(0, 3)).toBe('함께 고친 0회 · 3명 접속 중');
+    expect(peopleLine(12, 2)).toBe('함께 고친 12회 · 2명 접속 중');
+  });
+
+  it('alone', () => {
+    expect(peopleLine(4, 1)).toBe('함께 고친 4회 · 나 혼자 접속 중');
+    expect(peopleLine(4, 0)).toBe('함께 고친 4회 · 나 혼자 접속 중');
+  });
+
+  it('connection label and healthy line', () => {
     expect(connectionLabel('open')).toBeNull();
     expect(connectionLabel('reconnecting')).toBe('재연결 중…');
     expect(healthyLine({ faulted: false })).toBe('기지 정상 · 고장 나면 알려 드려요');
     expect(healthyLine({ faulted: true })).toBeNull();
+  });
+});
+
+describe('segments: wrap only between parts, never inside `0회` or `1분 전`', () => {
+  it('splits on the middle dot', () => {
+    expect(segments('마지막: 다른 사람 · 산소 탱크 · 25초 전')).toEqual(['마지막: 다른 사람', '산소 탱크', '25초 전']);
+    expect(segments('가동 3분')).toEqual(['가동 3분']);
+  });
+});
+
+describe('faultCountLine: how close the blackout is', () => {
+  it('shows the count out of three while something is broken and it is not dark yet', () => {
+    expect(faultCountLine(1, null)).toBe('고장 1/3 · 3개면 정전');
+    expect(faultCountLine(2, null)).toBe('고장 2/3 · 3개면 정전');
+  });
+
+  it('nothing when healthy or during a blackout (the blackout banner says it)', () => {
+    expect(faultCountLine(0, null)).toBeNull();
+    expect(faultCountLine(3, { id: 'b', startedAt: T })).toBeNull();
+    expect(faultCountLine(2, { id: 'b', startedAt: T })).toBeNull();
+  });
+});
+
+describe('hudReady: nothing claims "healthy" while loading', () => {
+  it('needs the scene and the base', () => {
+    expect(hudReady({ loaded: false, hasBase: false, incompatible: false })).toBe(false);
+    expect(hudReady({ loaded: true, hasBase: false, incompatible: false })).toBe(false);
+    expect(hudReady({ loaded: false, hasBase: true, incompatible: false })).toBe(false);
+    expect(hudReady({ loaded: true, hasBase: true, incompatible: false })).toBe(true);
+  });
+
+  it('an unreadable server does not leave it loading forever', () => {
+    expect(hudReady({ loaded: true, hasBase: false, incompatible: true })).toBe(true);
   });
 });
 
@@ -97,16 +135,14 @@ describe('banners', () => {
 
 describe('lastRepairLine', () => {
   it('says who and which module', () => {
-    expect(lastRepairLine({ moduleId: 'oxygen', at: T, mine: true }, T + 1000)).toBe(
-      '마지막 수리: 나 · 산소 탱크 · 방금',
-    );
+    expect(lastRepairLine({ moduleId: 'oxygen', at: T, mine: true }, T + 1000)).toBe('마지막: 나 · 산소 탱크 · 방금');
     expect(lastRepairLine({ moduleId: 'oxygen', at: T, mine: false }, T + 12_400)).toBe(
-      '마지막 수리: 다른 사람 · 산소 탱크 · 12초 전',
+      '마지막: 다른 사람 · 산소 탱크 · 12초 전',
     );
   });
 
   it('leaves out who when it came from the snapshot', () => {
-    expect(lastRepairLine({ moduleId: 'comms', at: T, mine: null }, T + 3 * MIN)).toBe('마지막 수리: 통신탑 · 3분 전');
+    expect(lastRepairLine({ moduleId: 'comms', at: T, mine: null }, T + 3 * MIN)).toBe('마지막: 통신탑 · 3분 전');
   });
 
   it('shows nothing without a repair', () => {

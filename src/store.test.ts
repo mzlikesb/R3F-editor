@@ -10,6 +10,7 @@ import {
   selectModuleFault,
   selectModuleStatus,
   selectOthersHolding,
+  selectReady,
   selectServerNow,
   setClientSender,
   useStore,
@@ -262,5 +263,16 @@ describe('store.setLoaded', () => {
     useStore.setState({ loaded: false });
     s().setLoaded();
     expect(s().loaded).toBe(true);
+  });
+});
+
+describe('selectReady (playtest #47: no "healthy" while loading)', () => {
+  it('is true once the scene is in and a base is known', () => {
+    useStore.setState({ loaded: false, sync: initialSync });
+    expect(selectReady(s())).toBe(false);
+    s().setLoaded();
+    expect(selectReady(s())).toBe(false);
+    s().receive(snapshot(), 0, T);
+    expect(selectReady(s())).toBe(true);
   });
 });

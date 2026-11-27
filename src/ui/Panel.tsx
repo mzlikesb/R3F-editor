@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef } from 'react';
 import { holdProgress, type HoldEvent } from '../hold';
 import { selectFaults, selectModuleFault, selectOthersHolding, selectServerNow, useStore } from '../store';
 import { canRepair } from '../sync';
-import { PANEL_TICK_MS, sensorLine, trendPoints, trendSamples } from './sensorView';
+import { PANEL_TICK_MS, sensorLine, trendBaselineY, trendOutsidePath, trendPoints, trendSamples } from './sensorView';
 import { panelView } from './view';
 
 /** The trend's drawing box; the SVG scales it to the panel width. */
@@ -23,6 +23,7 @@ export function Panel() {
   const fill = useRef<HTMLSpanElement>(null);
   const sensorText = useRef<HTMLParagraphElement>(null);
   const trendLine = useRef<SVGPolylineElement>(null);
+  const trendOutside = useRef<SVGPathElement>(null);
 
   // While the hold is time-driven (holding, pending), tick every frame and paint the fill
   // directly on the element so no React state changes per frame.
@@ -53,10 +54,9 @@ export function Panel() {
     const paint = () => {
       const now = selectServerNow(useStore.getState(), Date.now());
       if (sensorText.current) sensorText.current.textContent = sensorLine(selected, fault, now);
-      trendLine.current?.setAttribute(
-        'points',
-        trendPoints(selected, trendSamples(selected, fault, now), TREND_W, TREND_H),
-      );
+      const values = trendSamples(selected, fault, now);
+      trendLine.current?.setAttribute('points', trendPoints(selected, values, TREND_W, TREND_H));
+      trendOutside.current?.setAttribute('d', trendOutsidePath(selected, values, TREND_W, TREND_H));
     };
     paint();
     const id = setInterval(paint, PANEL_TICK_MS);
@@ -91,6 +91,8 @@ export function Panel() {
   if (selected === null) return null;
 
   const view = panelView(selected, { faults, blackout, othersHolding });
+  // The faint dashed line is the healthy level; the part of the trend away from it turns red.
+  const baselineY = trendBaselineY(selected, TREND_H);
   const repairButton = view.repairFaultId !== null;
 
   const dispatch = (event: HoldEvent) => useStore.getState().dispatchHold(event);
@@ -114,13 +116,15 @@ export function Panel() {
       </div>
       <p ref={sensorText} className="sensor-line" />
       <svg
-        className="trend"
+        className={view.status === 'fault' ? 'trend trend-tall' : 'trend'}
         viewBox={`0 0 ${TREND_W} ${TREND_H}`}
         preserveAspectRatio="none"
         role="img"
         aria-label="최근 30초 추이"
       >
-        <polyline ref={trendLine} className={view.status === 'fault' ? 'trend-line trend-fault' : 'trend-line'} />
+        <line className="trend-base" x1={0} x2={TREND_W} y1={baselineY} y2={baselineY} />
+        <polyline ref={trendLine} className="trend-line" />
+        <path ref={trendOutside} className="trend-outside" />
       </svg>
       {view.goTo && (
         <button

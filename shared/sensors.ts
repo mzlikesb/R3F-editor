@@ -6,8 +6,10 @@
 import type { Fault, ModuleId } from './protocol';
 
 export interface SensorSpec {
-  /** Shown in the panel: `발전기 출력`. */
+  /** Long name: `발전기 출력`. */
   label: string;
+  /** Short name next to the value in the panel and the badge: `출력`. */
+  short: string;
   /** Appended to the value: `kW`, `%`, `℃`, `kPa`. */
   unit: string;
   /** Healthy level. */
@@ -23,11 +25,47 @@ export interface SensorSpec {
 }
 
 export const SENSORS: Record<ModuleId, SensorSpec> = {
-  generator: { label: '발전기 출력', unit: 'kW', nominal: 120, wobble: 3, worst: 35, rampMs: 60_000, digits: 0 },
-  oxygen: { label: '산소', unit: '%', nominal: 98, wobble: 0.8, worst: 61, rampMs: 90_000, digits: 0 },
-  greenhouse: { label: '온실 온도', unit: '℃', nominal: 22, wobble: 0.6, worst: 41, rampMs: 90_000, digits: 1 },
-  comms: { label: '통신 신호', unit: '%', nominal: 94, wobble: 2.5, worst: 12, rampMs: 45_000, digits: 0 },
-  habitat: { label: '거주 돔 기압', unit: 'kPa', nominal: 101, wobble: 0.4, worst: 78, rampMs: 120_000, digits: 1 },
+  generator: {
+    label: '발전기 출력',
+    short: '출력',
+    unit: 'kW',
+    nominal: 120,
+    wobble: 3,
+    worst: 35,
+    rampMs: 60_000,
+    digits: 0,
+  },
+  oxygen: { label: '산소', short: '산소', unit: '%', nominal: 98, wobble: 0.8, worst: 61, rampMs: 90_000, digits: 0 },
+  greenhouse: {
+    label: '온실 온도',
+    short: '온도',
+    unit: '℃',
+    nominal: 22,
+    wobble: 0.6,
+    worst: 41,
+    rampMs: 90_000,
+    digits: 1,
+  },
+  comms: {
+    label: '통신 신호',
+    short: '신호',
+    unit: '%',
+    nominal: 94,
+    wobble: 2.5,
+    worst: 12,
+    rampMs: 45_000,
+    digits: 0,
+  },
+  habitat: {
+    label: '거주 돔 기압',
+    short: '기압',
+    unit: 'kPa',
+    nominal: 101,
+    wobble: 0.4,
+    worst: 78,
+    rampMs: 120_000,
+    digits: 1,
+  },
 };
 
 /** Wobble periods (ms). Not multiples of each other, so the line never looks like a clean loop. */
@@ -74,4 +112,23 @@ export function sensorRange(moduleId: ModuleId): { min: number; max: number } {
     min: Math.min(spec.nominal, spec.worst) - spec.wobble,
     max: Math.max(spec.nominal, spec.worst) + spec.wobble,
   };
+}
+
+/** `출력 96kW · 정상 120kW`: the value with the healthy level, so the number means something. */
+export function sensorReading(moduleId: ModuleId, value: number): string {
+  const spec = SENSORS[moduleId];
+  return `${spec.short} ${formatSensor(moduleId, value)} · 정상 ${formatSensor(moduleId, spec.nominal)}`;
+}
+
+/** A little past the healthy wobble, so rounding never flags a healthy value. */
+const ABNORMAL_MARGIN = 1.05;
+
+/**
+ * True when `value` has left the healthy band toward the fault side (down for most sensors, up for
+ * the greenhouse temperature). The healthy wobble never counts.
+ */
+export function isAbnormal(moduleId: ModuleId, value: number): boolean {
+  const spec = SENSORS[moduleId];
+  const toward = Math.sign(spec.worst - spec.nominal);
+  return (value - spec.nominal) * toward > spec.wobble * ABNORMAL_MARGIN;
 }

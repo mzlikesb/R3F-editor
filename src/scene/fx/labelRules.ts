@@ -7,6 +7,8 @@ import { moduleName } from '../../modules';
 import type { BaseModuleId } from '../../modules';
 
 export interface LabelInput {
+  /** Scene and base are in (`selectReady`). Before that no label at all (playtest #47). */
+  ready: boolean;
   /** Oldest first, as in the store. */
   faults: readonly Fault[];
   selected: BaseModuleId | null;
@@ -33,10 +35,11 @@ export interface LabelPlan {
  * 4. the generator, if broken;
  * 5. the oldest fault.
  * `dots`: the other broken modules in `faults` order. `tag` (nothing broken): the selected module,
- * or the generator in the overview (005).
+ * or the generator in the overview (005). Nothing at all until `ready`.
  */
 export function labelPlan(input: LabelInput): LabelPlan {
-  const { faults, selected, blackout, holding } = input;
+  const { ready, faults, selected, blackout, holding } = input;
+  if (!ready) return { badge: null, dots: [], tag: null };
   if (faults.length === 0) return { badge: null, dots: [], tag: selected ?? GENERATOR };
 
   const broken = faults.map((f) => f.moduleId);
@@ -65,10 +68,17 @@ export function holdingModules(faults: readonly Fault[], activity: Readonly<Reco
 }
 
 /**
- * Big badge text: `⚠ 산소 탱크 고장 · 누군가 고치는 중` while someone else holds it (no separate
- * label), else `⚠ 산소 탱크 고장 · 92%` (`sensorText` = `formatSensor(...)`).
+ * Big badge text: `⚠ 발전기 고장 · 눌러서 수리` (M2 call to action; the sensor reading is a small
+ * second line), `⚠ 산소 탱크 고장 · 누군가 고치는 중` while someone else holds it (no separate
+ * label), and just `⚠ 산소 탱크 고장` while its own panel is open (the panel button says how).
  */
-export function badgeText(id: BaseModuleId, state: { othersHolding: boolean; sensorText: string }): string {
-  const status = state.othersHolding ? '누군가 고치는 중' : state.sensorText;
-  return `⚠ ${moduleName(id)} 고장 · ${status}`;
+export function badgeText(id: BaseModuleId, state: { othersHolding: boolean; panelOpen: boolean }): string {
+  const head = `⚠ ${moduleName(id)} 고장`;
+  if (state.othersHolding) return `${head} · 누군가 고치는 중`;
+  return state.panelOpen ? head : `${head} · 눌러서 수리`;
+}
+
+/** A small dot names its module: `⚠ 거주 돔`. */
+export function dotText(id: BaseModuleId): string {
+  return `⚠ ${moduleName(id)}`;
 }

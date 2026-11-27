@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MODULE_IDS, type Fault, type ModuleId } from './protocol';
-import { SENSORS, formatSensor, sensorRange, sensorValue, severity } from './sensors';
+import { SENSORS, formatSensor, isAbnormal, sensorReading, sensorRange, sensorValue, severity } from './sensors';
 
 const T0 = 1_800_000_000_000;
 const faultOn = (moduleId: ModuleId, createdAt = T0): Fault => ({ id: `f-${moduleId}`, moduleId, createdAt });
@@ -87,5 +87,50 @@ describe('formatSensor', () => {
     expect(formatSensor('generator', 118.4)).toBe('118kW');
     expect(formatSensor('habitat', 100.96)).toBe('101.0kPa');
     expect(formatSensor('comms', -0.2)).toBe('0%');
+  });
+});
+
+describe('sensorReading (playtest #47: what the number means)', () => {
+  it('puts the healthy level next to the value', () => {
+    expect(sensorReading('generator', 96.4)).toBe('출력 96kW · 정상 120kW');
+    expect(sensorReading('oxygen', 92)).toBe('산소 92% · 정상 98%');
+    expect(sensorReading('greenhouse', 30.25)).toBe('온도 30.3℃ · 정상 22.0℃');
+    expect(sensorReading('comms', 40)).toBe('신호 40% · 정상 94%');
+    expect(sensorReading('habitat', 90)).toBe('기압 90.0kPa · 정상 101.0kPa');
+  });
+
+  it('is short enough for a badge line on a phone', () => {
+    for (const id of MODULE_IDS) {
+      const { worst } = SENSORS[id];
+      expect(sensorReading(id, worst).length).toBeLessThanOrEqual(24);
+    }
+  });
+});
+
+describe('isAbnormal', () => {
+  it('never flags the healthy wobble', () => {
+    for (const id of MODULE_IDS) {
+      for (let i = 0; i < 400; i++) expect(isAbnormal(id, sensorValue(id, null, T0 + i * 97))).toBe(false);
+    }
+  });
+
+  it('flags a value that left the healthy band toward the fault side, whichever way that is', () => {
+    for (const id of MODULE_IDS) {
+      const spec = SENSORS[id];
+      expect(isAbnormal(id, spec.worst)).toBe(true);
+      // The other side (better than healthy) is not a fault.
+      const away = spec.nominal - Math.sign(spec.worst - spec.nominal) * spec.wobble * 3;
+      expect(isAbnormal(id, away)).toBe(false);
+    }
+    // Greenhouse heats up, the others drop.
+    expect(isAbnormal('greenhouse', 30)).toBe(true);
+    expect(isAbnormal('oxygen', 90)).toBe(true);
+  });
+
+  it('a fault turns abnormal within seconds, not only at the cap', () => {
+    for (const id of MODULE_IDS) {
+      const f = faultOn(id);
+      expect(isAbnormal(id, sensorValue(id, f, T0 + 15_000))).toBe(true);
+    }
   });
 });

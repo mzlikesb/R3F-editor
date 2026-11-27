@@ -1,5 +1,5 @@
 import { useMemo, type ReactNode } from 'react';
-import { selectActivity, selectBlackout, selectFaults, useStore } from '../../store';
+import { selectActivity, selectBlackout, selectFaults, selectReady, useStore } from '../../store';
 import { LabelPlanContext } from './labelPlanContext';
 import { holdingModules, labelPlan } from './labelRules';
 
@@ -9,9 +9,10 @@ export function LabelPlanProvider({ children }: { children: ReactNode }) {
   const selected = useStore((s) => s.selected);
   const blackout = useStore(selectBlackout);
   const activity = useStore(selectActivity);
+  const ready = useStore(selectReady);
   const plan = useMemo(
-    () => labelPlan({ faults, selected, blackout, holding: holdingModules(faults, activity) }),
-    [faults, selected, blackout, activity],
+    () => labelPlan({ ready, faults, selected, blackout, holding: holdingModules(faults, activity) }),
+    [ready, faults, selected, blackout, activity],
   );
   return <LabelPlanContext.Provider value={plan}>{children}</LabelPlanContext.Provider>;
 }

@@ -8,6 +8,7 @@ import type { ClientMessage, Fault, ModuleId, ServerMessage, SnapshotMessage } f
 import { classifyRepaired, initialFeedback, reduceFeedback, type FeedbackEvent, type FeedbackState } from './feedback';
 import { initialRepairUi, reduceHold, type HoldEvent, type RepairUi } from './hold';
 import type { BaseModuleId } from './modules';
+import { hudReady } from './ui/view';
 import {
   applyRestSnapshot,
   applyServerMessage,
@@ -167,6 +168,11 @@ export function selectAnyFault(s: Store): boolean {
 }
 
 /** True during a blackout. */
+/** Scene and base are in (`hudReady`): before that, no state is shown (playtest #47). */
+export function selectReady(s: Store): boolean {
+  return hudReady({ loaded: s.loaded, hasBase: s.sync.base !== null, incompatible: s.sync.incompatible });
+}
+
 export function selectBlackout(s: Store): boolean {
   return (s.sync.base?.blackout ?? null) !== null;
 }

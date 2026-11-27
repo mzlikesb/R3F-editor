@@ -1,9 +1,14 @@
+/* Labels hang from their bottom edge at the anchor point, centered horizontally. */
+.fx-anchor {
+  transform: translate(-50%, -100%);
+}
+
 .fx-tag,
 .fx-badge {
   padding: 3px 9px;
   border-radius: 6px;
-  background: rgba(16, 18, 22, 0.85);
-  color: #e6e9ee;
+  background: rgba(16, 18, 22, 0.92);
+  color: #f4f6f8;
   font: inherit;
   font-size: 13px;
   white-space: nowrap;
@@ -12,7 +17,16 @@
   animation: fx-fade-in 0.18s ease-out;
 }
 
+.fx-tag {
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  font-weight: 600;
+}
+
 .fx-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
   border: 1px solid rgba(255, 122, 122, 0.6);
   color: #ff8a8a;
   pointer-events: auto;
@@ -23,16 +37,27 @@
     fx-badge-pulse 1.6s ease-in-out infinite;
 }
 
+.fx-badge-head {
+  font-weight: 600;
+}
+
+.fx-badge-reading {
+  font-size: 11px;
+  color: #d9b3b3;
+  font-variant-numeric: tabular-nums;
+}
+
 .fx-dot {
-  width: 32px;
+  min-width: 32px;
   height: 32px;
-  padding: 0;
+  padding: 0 10px;
   border: 1px solid rgba(255, 122, 122, 0.6);
-  border-radius: 50%;
-  background: rgba(16, 18, 22, 0.85);
+  border-radius: 999px;
+  background: rgba(16, 18, 22, 0.88);
   color: #ff8a8a;
   font: inherit;
-  font-size: 15px;
+  font-size: 12px;
+  white-space: nowrap;
   line-height: 1;
   user-select: none;
   pointer-events: auto;

@@ -2,14 +2,9 @@
  * Text and layout decisions for the HUD, panels and banners (plans 005, 006 C). Pure; the
  * components render what these return. Track `client` implements the TODO bodies.
  */
-import type { Blackout, Fault, ModuleId } from '../../shared/protocol';
+import { MAX_FAULTS, type Blackout, type Fault, type ModuleId } from '../../shared/protocol';
 import { moduleName } from '../modules';
 import type { BaseView, ConnectionStatus, LastRepairView } from '../sync';
-
-/** HUD: `함께 고친 횟수 N회`; `–` until the first snapshot. */
-export function repairsLine(repairs: number | undefined): string {
-  return `함께 고친 횟수 ${repairs ?? '–'}회`;
-}
 
 /**
  * A length of time, coarse: `45초`, `12분`, `3시간`, `3시간 12분`, `2일`, `2일 5시간`.
@@ -48,24 +43,46 @@ export function bestUptimeMs(base: UptimeView, serverNow: number): number {
 }
 
 /**
- * HUD top line (plan 006 C.19): `가동 3시간 12분 · 함께 고친 횟수 N회`; in a blackout
- * `가동 기록 끊김 · 최장 5시간 · 함께 고친 횟수 N회` (longest from `bestUptimeMs`); before any base
- * `함께 고친 횟수 –회`.
+ * HUD top line (plan 006 C.19): `가동 3시간 12분`; in a blackout `가동 기록 끊김 · 최장 5시간`
+ * (longest from `bestUptimeMs`).
  */
-export function hudTopLine(base: (UptimeView & { repairs: number }) | null, serverNow: number): string {
-  if (!base) return repairsLine(undefined);
-  const repairs = repairsLine(base.repairs);
+export function uptimeLine(base: UptimeView, serverNow: number): string {
   if (base.blackout !== null || base.uptimeStartedAt === null) {
-    return `가동 기록 끊김 · 최장 ${formatDuration(bestUptimeMs(base, serverNow))} · ${repairs}`;
+    return `가동 기록 끊김 · 최장 ${formatDuration(bestUptimeMs(base, serverNow))}`;
   }
-  return `가동 ${formatDuration(serverNow - base.uptimeStartedAt)} · ${repairs}`;
+  return `가동 ${formatDuration(serverNow - base.uptimeStartedAt)}`;
 }
 
 /**
- * HUD bottom line, people part: `지금 N명이 같이 지키는 중`, or `지금은 나 혼자 지키는 중` for 0 or 1.
+ * HUD second line, short enough for a phone (playtest #47): `함께 고친 7회 · 3명 접속 중`, or
+ * `함께 고친 7회 · 나 혼자 접속 중` for 0 or 1.
  */
-export function presenceLine(presence: number): string {
-  return presence <= 1 ? '지금은 나 혼자 지키는 중' : `지금 ${presence}명이 같이 지키는 중`;
+export function peopleLine(repairs: number, presence: number): string {
+  const people = presence <= 1 ? '나 혼자 접속 중' : `${presence}명 접속 중`;
+  return `함께 고친 ${repairs}회 · ${people}`;
+}
+
+/** The parts of a HUD line between ` · `. Each is laid out unbroken, so a line wraps only between them. */
+export function segments(line: string): string[] {
+  return line.split(' · ');
+}
+
+/**
+ * Under the HUD while something is broken and it is not dark yet: `고장 2/3 · 3개면 정전`, so the
+ * count means something. Null when healthy or in a blackout (the blackout banner says it).
+ */
+export function faultCountLine(faultCount: number, blackout: Blackout | null): string | null {
+  if (blackout !== null || faultCount <= 0) return null;
+  return `고장 ${faultCount}/${MAX_FAULTS} · ${MAX_FAULTS}개면 정전`;
+}
+
+/**
+ * The HUD tells the base's state only once the scene is in and a base is known (playtest #47: it
+ * said `기지 정상` under `기지를 불러오는 중…`). A server this build cannot read counts as known, so
+ * the update banner is not stuck behind the loading screen.
+ */
+export function hudReady(s: { loaded: boolean; hasBase: boolean; incompatible: boolean }): boolean {
+  return s.loaded && (s.hasBase || s.incompatible);
 }
 
 /** HUD bottom line, connection part: null when open, `연결 중…`, `재연결 중…`. */
@@ -90,14 +107,14 @@ export function updateBanner(incompatible: boolean): string | null {
 }
 
 /**
- * HUD `마지막 수리` line (plan 006 C.19), times in server ms:
- * `마지막 수리: 나 · 산소 탱크 · 방금`, `마지막 수리: 다른 사람 · 온실 · 12초 전`, and when it is not
- * known who (from a snapshot, `mine` null) `마지막 수리: 통신탑 · 3분 전`. Null without a repair.
+ * HUD last-repair line (plan 006 C.19), times in server ms:
+ * `마지막: 나 · 산소 탱크 · 방금`, `마지막: 다른 사람 · 온실 · 12초 전`, and when it is not known who
+ * (from a snapshot, `mine` null) `마지막: 통신탑 · 3분 전`. Null without a repair.
  */
 export function lastRepairLine(last: LastRepairView | null, serverNow: number): string | null {
   if (!last) return null;
   const who = last.mine === null ? '' : last.mine ? '나 · ' : '다른 사람 · ';
-  return `마지막 수리: ${who}${moduleName(last.moduleId)} · ${agoText(serverNow - last.at)}`;
+  return `마지막: ${who}${moduleName(last.moduleId)} · ${agoText(serverNow - last.at)}`;
 }
 
 /** In the panel of a fault someone else is holding: `지금 1명이 같이 누르는 중`; null for 0. */
