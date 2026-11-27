@@ -1,6 +1,6 @@
 ---
 name: doc-lint
-description: 마일스톤이 끝날 때 문서 주장을 실상태와 대조한다. 전역 doc-lint 절차에 이 저장소의 브랜치 보호 대조 단계를 더한다. 문서 드리프트 점검, doc-lint 말이 나오면 쓴다.
+description: 마일스톤이 끝날 때나 회고 PR을 올릴 때 문서 주장을 실상태와 대조한다. 전역 doc-lint 절차에 이 저장소의 브랜치 보호 대조 단계를 더한다. 문서 드리프트 점검, doc-lint 말이 나오면 쓴다.
 ---
 
 # doc-lint (OUTPOST)

@@ -77,7 +77,7 @@ wrangler.jsonc   assets(dist, SPA fallback) + DO 바인딩 + SQLite migration
 shared/protocol.ts   메시지 타입 (클라·워커 공용)  shared/sensors.ts   센서 계산(클라이언트가 씀)
 public/models/*.glb (Draco), public/draco/, scripts/compress.sh
 ```
-추가 의존성: `zustand`, `maath`; dev: `@gltf-transform/cli`, `wrangler`. `@react-three/postprocessing`은 설치돼 있으나 쓰지 않는다(M5에서 쓰지 않으면 제거).
+의존성 목록의 원본은 `package.json`이다. `@react-three/postprocessing`은 설치돼 있으나 쓰지 않는다(M5에서 쓰지 않으면 제거).
 에셋: CC0 로우폴리 SF 팩(Kenney Space Kit 등) + Poly Haven HDRI.
 
 ## 재사용
