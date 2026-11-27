@@ -197,6 +197,7 @@ export function checkIsolation(init) {
   if (!init || typeof init !== 'object') return fail('init 이벤트 없음');
   const tools = init.tools;
   if (!Array.isArray(tools)) return fail('도구 목록 없음');
+  if (tools.some((t) => typeof t !== 'string')) return fail('도구 목록 형태가 다름');
   const allowed = new Set(ALLOWED_TOOLS);
   const extra = tools.filter((t) => !allowed.has(t));
   if (extra.length > 0) return fail(`허용 목록 밖 도구: ${extra.join(', ')}`);
@@ -206,13 +207,14 @@ export function checkIsolation(init) {
   if (
     !Array.isArray(servers) ||
     servers.length !== 1 ||
-    servers[0].name !== MCP_SERVER_NAME ||
-    servers[0].status !== 'connected'
+    servers[0]?.name !== MCP_SERVER_NAME ||
+    servers[0]?.status !== 'connected'
   )
     return fail('MCP 서버가 playwright 하나로 연결되지 않음');
   if (!Array.isArray(init.skills) || init.skills.length > 0) return fail('스킬이 섞임');
   if (!Array.isArray(init.slash_commands) || init.slash_commands.length > 0) return fail('슬래시 명령이 섞임');
-  const outside = (init.plugins ?? []).filter((p) => !String(p?.source ?? '').endsWith('@builtin'));
+  if (!Array.isArray(init.plugins)) return fail('플러그인 목록 없음');
+  const outside = init.plugins.filter((p) => !String(p?.source ?? '').endsWith('@builtin'));
   if (outside.length > 0) return fail(`내장이 아닌 플러그인: ${outside.map((p) => p?.name).join(', ')}`);
   return { ok: true };
 }

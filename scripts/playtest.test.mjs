@@ -242,6 +242,44 @@ test('SIGINT to the runner cleans up players and temp folders', { timeout: T }, 
   assert.ok(r.ms < 8000, `took ${r.ms}ms`);
 });
 
+test('SIGHUP to the runner cleans up like SIGINT', { timeout: T }, async () => {
+  const r = await run([LOCAL, 'hang'], {
+    env: { PLAYTEST_TIMEOUT_SEC: '60' },
+    onSpawn: (child, dirs) => {
+      const tick = setInterval(() => {
+        if (child.exitCode !== null) clearInterval(tick);
+        else if (existsSync(join(dirs.logs, 'hang.child'))) {
+          clearInterval(tick);
+          setTimeout(() => child.kill('SIGHUP'), 200);
+        }
+      }, 50);
+    },
+  });
+  assert.notEqual(r.code, 0);
+  assert.ok(!alive(Number(readFileSync(join(r.logs, 'hang.child'), 'utf8'))));
+  assert.ok(!existsSync(log(r.logs, 'hang').cwd));
+  assert.ok(r.ms < 8000, `took ${r.ms}ms`);
+});
+
+test('output arriving after the player exited does not crash the runner', { timeout: T }, async () => {
+  // `hang` keeps the runner alive past the late line (2.6s); the time limit ends it.
+  const r = await run([LOCAL, 'late', 'hang'], { env: { PLAYTEST_TIMEOUT_SEC: '4' } });
+  assert.equal(r.code, 0, r.stderr);
+  assert.ok(!r.stderr.includes('ERR_'), r.stderr);
+  const dir = runDir(r.runs);
+  assert.ok(report(dir, 'late').includes('상태: 완료'));
+  assert.ok(!readFileSync(join(dir, 'late', 'stream.jsonl'), 'utf8').includes('"late"'), 'late line ignored');
+  assert.ok(report(dir, 'hang').includes('미완료(시간 상한)'));
+});
+
+test('unexpected init shapes fail as 격리 without crashing the runner', { timeout: T }, async () => {
+  const r = await run([LOCAL, 'weird']);
+  assert.equal(r.code, 1, r.stderr);
+  assert.ok(!r.stderr.includes('TypeError'), r.stderr);
+  assert.match(report(runDir(r.runs), 'weird'), /실패\(격리\)/);
+  assert.ok(!alive(Number(readFileSync(join(r.logs, 'weird.child'), 'utf8'))));
+});
+
 test('prints the run folder with the home directory shortened to ~', { timeout: T }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'pt-home-'));
   bases.push(home);
