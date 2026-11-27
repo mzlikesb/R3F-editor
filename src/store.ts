@@ -5,10 +5,18 @@
  */
 import { create } from 'zustand';
 import type { ClientMessage, Fault, ModuleId, ServerMessage, SnapshotMessage } from '../shared/protocol';
-import { initialFeedback, type FeedbackEvent, type FeedbackState } from './feedback';
-import { initialRepairUi, type HoldEvent, type RepairUi } from './hold';
+import { classifyRepaired, initialFeedback, reduceFeedback, type FeedbackEvent, type FeedbackState } from './feedback';
+import { initialRepairUi, reduceHold, type HoldEvent, type RepairUi } from './hold';
 import type { BaseModuleId } from './modules';
-import { initialSync, type ConnectionStatus, type SyncState } from './sync';
+import {
+  applyRestSnapshot,
+  applyServerMessage,
+  initialSync,
+  markIncompatible as markSyncIncompatible,
+  serverNow,
+  type ConnectionStatus,
+  type SyncState,
+} from './sync';
 
 export interface Store {
   sync: SyncState;
@@ -72,38 +80,65 @@ export const useStore = create<Store>((set, get) => ({
   feedback: initialFeedback,
   loaded: false,
   receive: (msg, now, dateNow) => {
-    void msg;
-    void now;
-    void dateNow;
-    throw new Error('TODO(client): store.receive');
+    const prev = get();
+    const sync = applyServerMessage(prev.sync, msg, dateNow);
+    let { repair, feedback } = prev;
+    const outbox: ClientMessage[] = [];
+    const feed = (event: HoldEvent) => {
+      const r = reduceHold(repair, event);
+      repair = r.ui;
+      if (r.send) outbox.push(r.send);
+    };
+    const changed = sync.base !== prev.sync.base;
+    if (msg.type === 'repaired' && changed) {
+      const outcome = classifyRepaired(repair.hold, msg);
+      feedback = reduceFeedback(feedback, { type: 'repaired', outcome, moduleId: msg.moduleId, now });
+      feed({ type: 'repaired', faultId: msg.faultId, now });
+    } else if (msg.type === 'fault' && changed) {
+      feedback = reduceFeedback(feedback, { type: 'fault', moduleId: msg.fault.moduleId, now });
+    } else if (msg.type === 'snapshot') {
+      feed({ type: 'snapshot', now });
+    }
+    if (msg.type === 'snapshot' || msg.type === 'fault' || msg.type === 'repaired') {
+      feed({ type: 'faults', ids: (sync.base?.faults ?? []).map((f) => f.id), now });
+    }
+    set({ sync, repair, feedback });
+    for (const m of outbox) sendToServer(m);
   },
   applyRest: (snap, dateNow) => {
-    void snap;
-    void dateNow;
-    throw new Error('TODO(client): store.applyRest');
+    const sync = applyRestSnapshot(get().sync, snap, dateNow);
+    if (sync !== get().sync) set({ sync });
   },
   markIncompatible: () => {
-    throw new Error('TODO(client): store.markIncompatible');
+    const sync = markSyncIncompatible(get().sync);
+    if (sync !== get().sync) set({ sync });
   },
   setConnection: (connection) => set({ connection }),
   setLoaded: () => {
     if (!get().loaded) set({ loaded: true });
   },
   select: (id) => {
-    void id;
-    throw new Error('TODO(client): store.select');
+    const prev = get();
+    if (id !== prev.selected) get().dispatchHold({ type: 'cancel', now: performance.now() });
+    const patch: Partial<Store> = { selected: id };
+    if (id !== null) {
+      patch.historyOpen = false;
+      patch.feedback = reduceFeedback(get().feedback, { type: 'moduleTapped' });
+    }
+    set(patch);
   },
   openHistory: (open) => {
-    void open;
-    throw new Error('TODO(client): store.openHistory');
+    if (open) get().dispatchHold({ type: 'cancel', now: performance.now() });
+    set(open ? { historyOpen: true, selected: null } : { historyOpen: false });
   },
   dispatchHold: (event) => {
-    void event;
-    throw new Error('TODO(client): store.dispatchHold');
+    const r = reduceHold(get().repair, event);
+    if (r.ui !== get().repair) set({ repair: r.ui });
+    if (r.send) sendToServer(r.send);
   },
   dispatchFeedback: (event) => {
-    void event;
-    throw new Error('TODO(client): store.dispatchFeedback');
+    const feedback = reduceFeedback(get().feedback, event);
+    if (feedback !== get().feedback) set({ feedback });
   },
 }));
 
@@ -113,35 +148,27 @@ const NO_FAULTS: readonly Fault[] = [];
 
 /** Current faults, oldest first (`NO_FAULTS` before the first snapshot). Same array until it changes. */
 export function selectFaults(s: Store): readonly Fault[] {
-  void s;
-  void NO_FAULTS;
-  throw new Error('TODO(client): selectFaults');
+  return s.sync.base?.faults ?? NO_FAULTS;
 }
 
 /** The fault on module `id`, or null. */
 export function selectModuleFault(s: Store, id: ModuleId): Fault | null {
-  void s;
-  void id;
-  throw new Error('TODO(client): selectModuleFault');
+  return s.sync.base?.faults.find((f) => f.moduleId === id) ?? null;
 }
 
 /** `fault` when module `id` has a fault, else `ok` (also `ok` before the first snapshot). */
 export function selectModuleStatus(s: Store, id: ModuleId): 'fault' | 'ok' {
-  void s;
-  void id;
-  throw new Error('TODO(client): selectModuleStatus');
+  return selectModuleFault(s, id) ? 'fault' : 'ok';
 }
 
 /** True while any module is broken. */
 export function selectAnyFault(s: Store): boolean {
-  void s;
-  throw new Error('TODO(client): selectAnyFault');
+  return (s.sync.base?.faults.length ?? 0) > 0;
 }
 
 /** True during a blackout. */
 export function selectBlackout(s: Store): boolean {
-  void s;
-  throw new Error('TODO(client): selectBlackout');
+  return (s.sync.base?.blackout ?? null) !== null;
 }
 
 /**
@@ -149,20 +176,16 @@ export function selectBlackout(s: Store): boolean {
  * server sent it (it already left this tab out; never subtract this tab's own hold). 0 without a fault.
  */
 export function selectOthersHolding(s: Store, id: ModuleId): number {
-  void s;
-  void id;
-  throw new Error('TODO(client): selectOthersHolding');
+  const fault = selectModuleFault(s, id);
+  return fault ? (s.sync.activity[fault.id] ?? 0) : 0;
 }
 
 /** faultId → others holding, as last received (stable object). */
 export function selectActivity(s: Store): Readonly<Record<string, number>> {
-  void s;
-  throw new Error('TODO(client): selectActivity');
+  return s.sync.activity;
 }
 
 /** Server time (epoch ms) for `dateNow = Date.now()`, for sensors and "N초 전" in the scene and UI. */
 export function selectServerNow(s: Store, dateNow: number): number {
-  void s;
-  void dateNow;
-  throw new Error('TODO(client): selectServerNow');
+  return serverNow(s.sync, dateNow);
 }

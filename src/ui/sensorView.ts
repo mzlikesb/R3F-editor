@@ -4,6 +4,7 @@
  * samples are collected). Track `client` implements the TODO bodies.
  */
 import type { Fault, ModuleId } from '../../shared/protocol';
+import { SENSORS, formatSensor, sensorRange, sensorValue } from '../../shared/sensors';
 
 /** The trend shows this much history. */
 export const TREND_WINDOW_MS = 30_000;
@@ -17,10 +18,10 @@ export const PANEL_TICK_MS = 500;
  * `serverNow - TREND_WINDOW_MS` to `serverNow` (last one exactly at `serverNow`).
  */
 export function trendSamples(moduleId: ModuleId, fault: Fault | null, serverNow: number): number[] {
-  void moduleId;
-  void fault;
-  void serverNow;
-  throw new Error('TODO(client): trendSamples');
+  const step = TREND_WINDOW_MS / (TREND_POINTS - 1);
+  return Array.from({ length: TREND_POINTS }, (_, i) =>
+    sensorValue(moduleId, fault, i === TREND_POINTS - 1 ? serverNow : serverNow - TREND_WINDOW_MS + i * step),
+  );
 }
 
 /**
@@ -29,17 +30,13 @@ export function trendSamples(moduleId: ModuleId, fault: Fault | null, serverNow:
  * pairs as `x,y` joined by single spaces.
  */
 export function trendPoints(moduleId: ModuleId, values: readonly number[], width: number, height: number): string {
-  void moduleId;
-  void values;
-  void width;
-  void height;
-  throw new Error('TODO(client): trendPoints');
+  const { min, max } = sensorRange(moduleId);
+  const round = (n: number) => Math.round(n * 10) / 10;
+  const last = Math.max(1, values.length - 1);
+  return values.map((v, i) => `${round((i / last) * width)},${round(((max - v) / (max - min)) * height)}`).join(' ');
 }
 
 /** Panel line: `산소 92%` (`SENSORS[id].label` + `formatSensor`). */
 export function sensorLine(moduleId: ModuleId, fault: Fault | null, serverNow: number): string {
-  void moduleId;
-  void fault;
-  void serverNow;
-  throw new Error('TODO(client): sensorLine');
+  return `${SENSORS[moduleId].label} ${formatSensor(moduleId, sensorValue(moduleId, fault, serverNow))}`;
 }

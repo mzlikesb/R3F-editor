@@ -1,8 +1,13 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import { holdProgress, type HoldEvent } from '../hold';
-import { selectFaults, selectModuleFault, selectOthersHolding, useStore } from '../store';
+import { selectFaults, selectModuleFault, selectOthersHolding, selectServerNow, useStore } from '../store';
 import { canRepair } from '../sync';
+import { PANEL_TICK_MS, sensorLine, trendPoints, trendSamples } from './sensorView';
 import { panelView } from './view';
+
+/** The trend's drawing box; the SVG scales it to the panel width. */
+const TREND_W = 100;
+const TREND_H = 24;
 
 export function Panel() {
   const selected = useStore((s) => s.selected);
@@ -14,6 +19,8 @@ export function Panel() {
   const holdKind = useStore((s) => s.repair.hold.kind);
   const button = useRef<HTMLButtonElement>(null);
   const fill = useRef<HTMLSpanElement>(null);
+  const sensorText = useRef<HTMLParagraphElement>(null);
+  const trendLine = useRef<SVGPolylineElement>(null);
 
   // While the hold is time-driven (holding, pending), tick every frame and paint the fill
   // directly on the element so no React state changes per frame.
@@ -37,6 +44,22 @@ export function Panel() {
       if (el) el.style.transform = 'scaleX(0)';
     };
   }, [busy]);
+
+  // The open panel re-reads its module's sensor twice a second, straight into the DOM.
+  useLayoutEffect(() => {
+    if (selected === null) return;
+    const paint = () => {
+      const now = selectServerNow(useStore.getState(), Date.now());
+      if (sensorText.current) sensorText.current.textContent = sensorLine(selected, fault, now);
+      trendLine.current?.setAttribute(
+        'points',
+        trendPoints(selected, trendSamples(selected, fault, now), TREND_W, TREND_H),
+      );
+    };
+    paint();
+    const id = setInterval(paint, PANEL_TICK_MS);
+    return () => clearInterval(id);
+  }, [selected, fault]);
 
   // Hold is cancelled when the tab loses focus or is hidden.
   useEffect(() => {
@@ -72,7 +95,7 @@ export function Panel() {
   const label = holdKind === 'holding' ? '계속 누르세요…' : holdKind === 'pending' ? '수리 중…' : '꾹 눌러 수리 (1초)';
 
   return (
-    <aside className={repairButton ? 'panel' : 'panel panel-compact'} onContextMenu={(e) => e.preventDefault()}>
+    <aside className="panel" onContextMenu={(e) => e.preventDefault()}>
       <div className="panel-head">
         <h2>{view.title}</h2>
         <p className={view.status === 'fault' ? 'status warn' : 'status ok'}>
@@ -87,6 +110,16 @@ export function Panel() {
           ✕
         </button>
       </div>
+      <p ref={sensorText} className="sensor-line" />
+      <svg
+        className="trend"
+        viewBox={`0 0 ${TREND_W} ${TREND_H}`}
+        preserveAspectRatio="none"
+        role="img"
+        aria-label="최근 30초 추이"
+      >
+        <polyline ref={trendLine} className={view.status === 'fault' ? 'trend-line trend-fault' : 'trend-line'} />
+      </svg>
       {view.goTo && (
         <button
           type="button"

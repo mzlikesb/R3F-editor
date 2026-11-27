@@ -55,9 +55,39 @@ export interface HoldResult {
  * Everything else keeps `ui` itself (same reference) and sends nothing.
  */
 export function reduceHold(ui: RepairUi, event: HoldEvent): HoldResult {
-  void ui;
-  void event;
-  throw new Error('TODO(client): reduceHold');
+  const hold = ui.hold;
+  const keep: HoldResult = { ui, send: null };
+  const idle: RepairUi = initialRepairUi;
+  switch (event.type) {
+    case 'press':
+      if (hold.kind !== 'idle') return keep;
+      return {
+        ui: { hold: { kind: 'holding', faultId: event.faultId, startedAt: event.now } },
+        send: { type: 'hold', faultId: event.faultId },
+      };
+    case 'release':
+    case 'cancel':
+      if (hold.kind !== 'holding') return keep;
+      return { ui: idle, send: { type: 'release', faultId: hold.faultId } };
+    case 'disconnect':
+      return hold.kind === 'holding' ? { ui: idle, send: null } : keep;
+    case 'repaired':
+      return hold.kind !== 'idle' && hold.faultId === event.faultId ? { ui: idle, send: null } : keep;
+    case 'snapshot':
+      return hold.kind === 'pending' ? { ui: idle, send: null } : keep;
+    case 'faults':
+      if (hold.kind === 'idle' || event.ids.includes(hold.faultId)) return keep;
+      return { ui: idle, send: hold.kind === 'holding' ? { type: 'release', faultId: hold.faultId } : null };
+    case 'tick':
+      if (hold.kind === 'holding' && event.now - hold.startedAt >= HOLD_MS) {
+        return {
+          ui: { hold: { kind: 'pending', faultId: hold.faultId, sentAt: event.now } },
+          send: { type: 'repair', faultId: hold.faultId },
+        };
+      }
+      if (hold.kind === 'pending' && event.now - hold.sentAt >= PENDING_TIMEOUT_MS) return { ui: idle, send: null };
+      return keep;
+  }
 }
 
 /** 0..1 fill for the button: elapsed/HOLD_MS while holding, 1 while pending, 0 when idle. */

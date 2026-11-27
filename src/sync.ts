@@ -3,7 +3,15 @@
  * The client never changes the base itself; it only mirrors what the server says.
  * Track `client` of `docs/plans/006-tasks.md` implements the TODO bodies.
  */
-import type { Blackout, BlackoutRecord, Fault, ModuleId, ServerMessage, SnapshotMessage } from '../shared/protocol';
+import {
+  SNAPSHOT_BLACKOUTS,
+  type Blackout,
+  type BlackoutRecord,
+  type Fault,
+  type ModuleId,
+  type ServerMessage,
+  type SnapshotMessage,
+} from '../shared/protocol';
 
 export type ConnectionStatus = 'connecting' | 'open' | 'reconnecting';
 
@@ -69,31 +77,92 @@ export const initialSync: SyncState = {
  * Returns `state` itself when nothing changes (a stale versioned message).
  */
 export function applyServerMessage(state: SyncState, msg: ServerMessage, dateNow: number): SyncState {
-  void state;
-  void msg;
-  void dateNow;
-  throw new Error('TODO(client): applyServerMessage');
+  switch (msg.type) {
+    case 'snapshot': {
+      const known = state.base;
+      if (known && known.instanceId === msg.instanceId && msg.version < known.version) return state;
+      return {
+        ...state,
+        base: baseFromSnapshot(msg),
+        presence: msg.presence,
+        wsSynced: true,
+        clockOffsetMs: msg.serverNow - dateNow,
+        activity: {},
+      };
+    }
+    case 'fault': {
+      const base = state.base;
+      if (!base || msg.version < base.version) return state;
+      const faults = [...base.faults.filter((f) => f.id !== msg.fault.id), msg.fault];
+      const start = msg.blackoutStart;
+      const next: BaseView = { ...base, faults, version: msg.version };
+      if (start) {
+        next.blackout = start.blackout;
+        next.uptimeStartedAt = null;
+        next.longestUptimeMs = start.longestUptimeMs;
+        next.blackouts = [start.record, ...base.blackouts.filter((r) => r.id !== start.record.id)].slice(
+          0,
+          SNAPSHOT_BLACKOUTS,
+        );
+      }
+      return { ...state, base: next };
+    }
+    case 'repaired': {
+      const base = state.base;
+      if (!base || msg.version < base.version) return state;
+      const next: BaseView = {
+        ...base,
+        faults: base.faults.filter((f) => f.id !== msg.faultId),
+        repairs: msg.repairs,
+        version: msg.version,
+        lastRepair: { moduleId: msg.moduleId, at: msg.at, mine: msg.mine },
+      };
+      const end = msg.blackoutEnd;
+      if (end) {
+        next.blackout = null;
+        next.uptimeStartedAt = end.uptimeStartedAt;
+        next.longestUptimeMs = end.longestUptimeMs;
+        next.blackouts = base.blackouts.map((r) => (r.id === end.blackoutId ? { ...r, endedAt: end.endedAt } : r));
+      }
+      const activity = Object.fromEntries(Object.entries(state.activity).filter(([id]) => id !== msg.faultId));
+      return { ...state, base: next, activity };
+    }
+    case 'activity':
+      return { ...state, activity: msg.holds };
+    case 'presence':
+      return state.presence === msg.count ? state : { ...state, presence: msg.count };
+  }
+}
+
+function baseFromSnapshot(msg: SnapshotMessage): BaseView {
+  return {
+    faults: msg.faults,
+    repairs: msg.repairs,
+    version: msg.version,
+    instanceId: msg.instanceId,
+    uptimeStartedAt: msg.uptimeStartedAt,
+    longestUptimeMs: msg.longestUptimeMs,
+    blackout: msg.blackout,
+    blackouts: msg.blackouts,
+    lastRepair: msg.lastRepair ? { ...msg.lastRepair, mine: null } : null,
+  };
 }
 
 /** Applies the `GET /api/base` response (sets the clock offset too), unless a WS snapshot already arrived or its version is lower. */
 export function applyRestSnapshot(state: SyncState, snap: SnapshotMessage, dateNow: number): SyncState {
-  void state;
-  void snap;
-  void dateNow;
-  throw new Error('TODO(client): applyRestSnapshot');
+  if (state.wsSynced) return state;
+  if (state.base && state.base.instanceId === snap.instanceId && snap.version < state.base.version) return state;
+  return { ...state, base: baseFromSnapshot(snap), presence: snap.presence, clockOffsetMs: snap.serverNow - dateNow };
 }
 
 /** `incompatible` = true (and the same state when it already is). */
 export function markIncompatible(state: SyncState): SyncState {
-  void state;
-  throw new Error('TODO(client): markIncompatible');
+  return state.incompatible ? state : { ...state, incompatible: true };
 }
 
 /** Server time now: `dateNow + clockOffsetMs`. */
 export function serverNow(state: SyncState, dateNow: number): number {
-  void state;
-  void dateNow;
-  throw new Error('TODO(client): serverNow');
+  return dateNow + state.clockOffsetMs;
 }
 
 /**
@@ -101,8 +170,10 @@ export function serverNow(state: SyncState, dateNow: number): number {
  * applied), a WS snapshot was applied, the protocol is compatible, and `faultId` is a current fault.
  */
 export function canRepair(state: SyncState, connection: ConnectionStatus, faultId: string): boolean {
-  void state;
-  void connection;
-  void faultId;
-  throw new Error('TODO(client): canRepair');
+  return (
+    connection === 'open' &&
+    state.wsSynced &&
+    !state.incompatible &&
+    (state.base?.faults.some((f) => f.id === faultId) ?? false)
+  );
 }

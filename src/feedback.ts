@@ -4,6 +4,7 @@
  * only reads `FeedbackState.effect` and `effectsFor`.
  */
 import type { ModuleId } from '../shared/protocol';
+import { moduleName, withObjectParticle, withSubjectParticle } from './modules';
 import type { HoldState } from './hold';
 
 /** Toasts show this long (ms). */
@@ -72,8 +73,17 @@ export type FeedbackEvent =
  * - fault: `온실이 고장 났어요` (module name + 이/가)
  */
 export function toastText(toast: Pick<Toast, 'kind' | 'moduleId'>): string {
-  void toast;
-  throw new Error('TODO(client): toastText');
+  const name = moduleName(toast.moduleId);
+  switch (toast.kind) {
+    case 'mine':
+      return '내가 고쳤어요 +1';
+    case 'beaten':
+      return '같이 눌렀는데 다른 사람이 한발 먼저 고쳤어요';
+    case 'other':
+      return `누군가 ${withObjectParticle(name)} 고쳤어요`;
+    case 'fault':
+      return `${withSubjectParticle(name)} 고장 났어요`;
+  }
 }
 
 /** Classifies a `repaired` from the hold state *before* `reduceHold` handles it. */
@@ -96,9 +106,25 @@ export function effectsFor(outcome: RepairOutcome): RepairEffects {
  * Returns `state` itself when nothing changes.
  */
 export function reduceFeedback(state: FeedbackState, event: FeedbackEvent): FeedbackState {
-  void state;
-  void event;
-  throw new Error('TODO(client): reduceFeedback');
+  switch (event.type) {
+    case 'repaired':
+      return {
+        ...state,
+        toast: { kind: event.outcome, moduleId: event.moduleId, until: event.now + TOAST_MS },
+        effect: {
+          outcome: event.outcome,
+          moduleId: event.moduleId,
+          seq: (state.effect?.seq ?? 0) + 1,
+          at: event.now,
+        },
+      };
+    case 'fault':
+      return { ...state, toast: { kind: 'fault', moduleId: event.moduleId, until: event.now + TOAST_MS } };
+    case 'moduleTapped':
+      return state.hintDismissed ? state : { ...state, hintDismissed: true };
+    case 'tick':
+      return state.toast && event.now >= state.toast.until ? { ...state, toast: null } : state;
+  }
 }
 
 /**

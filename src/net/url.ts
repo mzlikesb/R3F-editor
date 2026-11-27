@@ -1,3 +1,5 @@
+import { PROTOCOL_PARAM, PROTOCOL_VERSION } from '../../shared/protocol';
+
 /** The WebSocket URL (plan 006 B.12). Track `client` implements the TODO body. */
 
 /**
@@ -6,6 +8,6 @@
  * very first snapshot already has the right shape.
  */
 export function socketUrl(location: { protocol: string; host: string }): string {
-  void location;
-  throw new Error('TODO(client): socketUrl');
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  return `${proto}://${location.host}/ws?${PROTOCOL_PARAM}=${PROTOCOL_VERSION}`;
 }

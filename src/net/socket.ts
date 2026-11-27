@@ -1,9 +1,17 @@
-import { PING, PING_INTERVAL_MS, PONG_TIMEOUT_MS, parseServerMessage, type ClientMessage } from '../../shared/protocol';
+import {
+  PING,
+  PING_INTERVAL_MS,
+  PONG_TIMEOUT_MS,
+  isIncompatibleSnapshot,
+  parseServerMessage,
+  type ClientMessage,
+} from '../../shared/protocol';
 import { setClientSender, useStore } from '../store';
 import { reconnectDelayMs } from './backoff';
+import { socketUrl } from './url';
 
 /**
- * Connects to `/ws` and keeps it alive. `open` is reported only after the first snapshot of a
+ * Connects to `/ws?protocol=2` and keeps it alive. `open` is reported only after the first snapshot of a
  * connection is applied. Returns a stop function.
  */
 export function startSocket(): () => void {
@@ -43,8 +51,7 @@ export function startSocket(): () => void {
 
   function connect() {
     if (stopped) return;
-    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    const sock = new WebSocket(`${proto}://${location.host}/ws`);
+    const sock = new WebSocket(socketUrl(location));
     ws = sock;
     sock.onopen = () => {
       pingTimer = setInterval(() => {
@@ -67,7 +74,11 @@ export function startSocket(): () => void {
       } catch {
         return;
       }
-      if (!msg) return;
+      if (!msg) {
+        // A snapshot of a protocol this build cannot read: lock repairs, the banner offers a reload.
+        if (isIncompatibleSnapshot(ev.data)) store().markIncompatible();
+        return;
+      }
       const now = performance.now();
       // `receive` applies the message, runs the hold machine and the repair feedback (plan 005).
       store().receive(msg, now, Date.now());
