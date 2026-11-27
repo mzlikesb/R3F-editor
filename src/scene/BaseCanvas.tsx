@@ -11,11 +11,12 @@ import { Module } from './Module';
 import { PERF_ENABLED } from './perf';
 import { PerfHud } from './PerfHud';
 import { Rocks } from './Rocks';
+import { SolarPanels } from './SolarPanels';
 import { SKY_GRADIENT, SKY_GRADIENT_DARK, Stars } from './Sky';
 import { isTap } from './tap';
 
 /**
- * The canvas and everything in it: sky, lights, HDRI, ground, rocks, modules, camera, tap-vs-drag,
+ * The canvas and everything in it: sky, lights, HDRI, ground, rocks, solar panels, modules, camera, tap-vs-drag,
  * `?perf` HUD (plan 005 A, E).
  */
 export function BaseCanvas() {
@@ -40,6 +41,7 @@ export function BaseCanvas() {
         <Lighting />
         <Ground />
         <Rocks />
+        <SolarPanels />
         <LabelPlanProvider>
           {MODULES.map((m) => (
             <Module key={m.id} id={m.id} />
