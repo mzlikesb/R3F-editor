@@ -16,9 +16,9 @@ trap 'rm -f "$seen"' EXIT
 role() { # role <login> [body]. Exact logins only; anyone not listed is untrusted (public repo).
   case "$1" in
     'chatgpt-codex-connector[bot]') echo codex ;;
-    # The agent account posts both agent work and neon reviews. neon-review.sh (not the
-    # model) prefixes every review with this fixed header.
-    chillingdaisy-worker1) case "${2:-}" in '## neon review'*) echo neon ;; *) echo agent ;; esac ;;
+    # The agent account posts both agent work and neon output. neon-review.sh and
+    # neon-art-critique.sh (not the model) prefix every post with a fixed header.
+    chillingdaisy-worker1) case "${2:-}" in '## neon review'*|'## neon art critique'*) echo neon ;; *) echo agent ;; esac ;;
     mzlikesb) echo user ;;
     'github-actions[bot]') echo ci ;;
     *) echo untrusted ;;

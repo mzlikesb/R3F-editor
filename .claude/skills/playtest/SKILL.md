@@ -46,4 +46,11 @@ scripts/playtest.sh https://pr-N-outpost.<계정>.workers.dev
 - 결과 폴더 경로
 - 페르소나별 리포트 본문을 `<details>`로 접어서 붙인다. 붙이기 전에 `@`를 `@`+ZWJ(U+200D)로 바꿔 멘션을 무력화한다(`scripts/neon-review.sh` 방식). 이슈에 리포트를 인용할 때도 같다
 
-같은 PR에서 고친 뒤 다시 돌리면 1~3을 처음부터 다시 한다(새 결과 폴더, 새 코멘트).
+## 4. neon 아트 크리틱
+
+`scripts/neon-art-critique.sh N <결과 폴더>`로 돌린다. 페르소나별 스크린샷 중 처음·중간·마지막 몇 장(합계 9장 이내)을 neon(`agy`)이 직접 열어 보고, 결과가 PR에 `## neon art critique · <SHA>` 코멘트로 올라간다(에이전트 계정, `@` 무력화. 실패·한도면 `skipped(사유)`). 기준 프롬프트는 `.claude/prompts/neon-art-critique.md`.
+
+- 지적은 `art-ux` 라벨 이슈로 올린다(맨 위 `결정할 것` 줄, 그 PR의 마일스톤, 근거 스크린샷 파일 이름)
+- 판정과 이슈 번호는 3단계 요약 코멘트에도 한 줄 적는다
+
+같은 PR에서 고친 뒤 다시 돌리면 1~4를 처음부터 다시 한다(새 결과 폴더, 새 코멘트).

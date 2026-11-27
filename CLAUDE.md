@@ -16,6 +16,7 @@ neon은 리뷰만 한다. **훅이 자동으로 부른다**(`scripts/hooks/neon-
 1. 실제 실행은 `scripts/neon-review.sh <PR 번호> docs/plans/NNN-*.md`가 한다(수동으로 다시 돌릴 때도 이것만 쓴다). 스크립트가 `agy -p`(읽기 전용, 도구 없이 플랜을 프롬프트로 받음)를 돌리고, 결과를 에이전트 세션의 gh 계정(`chillingdaisy-worker1`)으로 PR에 `neon review` 코멘트로 게시한다. 본문의 `@` 멘션은 무력화한다
 2. 스크립트를 거치지 않고 `neon review` 코멘트를 직접 달면 훅이 막는다
 3. 실패하면 스크립트가 `skipped(사유)` 코멘트를 남긴다. PR 본문 `리뷰 기록` 표에 대상 SHA와 판정(또는 skipped)을 적고 다음 단계로 진행한다
+4. 아트/UX 크리틱은 플레이테스트 뒤에 `scripts/neon-art-critique.sh <PR 번호> <결과 폴더>`로 부른다(`playtest` 스킬 4단계). `agy`가 스크린샷 파일을 경로로 열어 보고, 결과는 `## neon art critique · <SHA>` 코멘트로 올라간다. 이 머리줄은 훅이 막지 않으므로(훅 규칙을 늘리지 않는다) 직접 달지 말고 스크립트만 쓴다
 
 ## 역할별 스킬
 
