@@ -4,20 +4,17 @@ import { holdProgress, type HoldEvent } from '../hold';
 import { useStore } from '../store';
 import { canRepair } from '../sync';
 
-const NOTICE_TEXT = { success: '수리 완료', beaten: '누군가 먼저 고쳤어요' } as const;
-
 export function Panel() {
   const selected = useStore((s) => s.selected === GENERATOR);
   const fault = useStore((s) => s.sync.base?.fault ?? null);
   const enabled = useStore((s) => canRepair(s.sync, s.connection));
   const holdKind = useStore((s) => s.repair.hold.kind);
-  const noticeKind = useStore((s) => s.repair.notice?.kind ?? null);
   const button = useRef<HTMLButtonElement>(null);
   const fill = useRef<HTMLSpanElement>(null);
 
-  // While anything is time-driven (hold, pending, notice), tick every frame and paint the fill
+  // While the hold is time-driven (holding, pending), tick every frame and paint the fill
   // directly on the element so no React state changes per frame.
-  const busy = holdKind !== 'idle' || noticeKind !== null;
+  const busy = holdKind !== 'idle';
   useEffect(() => {
     if (!busy) return;
     const el = fill.current;
@@ -85,9 +82,6 @@ export function Panel() {
         <span className="label">{label}</span>
       </button>
       {fault && !enabled && <p className="hint">연결되면 수리할 수 있어요</p>}
-      <p className="notice" aria-live="polite">
-        {noticeKind ? NOTICE_TEXT[noticeKind] : ''}
-      </p>
     </aside>
   );
 }

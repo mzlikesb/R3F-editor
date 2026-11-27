@@ -9,28 +9,21 @@ import type { RepairRequest } from '../shared/protocol';
 export const HOLD_MS = 1000;
 /** A pending repair with no answer by then goes back to idle. */
 export const PENDING_TIMEOUT_MS = 5000;
-/** Notices ("수리 완료", "누군가 먼저 고쳤어요") show this long. */
-export const NOTICE_MS = 3000;
-
 export type HoldState =
   | { kind: 'idle' }
   | { kind: 'holding'; faultId: string; startedAt: number }
   | { kind: 'pending'; faultId: string; sentAt: number };
 
-export type NoticeKind = 'success' | 'beaten';
-
-export interface Notice {
-  kind: NoticeKind;
-  /** Hidden from this time (ms). */
-  until: number;
-}
-
+/**
+ * Plan 005: what to say after a repair is no longer kept here. `feedback.ts` classifies the
+ * `repaired` message (mine / beaten / other) from the hold state *before* this reducer runs, and
+ * shows it as a toast.
+ */
 export interface RepairUi {
   hold: HoldState;
-  notice: Notice | null;
 }
 
-export const initialRepairUi: RepairUi = { hold: { kind: 'idle' }, notice: null };
+export const initialRepairUi: RepairUi = { hold: { kind: 'idle' } };
 
 /** All times are ms from the same clock (`performance.now()` or `Date.now()`). */
 export type HoldEvent =
@@ -42,11 +35,11 @@ export type HoldEvent =
   | { type: 'cancel'; now: number }
   /** The socket closed (status left `open`). */
   | { type: 'disconnect'; now: number }
-  /** A `repaired` message arrived (after it was applied to the store). */
+  /** A `repaired` message arrived (after it was applied to the store). Ends a hold or a pending repair of that fault. */
   | { type: 'repaired'; faultId: string; now: number }
   /** A WS `snapshot` arrived (e.g. after a reconnect). */
   | { type: 'snapshot'; now: number }
-  /** Animation-frame or timer tick: completes a hold, times out a pending repair, hides notices. */
+  /** Animation-frame or timer tick: completes a hold, times out a pending repair. */
   | { type: 'tick'; now: number };
 
 export interface HoldResult {
@@ -56,7 +49,7 @@ export interface HoldResult {
 }
 
 export function reduceHold(ui: RepairUi, event: HoldEvent): HoldResult {
-  const { hold, notice } = ui;
+  const { hold } = ui;
   const keep: HoldResult = { ui, send: null };
   switch (event.type) {
     case 'press':
@@ -67,18 +60,9 @@ export function reduceHold(ui: RepairUi, event: HoldEvent): HoldResult {
     case 'cancel':
     case 'disconnect':
       return hold.kind === 'holding' ? { ui: { ...ui, hold: { kind: 'idle' } }, send: null } : keep;
-    case 'repaired': {
-      if (hold.kind === 'holding' && hold.faultId === event.faultId) {
-        return { ui: { hold: { kind: 'idle' }, notice: { kind: 'beaten', until: event.now + NOTICE_MS } }, send: null };
-      }
-      if (hold.kind === 'pending' && hold.faultId === event.faultId) {
-        return {
-          ui: { hold: { kind: 'idle' }, notice: { kind: 'success', until: event.now + NOTICE_MS } },
-          send: null,
-        };
-      }
-      return keep;
-    }
+    case 'repaired':
+      // TODO(share, plan 005 D.11): holding or pending on `event.faultId` → idle; anything else unchanged.
+      throw new Error('TODO(share): reduceHold repaired');
     case 'snapshot':
       return hold.kind === 'pending' ? { ui: { ...ui, hold: { kind: 'idle' } }, send: null } : keep;
     case 'tick': {
@@ -91,7 +75,6 @@ export function reduceHold(ui: RepairUi, event: HoldEvent): HoldResult {
       if (hold.kind === 'pending' && event.now - hold.sentAt >= PENDING_TIMEOUT_MS) {
         return { ui: { ...ui, hold: { kind: 'idle' } }, send: null };
       }
-      if (notice && event.now >= notice.until) return { ui: { ...ui, notice: null }, send: null };
       return keep;
     }
   }

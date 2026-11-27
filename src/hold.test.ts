@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   HOLD_MS,
-  NOTICE_MS,
   PENDING_TIMEOUT_MS,
   holdProgress,
   initialRepairUi,
@@ -31,7 +30,6 @@ describe('timing constants', () => {
   it('matches the plan', () => {
     expect(HOLD_MS).toBe(1000);
     expect(PENDING_TIMEOUT_MS).toBe(5000);
-    expect(NOTICE_MS).toBe(3000);
   });
 });
 
@@ -72,25 +70,27 @@ describe('holding', () => {
     expect(sent).toEqual([]);
   });
 
-  it('releases with "someone fixed it first" when the fault is repaired mid-hold', () => {
+  it('releases the hold when the fault is repaired mid-hold, and sends nothing', () => {
     const { ui, sent } = run([press(0), { type: 'repaired', faultId: 'f1', now: 600 }, tick(HOLD_MS + 100)]);
-    expect(ui.hold.kind).toBe('idle');
-    expect(ui.notice?.kind).toBe('beaten');
+    expect(ui).toEqual(initialRepairUi);
     expect(sent).toEqual([]);
   });
 
-  it('hides "someone fixed it first" after 3 seconds', () => {
-    const beaten = [press(0), { type: 'repaired', faultId: 'f1', now: 600 } as HoldEvent];
-    expect(run([...beaten, tick(600 + NOTICE_MS - 1)]).ui.notice?.kind).toBe('beaten');
-    expect(run([...beaten, tick(600 + NOTICE_MS)]).ui.notice).toBeNull();
+  it('keeps holding when a different fault is repaired', () => {
+    const { ui } = run([press(0), { type: 'repaired', faultId: 'other', now: 600 }]);
+    expect(ui.hold.kind).toBe('holding');
   });
 });
 
 describe('pending', () => {
-  it('succeeds when my fault comes back repaired', () => {
+  it('goes back to idle when the pending fault comes back repaired', () => {
     const { ui } = run([...toPending, { type: 'repaired', faultId: 'f1', now: 1200 }]);
-    expect(ui.hold.kind).toBe('idle');
-    expect(ui.notice?.kind).toBe('success');
+    expect(ui).toEqual(initialRepairUi);
+  });
+
+  it('stays pending when a different fault is repaired', () => {
+    const { ui } = run([...toPending, { type: 'repaired', faultId: 'other', now: 1200 }]);
+    expect(ui.hold.kind).toBe('pending');
   });
 
   it('stays pending after release or cancel (the request is already out)', () => {
@@ -101,14 +101,12 @@ describe('pending', () => {
   it('goes back to idle after 5 seconds without an answer', () => {
     expect(run([...toPending, tick(HOLD_MS + PENDING_TIMEOUT_MS - 1)]).ui.hold.kind).toBe('pending');
     const { ui } = run([...toPending, tick(HOLD_MS + PENDING_TIMEOUT_MS)]);
-    expect(ui.hold.kind).toBe('idle');
-    expect(ui.notice).toBeNull();
+    expect(ui).toEqual(initialRepairUi);
   });
 
   it('goes back to idle on a new snapshot (the new state is the answer)', () => {
     const { ui } = run([...toPending, { type: 'snapshot', now: 2000 }]);
-    expect(ui.hold.kind).toBe('idle');
-    expect(ui.notice).toBeNull();
+    expect(ui).toEqual(initialRepairUi);
   });
 
   it('does not send again while pending', () => {
@@ -118,7 +116,7 @@ describe('pending', () => {
 });
 
 describe('idle', () => {
-  it('shows nothing when someone else repairs while I am not holding', () => {
+  it('stays idle when someone else repairs while I am not holding', () => {
     const { ui } = run([{ type: 'repaired', faultId: 'f1', now: 100 }]);
     expect(ui).toEqual(initialRepairUi);
   });

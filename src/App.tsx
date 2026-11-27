@@ -1,13 +1,16 @@
-import { OrbitControls } from '@react-three/drei';
-import { Canvas } from '@react-three/fiber';
 import { useEffect } from 'react';
 import { loadBase } from './net/api';
 import { startSocket } from './net/socket';
-import { Generator } from './scene/Generator';
-import { useStore } from './store';
+import { BaseCanvas } from './scene/BaseCanvas';
+import { BottomStack } from './ui/BottomStack';
 import { Hud } from './ui/Hud';
-import { Panel } from './ui/Panel';
+import { Loading } from './ui/Loading';
+import { ScreenFlash } from './ui/ScreenFlash';
 
+/**
+ * Composition only (plan 005). Owned by the dev lead: each track fills its own component, none
+ * edits this file. Order is paint order: canvas, then overlays on top.
+ */
 export function App() {
   useEffect(() => {
     void loadBase();
@@ -16,14 +19,11 @@ export function App() {
 
   return (
     <>
-      <Canvas camera={{ position: [3, 2.5, 4], fov: 50 }} onPointerMissed={() => useStore.getState().select(null)}>
-        <ambientLight intensity={0.4} />
-        <directionalLight position={[5, 8, 3]} intensity={1.2} />
-        <Generator />
-        <OrbitControls makeDefault />
-      </Canvas>
+      <BaseCanvas />
+      <Loading />
       <Hud />
-      <Panel />
+      <BottomStack />
+      <ScreenFlash />
     </>
   );
 }

@@ -14,8 +14,9 @@ describe('parseServerMessage', () => {
     const faultMsg = { type: 'fault', version: 4, fault };
     expect(parseServerMessage(JSON.stringify(faultMsg))).toEqual(faultMsg);
 
-    const repaired = { type: 'repaired', version: 5, faultId: 'f1', repairs: 3 };
+    const repaired = { type: 'repaired', version: 5, faultId: 'f1', repairs: 3, mine: true };
     expect(parseServerMessage(JSON.stringify(repaired))).toEqual(repaired);
+    expect(parseServerMessage(JSON.stringify({ ...repaired, mine: false }))).toEqual({ ...repaired, mine: false });
 
     const presence = { type: 'presence', count: 2 };
     expect(parseServerMessage(JSON.stringify(presence))).toEqual(presence);
@@ -31,6 +32,20 @@ describe('parseServerMessage', () => {
     expect(parseServerMessage('{"type":"presence","count":"2"}')).toBeNull();
     expect(parseServerMessage('{"type":"fault","version":4,"fault":null}')).toBeNull();
     expect(parseServerMessage('{"type":"snapshot","version":3,"repairs":2,"presence":1}')).toBeNull();
+  });
+});
+
+describe('parseServerMessage repaired.mine', () => {
+  const base = { type: 'repaired', version: 5, faultId: 'f1', repairs: 3 };
+
+  it('reads a missing mine as false (older servers)', () => {
+    expect(parseServerMessage(JSON.stringify(base))).toEqual({ ...base, mine: false });
+  });
+
+  it('counts only the boolean true as mine', () => {
+    for (const mine of ['true', 1, null, {}]) {
+      expect(parseServerMessage(JSON.stringify({ ...base, mine }))).toEqual({ ...base, mine: false });
+    }
   });
 });
 

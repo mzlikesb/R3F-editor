@@ -22,5 +22,5 @@
       }
     ]
   },
-  "ignorePatterns": ["dist", "worker/worker-configuration.d.ts"]
+  "ignorePatterns": ["dist", "worker/worker-configuration.d.ts", "public/draco"]
 }

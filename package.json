@@ -29,6 +29,7 @@
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "^1.9.2",
+    "@gltf-transform/cli": "^4.5.1",
     "@types/node": "^26.6.11",
     "@types/react": "^19.3.3",
     "@types/react-dom": "^19.3.0",

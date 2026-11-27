@@ -69,13 +69,11 @@ export function startSocket(): () => void {
       }
       if (!msg) return;
       const now = performance.now();
-      store().applyMessage(msg);
+      // `receive` applies the message, runs the hold machine and the repair feedback (plan 005).
+      store().receive(msg, now);
       if (msg.type === 'snapshot') {
         attempt = 0;
         store().setConnection('open');
-        store().dispatchHold({ type: 'snapshot', now });
-      } else if (msg.type === 'repaired') {
-        store().dispatchHold({ type: 'repaired', faultId: msg.faultId, now });
       }
     };
     sock.onclose = () => {

@@ -83,6 +83,8 @@ export class BaseRoom extends DurableObject<Env> {
           version: after.version,
           faultId: msg.faultId,
           repairs: after.repairs,
+          // TODO(share, plan 005 D.11): true only for the requesting socket (see ./socketId).
+          mine: false,
         } satisfies ServerMessage),
       );
     }
