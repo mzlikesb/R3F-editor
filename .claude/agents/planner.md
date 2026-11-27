@@ -19,4 +19,4 @@ model: opus
 - 머지 후 `docs/retro.md` 한 줄
 - 이슈 묶음과 우선순위 제안
 
-HUD·패널 UI는 `minimal-ui` 스킬을 쓴다.
+쓸 스킬과 쓰는 시점은 `CLAUDE.md`의 "역할별 스킬" 절이 원본이다.
