@@ -1,10 +1,19 @@
 // Integration tests for scripts/playtest.mjs with a fake `claude` (node:test).
 // No network, no browser: PLAYTEST_SKIP_PREP=1 skips the npx/Chromium check.
 // Run: node --test scripts/playtest.test.mjs (also part of `npm run test:hooks`).
-import { test } from 'node:test';
+import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  rmSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -18,6 +27,10 @@ const fake = join(data, 'fake-claude.mjs');
 chmodSync(fake, 0o755);
 
 const LOCAL = 'http://localhost:8787';
+const bases = [];
+after(() => {
+  for (const b of bases) rmSync(b, { recursive: true, force: true });
+});
 const T = 30_000; // per test: a missing or stuck runner fails instead of hanging
 
 /**
@@ -26,6 +39,7 @@ const T = 30_000; // per test: a missing or stuck runner fails instead of hangin
  */
 function run(args, { env = {}, onSpawn } = {}) {
   const base = mkdtempSync(join(tmpdir(), 'pt-test-'));
+  bases.push(base);
   const dirs = { runs: join(base, 'runs'), logs: join(base, 'logs'), home: join(base, 'home') };
   for (const d of Object.values(dirs)) mkdirSync(d);
   const t0 = Date.now();

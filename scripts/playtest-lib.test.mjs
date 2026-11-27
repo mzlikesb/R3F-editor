@@ -461,3 +461,16 @@ test('claudeProjectDirName matches how claude names per-folder state', () => {
   );
   assert.equal(claudeProjectDirName('/tmp/pt.x_y'), '-tmp-pt-x-y');
 });
+
+test('classifyRun: a failure keeps tokens already spent (approximate), none if nothing ran', () => {
+  const spent = classifyRun({
+    events: [init, asst('a', u(1, 2, 3, 4))],
+    timedOut: false,
+    exitCode: null,
+    abort: '격리',
+  });
+  assert.deepEqual(spent.usage, { input: 1, output: 2, cacheCreation: 3, cacheRead: 4 });
+  assert.equal(spent.usageApprox, true);
+  const none = classifyRun({ events: [init], timedOut: false, exitCode: null, abort: '격리' });
+  assert.equal(none.usage, null);
+});

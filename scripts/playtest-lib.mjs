@@ -258,13 +258,15 @@ const assistantText = (events) =>
 
 /** @returns {{ status: 'complete' | 'incomplete' | 'failed', reason: string | null, report: string, durationMs: number | null, usage: object | null, usageApprox: boolean }} */
 export function classifyRun({ events, timedOut, exitCode, abort }) {
+  // A failure can still have spent tokens (e.g. a turn that ran before an isolation kill).
+  const spent = assistantMessages(events).some((m) => m.usage);
   const failed = (reason) => ({
     status: 'failed',
     reason,
     report: '',
     durationMs: null,
-    usage: null,
-    usageApprox: false,
+    usage: spent ? sumUsage(events) : null,
+    usageApprox: spent,
   });
   if (abort) return failed(abort);
   if (!events.some((e) => e?.type === 'system' && e.subtype === 'init')) return failed('시작하지 못함');
@@ -328,7 +330,8 @@ export function formatHeader({ status, reason, mode, device, durationMs, usage, 
   const secs = Math.round((durationMs ?? 0) / 1000);
   const time = durationMs == null ? '알 수 없음' : `${Math.floor(secs / 60)}분 ${secs % 60}초`;
   const tokens = usage
-    ? `입력 ${num(usage.input + usage.cacheCreation + usage.cacheRead)} · 출력 ${num(usage.output)}${usageApprox ? ' (근사)' : ''}`
+    ? // Summed from the stream: input matches result.usage, but output is only the first chunk of each turn.
+      `입력 ${num(usage.input + usage.cacheCreation + usage.cacheRead)} · 출력 ${num(usage.output)}${usageApprox ? ' 이상 (근사)' : ''}`
     : '없음';
   return [`상태: ${state}`, `실행 모드: ${mode}`, `기기: ${device}`, `시간: ${time}`, `토큰: ${tokens}`].join('\n');
 }

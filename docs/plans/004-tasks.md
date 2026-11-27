@@ -12,7 +12,7 @@ T1·T2는 한 개발 에이전트가 순서대로 한다(T2가 T1을 부른다).
 | T3  | 페르소나 3종·리포트 템플릿          | 개발 | `docs/playtests/personas/{phone-casual,pc-dev,first-visitor}.md`, `docs/templates/playtest.md` | 첫 줄 `device: …`(T1 `readDevice` 형식). 작품 정보·원칙의 말 없음. 템플릿은 플랜 3번 항목 그대로, 질문은 중립                    | (T2 테스트가 형식만 본다. 내용은 M에서 확인)                | 완료 |
 | T4  | 스킬 `playtest`                     | 개발 | `.claude/skills/playtest/SKILL.md`                                                       | 플랜 4번 절차 전부. 실행 명령은 `scripts/playtest.sh <Preview URL>`. 결과 폴더 경로·실행 모드·시간·토큰을 요약 코멘트에 옮기는 법 | —                                                           | 완료 |
 | T5  | 규칙 문서                           | 개발 | `AGENTS.md`, `CLAUDE.md`                                                                 | 플랜 5·6번. AGENTS.md의 "#23 미구현" 문구 정리                                                                                    | —                                                           | 완료 |
-| M   | 병합·의도 확인                      | 리드 | —                                                                                        | 아래 "M 확인"                                                                                                                     | 전체                                                        | 대기 |
+| M   | 병합·의도 확인                      | 리드 | —                                                                                        | 아래 "M 확인"·"M 결과"                                                                                                            | 전체                                                        | 완료 |
 
 ## T0 결과 (2026-11-27, 로컬 `npm run build` + `npx wrangler dev`, `claude` 2.1.332, Sonnet)
 
@@ -45,7 +45,7 @@ T1·T2는 한 개발 에이전트가 순서대로 한다(T2가 T1을 부른다).
   - output-dir은 플레이어 임시 폴더 안에 둔다. 경로가 도구 결과에 그대로 보이므로 결과 폴더(`…/outpost-playtests/…`)를 직접 주면 작품 이름이 새어 나간다. 끝나면 실행기가 결과 폴더로 옮긴다
 - 준비 단계: `npx -y -p @playwright/mcp@0.0.86 playwright install chromium`(같은 패키지에 든 Playwright로 맞는 Chromium을 받거나 있으면 넘어간다)
 - (neon b) 행동 예산 **15회**, `--max-turns` **80**, 시간 상한 10분. 근거: 스크립트대로 움직인 확인 실행이 도구 10번에 11턴·23초·약 10만 토큰(대부분 캐시 읽기)이었다. 페르소나는 행동마다 스크린샷을 한 번 더 찍으므로 행동 1회 ≈ 2턴, 홀드 ≈ 5턴. 15회 × 2 + 홀드 여유 + 리포트 ≈ 40~50턴. 실제 페르소나 실행 값은 M의 첫 로컬 실행에서 다시 보고, 크게 다르면 리드가 `DEFAULTS`만 고친다
-- (neon b) 미완료 토큰: `error_max_turns`의 `result.usage`가 있으면 그것, 없거나 시간 상한이면 assistant 이벤트를 `message.id`로 중복 제거(같은 id는 마지막 것)해 합산하고 `(근사)`를 붙인다. T0에서 턴 합산 출력 토큰이 `result`보다 적게 나왔다(1,142 대 1,427). `미집계`는 쓰지 않는다
+- (neon b) 미완료 토큰: `error_max_turns`의 `result.usage`가 있으면 그것, 없거나 시간 상한이면 assistant 이벤트를 `message.id`로 중복 제거(같은 id는 마지막 것)해 합산하고 `(근사)`를 붙인다. T0에서 턴 합산 출력 토큰이 `result`보다 적게 나왔다(1,142 대 1,427). `미집계`는 쓰지 않는다. M 실측: 입력은 `result`와 정확히 같고, 출력은 스트림에 턴마다 첫 조각만 남아 크게 적다(115 대 5,479). 그래서 근사일 때는 `출력 N 이상 (근사)`로 적는다
 - (neon c) 스크린샷 보관: 이름순(=시각순)으로 **처음 5장 + 최신 15장**. png만 옮기고 `console-*.log`·`.yml`은 버린다
 - 정리: `claude`가 `~/.claude/projects/<임시 폴더 실경로를 영숫자 외 '-'로 바꾼 이름>/memory`를 빈 채로 남긴다. 실행기가 지운다. macOS는 `/var/folders`가 `/private/var/folders`의 링크이므로 `realpath`로 이름을 만든다
 - stream-json에는 `rate_limit_event` 같은 다른 이벤트도 섞인다. 모르는 이벤트는 무시한다
@@ -86,3 +86,20 @@ T1·T2는 한 개발 에이전트가 순서대로 한다(T2가 T1을 부른다).
 4. production URL 거절 확인
 5. 페르소나·템플릿·스킬 문구가 플랜 의도(작품 설명 없음, 중립 질문)와 맞는지 읽어서 판단
 6. Preview 3명 동시 실행과 이슈·요약 코멘트는 스킬 절차로 기획 에이전트가 한다(플랜 Verification)
+
+## M 결과 (2026-11-27, HEAD 기준 로컬 `wrangler dev`)
+
+- `origin/main`을 merge로 합쳤다(rebase·force push 없음). 충돌은 `CLAUDE.md` 역할별 스킬 줄과 `package.json` `test:hooks` 줄. 둘 다 양쪽을 모두 남겼다
+- 코드 확인: 플랜·tasks와 맞다. 리드가 고친 것 셋
+  - 실패여도 이미 쓴 토큰이 있으면 남긴다(격리 SIGKILL 전에 끝난 턴 등). 아무것도 안 돌았으면 `토큰: 없음`. 테스트 추가
+  - 근사 토큰 표기를 `출력 N 이상 (근사)`로 바꿨다(위 T0 메모)
+  - 통합 테스트가 임시 폴더(`pt-test-*`)를 남기던 것을 `after`에서 지운다
+- 로컬 3명 동시 1회(`scripts/playtest.sh http://localhost:8787`, 종료 코드 0). 격리 점검은 실제 init(내장 플러그인 4개 `@builtin`, 도구 11개)로 통과
+  - `first-visitor`(iPhone 13): 완료, 1분 26초, 입력 103,227 · 출력 5,375, 26턴, 스크린샷 8장. 큐브 → 패널 → 홀드 수리
+  - `pc-dev`(1280x800): 완료, 2분 23초, 입력 244,946 · 출력 8,009, 35턴, 스크린샷 14장. 드래그·휠로 카메라까지 시험
+  - `phone-casual`(iPhone 13): 완료, 1분 38초, 입력 117,519 · 출력 5,479, 23턴, 스크린샷 8장. 수리 뒤 "다음 할 일이 없다", "접속 3명인데 다른 사람이 안 보인다"를 지적
+  - 리포트에 `지금 접속 3명`이 나왔다. 셋 다 행동 예산 안에서 스스로 끝냈다(턴 23~35). 기본값 15회·80턴은 그대로 둔다
+- 시간 상한 40초로 `phone-casual` 1회: `미완료(시간 상한)`, 스크린샷 7장 남음, 종료 코드 0. 끝난 뒤 Chromium·Playwright MCP 프로세스, 플레이어 임시 폴더, `~/.claude/projects` 빈 폴더 모두 없음
+- production URL(`https://outpost.<계정>.workers.dev`)은 실행 전에 종료 코드 2로 거절
+- 저장소 `git status`는 실행 전후로 깨끗하다. 리포트 원문과 스크린샷은 저장소 밖에만 있다
+- 알려진 한계: 리포트에 output-dir 이름(`shots/`)이 보인다. 작품 정보는 아니라 그대로 둔다
