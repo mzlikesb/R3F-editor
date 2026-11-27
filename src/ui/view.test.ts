@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { connectionLabel, healthyLine, panelView, presenceLine, repairsLine } from './view';
+import { connectionLabel, healthyLine, lastRepairLine, panelView, presenceLine, repairsLine } from './view';
 
 describe('HUD lines', () => {
   it('counts repairs together', () => {
@@ -22,9 +22,38 @@ describe('HUD lines', () => {
   });
 
   it('shows the healthy line only when a base is known and nothing is broken', () => {
-    expect(healthyLine({ faulted: false })).toBe('기지 정상 가동 중 · 고장이 나면 여기에 알려 드려요');
+    expect(healthyLine({ faulted: false })).toBe('기지 정상 · 고장 나면 알려 드려요');
     expect(healthyLine({ faulted: true })).toBeNull();
     expect(healthyLine(null)).toBeNull();
+  });
+});
+
+describe('lastRepairLine', () => {
+  const at = 10_000;
+
+  it('shows nothing until a repair happened while this tab was open', () => {
+    expect(lastRepairLine(null, at)).toBeNull();
+  });
+
+  it('says who repaired: me or someone else (beaten counts as someone else)', () => {
+    expect(lastRepairLine({ outcome: 'mine', at }, at + 1000)).toBe('마지막 수리: 나 · 방금');
+    expect(lastRepairLine({ outcome: 'other', at }, at + 1000)).toBe('마지막 수리: 다른 사람 · 방금');
+    expect(lastRepairLine({ outcome: 'beaten', at }, at + 1000)).toBe('마지막 수리: 다른 사람 · 방금');
+  });
+
+  it('counts seconds, then minutes, then hours on the client clock', () => {
+    const line = (ms: number) => lastRepairLine({ outcome: 'other', at }, at + ms);
+    expect(line(4_999)).toBe('마지막 수리: 다른 사람 · 방금');
+    expect(line(5_000)).toBe('마지막 수리: 다른 사람 · 5초 전');
+    expect(line(12_400)).toBe('마지막 수리: 다른 사람 · 12초 전');
+    expect(line(59_999)).toBe('마지막 수리: 다른 사람 · 59초 전');
+    expect(line(60_000)).toBe('마지막 수리: 다른 사람 · 1분 전');
+    expect(line(59 * 60_000 + 59_999)).toBe('마지막 수리: 다른 사람 · 59분 전');
+    expect(line(3 * 3_600_000)).toBe('마지막 수리: 다른 사람 · 3시간 전');
+  });
+
+  it('treats a clock that went backwards as just now', () => {
+    expect(lastRepairLine({ outcome: 'mine', at }, at - 500)).toBe('마지막 수리: 나 · 방금');
   });
 });
 

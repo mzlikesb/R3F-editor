@@ -12,6 +12,8 @@ export interface Store {
   selected: BaseModuleId | null;
   repair: RepairUi;
   feedback: FeedbackState;
+  /** The scene finished its first load (models and HDRI, or their fallbacks). Latches. */
+  loaded: boolean;
   /**
    * Handles one WS message (plan 005, track `share`):
    * 1. applies it to `sync` (`applyServerMessage`);
@@ -25,6 +27,8 @@ export interface Store {
   receive: (msg: ServerMessage, now: number) => void;
   applyRest: (snap: SnapshotMessage) => void;
   setConnection: (status: ConnectionStatus) => void;
+  /** `ui/Loading.tsx` calls this once the loading overlay goes away. */
+  setLoaded: () => void;
   /** Selecting any module (non-null) also dismisses the hint for this session (`moduleTapped`). */
   select: (id: BaseModuleId | null) => void;
   /** Feeds the hold state machine; a completed hold goes out through the registered sender. */
@@ -46,6 +50,7 @@ export const useStore = create<Store>((set, get) => ({
   selected: null,
   repair: initialRepairUi,
   feedback: initialFeedback,
+  loaded: false,
   receive: (msg, now) => {
     const before = get();
     const sync = applyServerMessage(before.sync, msg);
@@ -68,6 +73,9 @@ export const useStore = create<Store>((set, get) => ({
   },
   applyRest: (snap) => set((s) => ({ sync: applyRestSnapshot(s.sync, snap) })),
   setConnection: (connection) => set({ connection }),
+  setLoaded: () => {
+    if (!get().loaded) set({ loaded: true });
+  },
   select: (selected) => {
     // The repair button lives in the panel of the selected module. If selection moves away
     // mid-hold (e.g. a second finger taps the canvas), the button unmounts without a

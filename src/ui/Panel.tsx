@@ -50,6 +50,17 @@ export function Panel() {
     };
   }, []);
 
+  // Esc closes the panel like the ✕ (desktop players reach for it).
+  const open = selected !== null;
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') useStore.getState().select(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open]);
+
   if (selected === null) return null;
 
   const view = panelView(selected, generatorFaulted);
@@ -58,11 +69,21 @@ export function Panel() {
   const label = holdKind === 'holding' ? '계속 누르세요…' : holdKind === 'pending' ? '수리 중…' : '꾹 눌러 수리 (1초)';
 
   return (
-    <aside className="panel" onContextMenu={(e) => e.preventDefault()}>
-      <h2>{view.title}</h2>
-      <p className={view.status === 'fault' ? 'status warn' : 'status ok'}>
-        {view.status === 'fault' ? '⚠ 고장' : '정상'}
-      </p>
+    <aside className={view.repairButton ? 'panel' : 'panel panel-compact'} onContextMenu={(e) => e.preventDefault()}>
+      <div className="panel-head">
+        <h2>{view.title}</h2>
+        <p className={view.status === 'fault' ? 'status warn' : 'status ok'}>
+          {view.status === 'fault' ? '⚠ 고장' : '정상'}
+        </p>
+        <button
+          type="button"
+          className="panel-close"
+          aria-label="닫기"
+          onClick={() => useStore.getState().select(null)}
+        >
+          ✕
+        </button>
+      </div>
       {view.goToFault && (
         <button type="button" className="goto" onClick={() => useStore.getState().select('generator')}>
           발전기 고장 — 눌러서 이동

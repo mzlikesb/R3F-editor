@@ -3,6 +3,7 @@
  * `Panel.tsx` render what these return. Track `share`.
  */
 import { isRepairable, moduleName, type BaseModuleId } from '../modules';
+import type { RepairOutcome } from '../feedback';
 import type { ConnectionStatus } from '../sync';
 
 /** HUD top line: `함께 고친 횟수 N회`; `–` until the first snapshot. */
@@ -24,9 +25,29 @@ export function connectionLabel(status: ConnectionStatus): string | null {
   return status === 'connecting' ? '연결 중…' : '재연결 중…';
 }
 
-/** Under the HUD while nothing is broken (and a base is known): `기지 정상 가동 중 · 고장이 나면 여기에 알려 드려요`. */
+/** Under the HUD while nothing is broken (and a base is known). Short enough for one line on a phone. */
 export function healthyLine(base: { faulted: boolean } | null): string | null {
-  return base && !base.faulted ? '기지 정상 가동 중 · 고장이 나면 여기에 알려 드려요' : null;
+  return base && !base.faulted ? '기지 정상 · 고장 나면 알려 드려요' : null;
+}
+
+/** Below this the last repair reads `방금`. */
+const JUST_NOW_MS = 5000;
+
+/**
+ * HUD line `마지막 수리: 나 · 방금` / `마지막 수리: 다른 사람 · 12초 전`, from the last repair seen in
+ * this session (`FeedbackState.effect`) and the same client clock (`performance.now()`). Null until
+ * a repair happened while this tab was open.
+ */
+export function lastRepairLine(last: { outcome: RepairOutcome; at: number } | null, now: number): string | null {
+  if (!last) return null;
+  const who = last.outcome === 'mine' ? '나' : '다른 사람';
+  const ms = now - last.at;
+  let ago: string;
+  if (ms < JUST_NOW_MS) ago = '방금';
+  else if (ms < 60_000) ago = `${Math.floor(ms / 1000)}초 전`;
+  else if (ms < 3_600_000) ago = `${Math.floor(ms / 60_000)}분 전`;
+  else ago = `${Math.floor(ms / 3_600_000)}시간 전`;
+  return `마지막 수리: ${who} · ${ago}`;
 }
 
 export interface PanelView {

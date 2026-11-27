@@ -106,6 +106,31 @@ describe('store.receive', () => {
     expect(s().feedback.effect?.outcome).toBe('other');
   });
 
+  it('playtest pc-dev: pressing only after someone else\'s repair arrived is "other", not "beaten"', () => {
+    // Persona timeline (2026-11-27, PR #45): another tab's repaired arrived ~0.6 s before this
+    // tab's pointerdown. The button was already gone, so the press never started a hold.
+    s().receive(snapshot(), 0);
+    s().receive(repaired(false), 50_600);
+    expect(s().feedback.toast?.kind).toBe('other');
+    expect(s().repair.hold.kind).toBe('idle');
+  });
+
+  it('a press is holding at once, so a repaired 1 ms later is still "beaten"', () => {
+    s().receive(snapshot(), 0);
+    s().dispatchHold({ type: 'press', faultId: 'f1', now: 1000 });
+    expect(s().repair.hold.kind).toBe('holding');
+    s().receive(repaired(false), 1001);
+    expect(s().feedback.toast?.kind).toBe('beaten');
+  });
+
+  it('remembers the last repair seen in this session, not one from before arrival', () => {
+    s().receive(snapshot({ fault: null, repairs: 7 }), 0);
+    expect(s().feedback.effect).toBeNull();
+    s().receive({ type: 'fault', version: 6, fault: F1 }, 10);
+    s().receive(repaired(true, 7), 500);
+    expect(s().feedback.effect).toMatchObject({ outcome: 'mine', at: 500 });
+  });
+
   it('ignores a stale repaired: no toast, no effect', () => {
     s().receive(snapshot({ version: 10 }), 0);
     s().receive(repaired(true, 9), 100);
@@ -168,6 +193,15 @@ describe('store.select and the hint', () => {
   it('does not dismiss the hint when the selection is cleared', () => {
     useStore.getState().select(null);
     expect(useStore.getState().feedback.hintDismissed).toBe(false);
+  });
+});
+
+describe('store.setLoaded', () => {
+  it('starts not loaded and latches once the scene is in', () => {
+    useStore.setState({ loaded: false });
+    expect(useStore.getState().loaded).toBe(false);
+    useStore.getState().setLoaded();
+    expect(useStore.getState().loaded).toBe(true);
   });
 });
 

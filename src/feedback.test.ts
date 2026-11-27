@@ -27,7 +27,7 @@ describe('constants and text', () => {
     expect(TOAST_MS).toBe(3000);
     expect(TOAST_TEXT).toEqual({
       mine: '내가 고쳤어요 +1',
-      beaten: '누군가 먼저 고쳤어요',
+      beaten: '같이 눌렀는데 다른 사람이 한발 먼저 고쳤어요',
       other: '누군가 발전기를 고쳤어요',
       refault: '발전기가 다시 고장 났어요',
     });
@@ -152,14 +152,18 @@ describe('reduceFeedback: tick', () => {
 
 describe('hint', () => {
   it('shows only while something is broken', () => {
-    expect(hintVisible(true, initialFeedback)).toBe(true);
-    expect(hintVisible(false, initialFeedback)).toBe(false);
+    expect(hintVisible(true, initialFeedback, true)).toBe(true);
+    expect(hintVisible(false, initialFeedback, true)).toBe(false);
+  });
+
+  it('waits until the base has finished loading', () => {
+    expect(hintVisible(true, initialFeedback, false)).toBe(false);
   });
 
   it('never comes back in this session once a module was tapped', () => {
     const s = run([{ type: 'moduleTapped' }]);
     expect(s.hintDismissed).toBe(true);
-    expect(hintVisible(true, s)).toBe(false);
+    expect(hintVisible(true, s, true)).toBe(false);
   });
 });
 

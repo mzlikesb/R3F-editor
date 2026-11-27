@@ -11,7 +11,7 @@ import { Toast } from './Toast';
 export function BottomStack() {
   const hasPanel = useStore((s) => s.selected !== null);
   const toast = useStore((s) => s.feedback.toast);
-  const hint = useStore((s) => hintVisible(selectFaulted(s), s.feedback));
+  const hint = useStore((s) => hintVisible(selectFaulted(s), s.feedback, s.loaded));
   const items = bottomStack({ panel: hasPanel, toast: toast !== null, hint });
   if (items.length === 0) return null;
   return (

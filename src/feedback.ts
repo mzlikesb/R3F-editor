@@ -27,7 +27,7 @@ export type ToastKind = RepairOutcome | 'refault';
 
 export const TOAST_TEXT: Record<ToastKind, string> = {
   mine: '내가 고쳤어요 +1',
-  beaten: '누군가 먼저 고쳤어요',
+  beaten: '같이 눌렀는데 다른 사람이 한발 먼저 고쳤어요',
   other: '누군가 발전기를 고쳤어요',
   refault: '발전기가 다시 고장 났어요',
 };
@@ -63,6 +63,10 @@ export interface FeedbackState {
   healthySince: number | null;
   /** Set once any module was tapped this session; the hint never shows again. */
   hintDismissed: boolean;
+  /**
+   * The latest repair seen over WS in this session (never one from before arrival: snapshots do not
+   * set it). Also what the HUD's `마지막 수리` line reads.
+   */
   effect: RepairEffect | null;
 }
 
@@ -125,9 +129,12 @@ export function reduceFeedback(state: FeedbackState, event: FeedbackEvent): Feed
   }
 }
 
-/** The bottom hint `고장 난 모듈을 눌러 보세요`: only while faulted, until a module is tapped. */
-export function hintVisible(faulted: boolean, state: FeedbackState): boolean {
-  return faulted && !state.hintDismissed;
+/**
+ * The bottom hint `고장 난 모듈을 눌러 보세요`: only once the base has loaded, while faulted, until a
+ * module is tapped.
+ */
+export function hintVisible(faulted: boolean, state: FeedbackState, loaded: boolean): boolean {
+  return loaded && faulted && !state.hintDismissed;
 }
 
 export type BottomItem = 'panel' | 'toast' | 'hint';
