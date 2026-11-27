@@ -20,11 +20,8 @@ export interface Hold {
  * Otherwise a new hold that replaces `current` (one hold per socket).
  */
 export function startHold(current: Hold | null, faultId: string, now: number, faults: readonly Fault[]): Hold | null {
-  void current;
-  void faultId;
-  void now;
-  void faults;
-  throw new Error('TODO(server): startHold');
+  if (!faults.some((f) => f.id === faultId)) return current;
+  return { faultId, startedAt: now };
 }
 
 /**
@@ -32,22 +29,23 @@ export function startHold(current: Hold | null, faultId: string, now: number, fa
  * `release{faultId}` and, on every socket, when `faultId` was repaired.
  */
 export function releaseHold(current: Hold | null, faultId: string): Hold | null {
-  void current;
-  void faultId;
-  throw new Error('TODO(server): releaseHold');
+  return current !== null && current.faultId === faultId ? null : current;
 }
 
 /** True once `HOLD_EXPIRY_MS` have passed since `startedAt`. */
 export function isExpired(hold: Hold, now: number): boolean {
-  void hold;
-  void now;
-  throw new Error('TODO(server): isExpired');
+  return now - hold.startedAt >= HOLD_EXPIRY_MS;
 }
 
 /** The earliest `startedAt + HOLD_EXPIRY_MS` among the holds; null when there are none. */
 export function earliestExpiry(holds: readonly (Hold | null)[]): number | null {
-  void holds;
-  throw new Error('TODO(server): earliestExpiry');
+  let earliest: number | null = null;
+  for (const hold of holds) {
+    if (hold === null) continue;
+    const at = hold.startedAt + HOLD_EXPIRY_MS;
+    if (earliest === null || at < earliest) earliest = at;
+  }
+  return earliest;
 }
 
 /**
@@ -55,7 +53,14 @@ export function earliestExpiry(holds: readonly (Hold | null)[]): number | null {
  * the receiver included), minus the receiver's own hold `own`. Only counts >= 1 appear.
  */
 export function activityFor(holds: readonly (Hold | null)[], own: Hold | null): Record<string, number> {
-  void holds;
-  void own;
-  throw new Error('TODO(server): activityFor');
+  const counts: Record<string, number> = {};
+  for (const hold of holds) {
+    if (hold !== null) counts[hold.faultId] = (counts[hold.faultId] ?? 0) + 1;
+  }
+  // `own` may be a copy read back from an attachment, so subtract it by value, not by identity.
+  if (own !== null && counts[own.faultId] !== undefined) counts[own.faultId]! -= 1;
+  for (const faultId of Object.keys(counts)) {
+    if (counts[faultId]! <= 0) delete counts[faultId];
+  }
+  return counts;
 }

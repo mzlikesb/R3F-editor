@@ -25,8 +25,6 @@ export function createRateLimiter(
  * A `hold` turned away here is not recorded as a hold (neon (b)).
  */
 export function admit(type: ClientMessage['type'], allow: (now: number) => boolean, now: number): boolean {
-  void type;
-  void allow;
-  void now;
-  throw new Error('TODO(server): admit');
+  if (type === 'release') return true;
+  return allow(now);
 }

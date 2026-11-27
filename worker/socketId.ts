@@ -21,9 +21,15 @@ export interface SocketInfo {
 
 /** A fresh attachment with id `newId()` and no hold (`BaseRoom` passes `() => crypto.randomUUID()`). */
 export function newAttachment(newId: () => string, protocol: 1 | 2): SocketAttachment {
-  void newId;
-  void protocol;
-  throw new Error('TODO(server): newAttachment');
+  return { id: newId(), protocol, hold: null };
+}
+
+function readHold(value: unknown): Hold | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  const { faultId, startedAt } = value as { faultId?: unknown; startedAt?: unknown };
+  if (typeof faultId !== 'string' || faultId === '') return null;
+  if (typeof startedAt !== 'number' || !Number.isFinite(startedAt)) return null;
+  return { faultId, startedAt };
 }
 
 /**
@@ -32,8 +38,12 @@ export function newAttachment(newId: () => string, protocol: 1 | 2): SocketAttac
  * `{ faultId: non-empty string, startedAt: finite number }`, else null.
  */
 export function readAttachment(attachment: unknown): SocketInfo {
-  void attachment;
-  throw new Error('TODO(server): readAttachment');
+  const id = readSocketId(attachment);
+  if (typeof attachment !== 'object' || attachment === null || Array.isArray(attachment)) {
+    return { id, protocol: 1, hold: null };
+  }
+  const { protocol, hold } = attachment as { protocol?: unknown; hold?: unknown };
+  return { id, protocol: protocol === 2 ? 2 : 1, hold: readHold(hold) };
 }
 
 /**

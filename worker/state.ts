@@ -8,7 +8,11 @@
  * every new state it gets). A function that changes nothing returns its input or null, as documented.
  */
 import {
+  GENERATOR,
   HISTORY_BLACKOUTS,
+  MAX_FAULTS,
+  MODULE_IDS,
+  PROTOCOL_VERSION,
   SNAPSHOT_BLACKOUTS,
   type Blackout,
   type BlackoutEnd,
@@ -17,6 +21,7 @@ import {
   type Fault,
   type HistoryResponse,
   type LastRepair,
+  type ModuleId,
   type SnapshotMessage,
 } from '../shared/protocol';
 
@@ -31,6 +36,17 @@ export const UNATTENDED_FAULT_CAP = 2;
  * Longer than `REFAULT_MAX_MS`, so whenever it applies at least one fault is due anyway ("최소 1개").
  */
 export const MIN_UNATTENDED_MS = 60_000;
+
+/**
+ * A random healthy module. The `MAX_FAULTS`-th fault goes to the generator while it is healthy.
+ * Callers guarantee fewer than `MAX_FAULTS` faults.
+ */
+function pickModule(faults: readonly Fault[], rand: () => number): ModuleId {
+  const broken = new Set(faults.map((f) => f.moduleId));
+  if (faults.length === MAX_FAULTS - 1 && !broken.has(GENERATOR)) return GENERATOR;
+  const healthy = MODULE_IDS.filter((id) => !broken.has(id));
+  return healthy[Math.floor(rand() * healthy.length)]!;
+}
 
 /** What `BaseRoom` stores under `base:v2`, as one object. */
 export interface BaseState {
@@ -78,10 +94,19 @@ export function nextFaultDelayMs(rand: () => number): number {
  * `nextFaultAt = now + nextFaultDelayMs`.
  */
 export function initialState(instanceId: string, now: number, rng: Rng): BaseState {
-  void instanceId;
-  void now;
-  void rng;
-  throw new Error('TODO(server): initialState');
+  return {
+    faults: [],
+    repairs: 0,
+    version: 0,
+    instanceId,
+    uptimeStartedAt: now,
+    longestUptimeMs: 0,
+    blackout: null,
+    blackouts: [],
+    nextFaultAt: now + nextFaultDelayMs(rng.rand),
+    lastSavedAt: now,
+    lastRepair: null,
+  };
 }
 
 /**
@@ -92,10 +117,19 @@ export function initialState(instanceId: string, now: number, rng: Rng): BaseSta
  * `blackouts` [], `lastRepair` null, `nextFaultAt = now + nextFaultDelayMs`. Does not touch `legacy`.
  */
 export function migrateLegacy(legacy: LegacyState, now: number, rng: Rng): BaseState {
-  void legacy;
-  void now;
-  void rng;
-  throw new Error('TODO(server): migrateLegacy');
+  return {
+    faults: legacy.fault ? [{ ...legacy.fault }] : [],
+    repairs: legacy.repairs,
+    version: legacy.version + 1,
+    instanceId: legacy.instanceId,
+    uptimeStartedAt: now,
+    longestUptimeMs: 0,
+    blackout: null,
+    blackouts: [],
+    nextFaultAt: now + nextFaultDelayMs(rng.rand),
+    lastSavedAt: now,
+    lastRepair: null,
+  };
 }
 
 export interface InjectResult {
@@ -116,10 +150,37 @@ export interface InjectResult {
  *   Already in a blackout: none of that (a blackout ends only by repairing the generator).
  */
 export function injectFault(state: BaseState, now: number, rng: Rng): InjectResult | null {
-  void state;
-  void now;
-  void rng;
-  throw new Error('TODO(server): injectFault');
+  if (state.faults.length >= MAX_FAULTS) return null;
+  const moduleId = pickModule(state.faults, rng.rand);
+  const fault: Fault = { id: rng.newId(), moduleId, createdAt: now };
+  const faults = [...state.faults, fault];
+  const atCap = faults.length >= MAX_FAULTS;
+  const next: BaseState = {
+    ...state,
+    faults,
+    version: state.version + 1,
+    nextFaultAt: atCap ? null : now + nextFaultDelayMs(rng.rand),
+    lastSavedAt: now,
+  };
+  if (!atCap || state.blackout !== null) return { state: next, fault, blackoutStart: null };
+
+  const longestUptimeMs =
+    state.uptimeStartedAt === null
+      ? state.longestUptimeMs
+      : Math.max(state.longestUptimeMs, now - state.uptimeStartedAt);
+  const blackout: Blackout = { id: rng.newId(), startedAt: now };
+  const record: BlackoutRecord = { ...blackout, endedAt: null };
+  return {
+    state: {
+      ...next,
+      blackout,
+      blackouts: [record, ...state.blackouts].slice(0, HISTORY_BLACKOUTS),
+      longestUptimeMs,
+      uptimeStartedAt: null,
+    },
+    fault,
+    blackoutStart: { blackout, uptimeStartedAt: null, longestUptimeMs, record },
+  };
 }
 
 export interface RepairResult {
@@ -137,11 +198,31 @@ export interface RepairResult {
  * `uptimeStartedAt = now`; `blackoutEnd` carries those and `longestUptimeMs`.
  */
 export function repair(state: BaseState, faultId: string, now: number, rng: Rng): RepairResult | null {
-  void state;
-  void faultId;
-  void now;
-  void rng;
-  throw new Error('TODO(server): repair');
+  const fault = state.faults.find((f) => f.id === faultId);
+  if (!fault) return null;
+  const next: BaseState = {
+    ...state,
+    faults: state.faults.filter((f) => f.id !== faultId),
+    repairs: state.repairs + 1,
+    version: state.version + 1,
+    lastRepair: { moduleId: fault.moduleId, at: now },
+    nextFaultAt: now + nextFaultDelayMs(rng.rand),
+    lastSavedAt: now,
+  };
+  if (fault.moduleId !== GENERATOR || state.blackout === null) return { state: next, fault, blackoutEnd: null };
+
+  const blackoutId = state.blackout.id;
+  const ended: BaseState = {
+    ...next,
+    blackout: null,
+    blackouts: state.blackouts.map((r) => (r.id === blackoutId ? { ...r, endedAt: now } : r)),
+    uptimeStartedAt: now,
+  };
+  return {
+    state: ended,
+    fault,
+    blackoutEnd: { blackoutId, endedAt: now, uptimeStartedAt: now, longestUptimeMs: state.longestUptimeMs },
+  };
 }
 
 /**
@@ -149,10 +230,8 @@ export function repair(state: BaseState, faultId: string, now: number, rng: Rng)
  * has passed. An early alarm (for a hold expiry) or a retried alarm after the cap does nothing here.
  */
 export function decideOnAlarm(state: BaseState, connections: number, now: number): 'injectFault' | 'none' {
-  void state;
-  void connections;
-  void now;
-  throw new Error('TODO(server): decideOnAlarm');
+  if (connections <= 0 || state.nextFaultAt === null || state.nextFaultAt > now) return 'none';
+  return 'injectFault';
 }
 
 export interface ArriveResult {
@@ -173,17 +252,33 @@ export interface ArriveResult {
  * Always returns a new state (`lastSavedAt = now`).
  */
 export function arrive(state: BaseState, now: number, rng: Rng): ArriveResult {
-  void state;
-  void now;
-  void rng;
-  throw new Error('TODO(server): arrive');
+  const injected: Fault[] = [];
+  let faults = state.faults;
+  if (now - state.lastSavedAt >= MIN_UNATTENDED_MS) {
+    let at = state.lastSavedAt;
+    while (faults.length < UNATTENDED_FAULT_CAP) {
+      at += nextFaultDelayMs(rng.rand);
+      if (at > now) break;
+      const fault: Fault = { id: rng.newId(), moduleId: pickModule(faults, rng.rand), createdAt: at };
+      injected.push(fault);
+      faults = [...faults, fault];
+    }
+  }
+  return {
+    state: {
+      ...state,
+      faults,
+      version: state.version + injected.length,
+      nextFaultAt: faults.length >= MAX_FAULTS ? null : now + nextFaultDelayMs(rng.rand),
+      lastSavedAt: now,
+    },
+    injected,
+  };
 }
 
 /** Connections went 1 → 0: only `lastSavedAt = now`, so the stay is not counted as unattended. */
 export function leave(state: BaseState, now: number): BaseState {
-  void state;
-  void now;
-  throw new Error('TODO(server): leave');
+  return { ...state, lastSavedAt: now };
 }
 
 /**
@@ -191,9 +286,8 @@ export function leave(state: BaseState, now: number): BaseState {
  * the earliest hold expiry, skipping nulls. Null when both are null.
  */
 export function plannedAlarmAt(state: BaseState, earliestHoldExpiry: number | null): number | null {
-  void state;
-  void earliestHoldExpiry;
-  throw new Error('TODO(server): plannedAlarmAt');
+  const times = [state.nextFaultAt, earliestHoldExpiry].filter((t): t is number => t !== null);
+  return times.length === 0 ? null : Math.min(...times);
 }
 
 export type AlarmDecision = { kind: 'set'; at: number } | { kind: 'delete' } | { kind: 'keep' };
@@ -211,8 +305,10 @@ export function decideAlarm(facts: {
   planned: number | null;
   current: number | null;
 }): AlarmDecision {
-  void facts;
-  throw new Error('TODO(server): decideAlarm');
+  if (facts.connections <= 0) return facts.current !== null ? { kind: 'delete' } : { kind: 'keep' };
+  if (facts.planned === null) return { kind: 'keep' };
+  if (facts.current === null || facts.current > facts.planned) return { kind: 'set', at: facts.planned };
+  return { kind: 'keep' };
 }
 
 /** Open sockets, leaving out `closing` (in close/error callbacks it may still be listed). */
@@ -222,17 +318,30 @@ export function countPresence<T>(sockets: readonly T[], closing?: T): number {
 
 /** Protocol-2 snapshot: the `SNAPSHOT_BLACKOUTS` newest records, `protocol: 2`, `serverNow`. */
 export function toSnapshot(state: BaseState, presence: number, serverNow: number): SnapshotMessage {
-  void state;
-  void presence;
-  void serverNow;
-  void SNAPSHOT_BLACKOUTS;
-  throw new Error('TODO(server): toSnapshot');
+  return {
+    type: 'snapshot',
+    protocol: PROTOCOL_VERSION,
+    version: state.version,
+    faults: state.faults,
+    repairs: state.repairs,
+    uptimeStartedAt: state.uptimeStartedAt,
+    longestUptimeMs: state.longestUptimeMs,
+    blackout: state.blackout,
+    blackouts: state.blackouts.slice(0, SNAPSHOT_BLACKOUTS),
+    lastRepair: state.lastRepair,
+    presence,
+    instanceId: state.instanceId,
+    serverNow,
+  };
 }
 
 /** `GET /api/history`: uptime, the blackout in progress and up to `HISTORY_BLACKOUTS` records. */
 export function toHistory(state: BaseState, serverNow: number): HistoryResponse {
-  void state;
-  void serverNow;
-  void HISTORY_BLACKOUTS;
-  throw new Error('TODO(server): toHistory');
+  return {
+    uptimeStartedAt: state.uptimeStartedAt,
+    longestUptimeMs: state.longestUptimeMs,
+    blackout: state.blackout,
+    blackouts: state.blackouts.slice(0, HISTORY_BLACKOUTS),
+    serverNow,
+  };
 }

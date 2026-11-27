@@ -5,22 +5,24 @@
  * implements the TODO bodies; `legacy.test.ts` runs the output through the deployed parser and
  * reducer (`shared/testdata/v1.ts`).
  */
-import type { Fault, LegacyRepairedMessage, LegacySnapshotMessage } from '../shared/protocol';
+import { GENERATOR, type Fault, type LegacyRepairedMessage, type LegacySnapshotMessage } from '../shared/protocol';
 import type { BaseState } from './state';
 
 /** Old-shape snapshot: `fault` is the generator fault or null; `version` is the state's version. */
 export function toLegacySnapshot(state: BaseState, presence: number): LegacySnapshotMessage {
-  void state;
-  void presence;
-  throw new Error('TODO(server): toLegacySnapshot');
+  return {
+    type: 'snapshot',
+    version: state.version,
+    fault: state.faults.find((f) => f.moduleId === GENERATOR) ?? null,
+    repairs: state.repairs,
+    presence,
+    instanceId: state.instanceId,
+  };
 }
 
 /** Old-shape `repaired` for the generator fault `faultId`, with this socket's `mine`. */
 export function toLegacyRepaired(state: BaseState, faultId: string, mine: boolean): LegacyRepairedMessage {
-  void state;
-  void faultId;
-  void mine;
-  throw new Error('TODO(server): toLegacyRepaired');
+  return { type: 'repaired', version: state.version, faultId, repairs: state.repairs, mine };
 }
 
 /**
@@ -34,8 +36,8 @@ export function legacyUpdate(
   after: BaseState,
   repairedFault: Fault | null,
 ): 'repaired' | 'snapshot' | null {
-  void before;
-  void after;
-  void repairedFault;
-  throw new Error('TODO(server): legacyUpdate');
+  if (repairedFault !== null && repairedFault.moduleId === GENERATOR) return 'repaired';
+  const generatorId = (s: BaseState) => s.faults.find((f) => f.moduleId === GENERATOR)?.id ?? null;
+  if (generatorId(before) !== generatorId(after) || before.repairs !== after.repairs) return 'snapshot';
+  return null;
 }
