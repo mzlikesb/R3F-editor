@@ -111,6 +111,7 @@ README·UI·커밋 메시지는 작품 자체로 설명한다.
 - small → large 전환: **auto-merge 예약을 먼저 해제한 뒤** 라벨을 바꾼다(`pr-check`가 large + 예약 켜짐을 실패로 본다)
 - **사용자는 에이전트 PR 브랜치에 직접 push하지 않는다**(웹의 "Update branch"·"Apply suggestion" 포함). 마지막 push가 `mzlikesb`면 아무도 Approve할 수 없게 된다. 실수했으면 에이전트가 브랜치를 다시 push(빈 커밋 등)해 마지막 pusher를 에이전트 계정으로 되돌린다
 - **모든 PR은 에이전트 계정으로 연다.** 사용자가 직접 연 PR은 본인 Approve가 안 되므로, 긴급할 때만 사용자가 **`enforce_admins`만** 잠시 끄고 머지한 뒤 다시 켠다. 브랜치 보호 전체를 끄지 않는다
+- 브랜치 보호 실제 값은 `scripts/check-protection.sh`로 이 절의 주장과 대조하고, 마일스톤마다 doc-lint가 돌린다(#60)
 
 ### 에이전트 세션 설정
 
