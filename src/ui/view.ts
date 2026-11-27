@@ -108,12 +108,14 @@ export function updateBanner(incompatible: boolean): string | null {
 
 /**
  * HUD last-repair line (plan 006 C.19), times in server ms:
- * `마지막: 나 · 산소 탱크 · 방금`, `마지막: 다른 사람 · 온실 · 12초 전`, and when it is not known who
+ * `마지막: 나 · 산소 탱크 · 방금`, `마지막: 다른 사람 · 온실 · 12초 전`; with helpers (#56)
+ * `마지막: 나 외 2명 · …` / `마지막: 다른 사람 외 2명 · …` (whoever made it count, then the rest); when it is not known who
  * (from a snapshot, `mine` null) `마지막: 통신탑 · 3분 전`. Null without a repair.
  */
 export function lastRepairLine(last: LastRepairView | null, serverNow: number): string | null {
   if (!last) return null;
-  const who = last.mine === null ? '' : last.mine ? '나 · ' : '다른 사람 · ';
+  const others = last.helpers > 0 ? ` 외 ${last.helpers}명` : '';
+  const who = last.mine === null ? '' : `${last.mine ? '나' : '다른 사람'}${others} · `;
   return `마지막: ${who}${moduleName(last.moduleId)} · ${agoText(serverNow - last.at)}`;
 }
 

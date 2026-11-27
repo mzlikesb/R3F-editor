@@ -46,18 +46,21 @@ interface SparksProps {
   radius: number;
   height: number;
   token: number;
+  /** A helper's burst (#56): only the first half of the pool is thrown. */
+  soft?: boolean;
 }
 
-/** One InstancedMesh pool (one draw call) of sparks thrown out when my repair lands. */
-export function Sparks({ radius, height, token }: SparksProps) {
-  const count = useMemo(
+/** One InstancedMesh pool (one draw call) of sparks thrown out when my repair lands (half when I helped). */
+export function Sparks({ radius, height, token, soft = false }: SparksProps) {
+  const pool = useMemo(
     () => (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches ? SPARK_COUNT / 2 : SPARK_COUNT),
     [],
   );
+  const count = soft ? Math.ceil(pool / 2) : pool;
   const mesh = useRef<InstancedMesh>(null);
   const timerRef = useOneShot(token);
   const dummy = useMemo(() => new Object3D(), []);
-  const vel = useMemo(() => new Float32Array(count * 3), [count]);
+  const vel = useMemo(() => new Float32Array(pool * 3), [pool]);
   const material = useMemo(
     () =>
       new MeshBasicMaterial({
@@ -86,9 +89,10 @@ export function Sparks({ radius, height, token }: SparksProps) {
       return;
     }
     m.visible = true;
+    m.count = count;
     drawSparks(m, dummy, vel, count, p * SPARK_S, (0.03 + 0.03 * radius) * (1 - p), height * 0.5);
     setOpacity(material, 1 - p * p);
   });
 
-  return <instancedMesh ref={mesh} args={[SPARK_GEOMETRY, material, count]} frustumCulled={false} visible={false} />;
+  return <instancedMesh ref={mesh} args={[SPARK_GEOMETRY, material, pool]} frustumCulled={false} visible={false} />;
 }

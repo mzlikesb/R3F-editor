@@ -149,6 +149,13 @@ export interface RepairedMessage {
   repairs: number;
   /** True only on the socket whose request made this repair count. A missing `mine` parses as false. */
   mine: boolean;
+  /**
+   * True on the other sockets that were holding this fault (hold not expired) when the repair
+   * counted (#56). Never together with `mine`. A missing `helped` parses as false.
+   */
+  helped: boolean;
+  /** How many sockets got `helped: true`; the same on every socket. A missing or malformed one parses as 0. */
+  helpers: number;
   /** Server time of the repair (the new `lastRepair.at`). */
   at: number;
   /** Set only when this repair ended the blackout. */
@@ -377,7 +384,18 @@ export function parseServerMessage(raw: string): ServerMessage | null {
       }
       const blackoutEnd = optional(m.blackoutEnd, parseBlackoutEnd);
       if (blackoutEnd === undefined) return null;
-      return { type: 'repaired', version, faultId, moduleId, repairs, mine: m.mine === true, at, blackoutEnd };
+      return {
+        type: 'repaired',
+        version,
+        faultId,
+        moduleId,
+        repairs,
+        mine: m.mine === true,
+        helped: m.helped === true,
+        helpers: isCount(m.helpers) ? m.helpers : 0,
+        at,
+        blackoutEnd,
+      };
     }
     case 'activity': {
       const holds = parseHolds(m.holds);

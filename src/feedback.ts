@@ -13,10 +13,11 @@ export const TOAST_MS = 3000;
 /**
  * Who a `repaired` was for, from this client's view.
  * - `mine`: `mine: true` (my request counted)
- * - `beaten`: `mine: false` while I was holding or pending on that fault
+ * - `helped`: `helped: true` (I was holding it when someone else's request counted, #56)
+ * - `beaten`: neither, while I was holding or pending on that fault
  * - `other`: `mine: false` otherwise
  */
-export type RepairOutcome = 'mine' | 'beaten' | 'other';
+export type RepairOutcome = 'mine' | 'helped' | 'beaten' | 'other';
 
 /** `fault`: a module broke while this tab was open (every `fault` message is live; arrival faults come in the snapshot). */
 export type ToastKind = RepairOutcome | 'fault';
@@ -32,6 +33,8 @@ export interface Toast {
 export interface RepairEffects {
   sweep: boolean;
   burst: boolean;
+  /** The burst is the light one of a helper: no glow flash, a smaller punch, half the sparks. */
+  soft: boolean;
   ringPing: boolean;
   /** A soft green glow on the module for `AFTERGLOW_MS`: someone else was just here. */
   afterglow: boolean;
@@ -73,6 +76,7 @@ export type FeedbackEvent =
 
 /**
  * - mine: `내가 고쳤어요 +1`
+ * - helped: `함께 고쳤어요 +1`
  * - beaten: `같이 눌렀는데 다른 사람이 한발 먼저 고쳤어요`
  * - other: `누군가 산소 탱크를 고쳤어요` (module name + 을/를)
  * - fault: `온실이 고장 났어요` (module name + 이/가)
@@ -82,6 +86,8 @@ export function toastText(toast: Pick<Toast, 'kind' | 'moduleId'>): string {
   switch (toast.kind) {
     case 'mine':
       return '내가 고쳤어요 +1';
+    case 'helped':
+      return '함께 고쳤어요 +1';
     case 'beaten':
       return '같이 눌렀는데 다른 사람이 한발 먼저 고쳤어요';
     case 'other':
@@ -92,15 +98,22 @@ export function toastText(toast: Pick<Toast, 'kind' | 'moduleId'>): string {
 }
 
 /** Classifies a `repaired` from the hold state *before* `reduceHold` handles it. */
-export function classifyRepaired(hold: HoldState, msg: { faultId: string; mine: boolean }): RepairOutcome {
+export function classifyRepaired(
+  hold: HoldState,
+  msg: { faultId: string; mine: boolean; helped: boolean },
+): RepairOutcome {
   if (msg.mine) return 'mine';
+  // The server saw my hold when it counted; trust it over this tab's own state.
+  if (msg.helped) return 'helped';
   const busyOnIt = (hold.kind === 'holding' || hold.kind === 'pending') && hold.faultId === msg.faultId;
   return busyOnIt ? 'beaten' : 'other';
 }
 
 export function effectsFor(outcome: RepairOutcome): RepairEffects {
   const mine = outcome === 'mine';
-  return { sweep: true, burst: mine, ringPing: !mine, afterglow: !mine };
+  const helped = outcome === 'helped';
+  const own = mine || helped;
+  return { sweep: true, burst: own, soft: helped, ringPing: !own, afterglow: !own };
 }
 
 /**
