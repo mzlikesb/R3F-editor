@@ -68,7 +68,7 @@ M2의 기지는 보기 좋아졌다. 하지만 고장 나는 곳은 늘 발전�
    - `sensorValue(moduleId, fault, now)`는 결정적인 순수 함수이고 **`shared/`에 둔다**. 흔들림은 시각의 사인 합으로 만든다. 테스트한다.
    - **센서는 클라이언트가 계산한다**: snapshot에 서버 시각을 담아 클라이언트가 시계 차이를 보정하고, 같은 함수로 매 순간 값을 계산한다. 그래서 센서용 주기 alarm과 `sensors` 메시지가 없다.
 9. **alarm**: alarm은 "다음에 할 일" 시각 하나에만 건다: `min(nextFaultAt, 가장 이른 홀드 만료)`. 값이 `null`인 후보는 뺀다. 둘 다 없으면(고장 3개, 홀드 없음) alarm을 걸지 않는다. 자가 복구 판정도 "고장이 상한 아래인데 alarm이 없다"일 때만 다시 건다
-   - 접속자가 0이면 alarm을 걸지 않는다. 지금의 "자가 복구"(접속자가 있는데 alarm이 없으면 다시 건다)는 그대로 둔다.
+   - 접속자가 0이 되면(1→0) 예약된 alarm을 `deleteAlarm()`으로 지운다. 접속자가 0이면 alarm을 걸지 않는다. 지금의 "자가 복구"(접속자가 있는데 alarm이 없으면 다시 건다)는 그대로 둔다.
    - 주기 틱이 없으므로 유령 소켓(#15-2)이 남아도 alarm은 20~40초에 한 번이다. 무인 시간 보호는 "실제로 메시지를 주고받은 소켓"이 아니라 접속 수로 판단하므로, 유령 소켓이 있으면 빈 기지에도 고장이 3개까지 쌓여 정전될 수 있다. 이 경우는 #15-2로 남긴다.
 10. **누가 고치는 중인가**: 클라이언트가 홀드를 시작하면 `hold{faultId}`, 손을 떼거나 취소하면 `release{faultId}`를 보낸다.
     - 서버는 **저장하지 않고** 메모리에만 둔다. attachment에 소켓별 홀드 중인 faultId를 둔다.
@@ -81,13 +81,13 @@ M2의 기지는 보기 좋아졌다. 하지만 고장 나는 곳은 늘 발전�
 
 11. 서버 → 클라이언트:
     - `snapshot`: `faults`, `repairs`, `uptimeStartedAt`, `longestUptimeMs`, `blackout`, 최근 정전 5개, `lastRepair`, `presence`, `instanceId`, `version`, `serverNow`, `protocol`
-    - `fault`: 고장 1개 추가 + `blackout`(바뀌었으면)
+    - `fault`: 고장 1개 추가. 이 고장으로 정전이 시작됐으면 `blackout`, `uptimeStartedAt: null`, 갱신된 `longestUptimeMs`, 새 정전 이력 항목도 담는다
     - `repaired`: `faultId`, `moduleId`, `repairs`, `mine`, 그리고 정전이 끝났으면 `blackout: null`과 서버가 정한 새 `uptimeStartedAt`(·갱신된 `longestUptimeMs`). 클라이언트는 수신 시각이 아니라 이 값으로 가동 시간을 다시 센다
     - `activity`: 고장별로 지금 누르는 사람 수. 버전 없음.
     - `presence`: 지금과 같다.
-12. 클라이언트 → 서버: `hello{protocol: 2}`(연결 직후 1번), `repair{faultId}`, `hold{faultId}`, `release{faultId}`
+12. 클라이언트 → 서버: `repair{faultId}`, `hold{faultId}`, `release{faultId}`. 프로토콜 버전은 메시지가 아니라 **WebSocket 연결 URL 쿼리 `/ws?protocol=2`**로 알린다. 서버는 업그레이드 시점에 attachment에 버전을 적으므로, 첫 snapshot부터 맞는 형식으로 보낸다
 13. 파서는 모르는 필드를 무시한다.
-    - **배포 경계**: 배포 전에 열린 탭은 옛 JavaScript로 남는다. 옛 클라이언트는 `hello`를 보내지 않으므로 서버는 attachment에 소켓별 프로토콜(기본 1)을 둔다.
+    - **배포 경계**: 배포 전에 열린 탭은 옛 JavaScript로 남는다. 옛 클라이언트는 쿼리 없이 `/ws`로 연결하므로 서버는 attachment에 소켓별 프로토콜(쿼리 없으면 1)을 둔다.
       - 프로토콜 1 소켓에는 **이벤트 메시지를 보내지 않는다.** 상태가 바뀔 때마다 옛 형식 snapshot(`fault` = 발전기 고장 또는 null, `repairs`, `version`, `presence`, `instanceId`)을 보낸다. 다른 모듈의 수리가 옛 탭의 발전기 고장을 지우는 일이 없다.
       - 옛 탭이 보낸 `repair`(발전기 faultId)는 그대로 처리하고, 그 탭이 이겼으면 옛 형식 `repaired`(mine 포함)를 보낸다.
     - 앞으로를 위해 snapshot에 `protocol: 2`를 넣는다. 새 클라이언트는 자기 버전과 다르거나 snapshot을 해석하지 못하면 수리를 잠그고 `새 버전이 나왔어요 · 새로고침` 배너를 띄운다. 배너를 누르면 페이지를 다시 읽는다.
@@ -118,7 +118,7 @@ M2의 기지는 보기 좋아졌다. 하지만 고장 나는 곳은 늘 발전�
     - 윗줄에 `가동 3시간 12분 · 함께 고친 횟수 N회`를 둔다. 가동 시간은 1초마다 DOM ref로 갱신한다.
     - 정전 중이면 `가동 기록 끊김 · 최장 5시간`이다.
     - `마지막 수리` 줄은 모듈 이름을 넣어 `마지막 수리: 다른 사람 · 산소 탱크 · 12초 전`으로 바꾼다.
-20. **기록 패널**: HUD를 누르면 작은 기록 패널이 열린다. 지금 가동, 최장 가동, 최근 정전 5개를 snapshot 값으로 보여 준다(`/api/history`는 같은 기록을 REST로 내놓는 경로). 기록 패널과 수리 패널은 동시에 열리지 않는다(하나를 열면 다른 하나가 닫힌다).
+20. **기록 패널**: HUD를 누르면 작은 기록 패널이 열린다. 지금 가동, 최장 가동, 최근 정전 5개를 보여 준다. 처음 값은 snapshot에서 받고, 연결을 유지하는 동안은 `fault`(정전 시작 항목 추가)와 `repaired`(그 항목의 `endedAt` 채움)로 로컬 목록을 갱신한다(`/api/history`는 같은 기록을 REST로 내놓는 경로). 기록 패널과 수리 패널은 동시에 열리지 않는다(하나를 열면 다른 하나가 닫힌다).
 21. **#15 1·4번**:
     - snapshot의 `instanceId`가 가진 것과 다르면 버전과 관계없이 받는다.
     - 홀드 중에 선택이 풀리거나 버튼이 사라지면 홀드를 취소하고 `release`를 보낸다.
@@ -138,9 +138,11 @@ M2의 기지는 보기 좋아졌다. 하지만 고장 나는 곳은 늘 발전�
   - alarm 시각 결정(`min(nextFaultAt, 홀드 만료)`, 상한 3개면 `nextFaultAt` null·alarm 없음·자가 복구도 안 걸음, 수리로 2개가 되면 다시 예약, 접속자 0이면 안 건다)
   - `activity` 집계(소켓 닫힘, 수리 시 그 고장 홀드 일괄 해제)
   - `lastRepair` 갱신
+  - 1→0 때 `deleteAlarm`
+  - 정전 시작 `fault`에 `longestUptimeMs`·`uptimeStartedAt: null`·이력 항목
   - 무인 시간 경계: 1→0 때 `lastSavedAt` 갱신, 기존 고장 포함 상한 2, 정전 유지, 역산된 `createdAt`
   - 없는 `faultId`의 `hold` 무시
-- 서버(`BaseRoom` 통합, 기존 vitest-plugin): 연결하면 snapshot, `hold`/`release`에서 `activity`, 정전→발전기 수리→복구 메시지 순서, 옛 키만 있는 저장소에서 시작(이전·옛 키 보존), 저장 시각을 과거로 둔 뒤 0→1 접속(무인 시간), alarm 두 번 호출에도 정전 이력 1개, 프로토콜 1 소켓에는 옛 형식 snapshot만 가고 다른 모듈 수리가 그 소켓의 발전기 고장을 지우지 않음
+- 서버(`BaseRoom` 통합, 기존 vitest-plugin): 연결하면 snapshot, `hold`/`release`에서 `activity`, 정전→발전기 수리→복구 메시지 순서, 옛 키만 있는 저장소에서 시작(이전·옛 키 보존), 저장 시각을 과거로 둔 뒤 0→1 접속(무인 시간), alarm 두 번 호출에도 정전 이력 1개, `/ws?protocol=2` 소켓은 첫 snapshot부터 새 형식, 쿼리 없는 소켓(프로토콜 1)에는 옛 형식 snapshot만 가고 다른 모듈 수리가 그 소켓의 발전기 고장을 지우지 않음
 - 프로토콜: 새 메시지 파싱, 모르는 필드 무시, 프로토콜 1 소켓에 가는 모든 메시지(옛 형식 snapshot·`repaired`)를 **배포 전 파서(main의 `parseServerMessage`)와 reducer**에 넣어 발전기 상태가 맞는지(픽스처), `protocol` 불일치 판정
 - 서버: rate limit에 걸린 `release`도 처리, 홀드 3초 만료 뒤 `activity` 재전송, 정전 종료 `repaired`에 새 `uptimeStartedAt`
 - 클라이언트 UI 로직:
