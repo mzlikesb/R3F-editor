@@ -1,7 +1,8 @@
-import { useEffect, useLayoutEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { holdProgress, type HoldEvent } from '../hold';
 import { selectFaults, selectModuleFault, selectOthersHolding, selectServerNow, useStore } from '../store';
 import { canRepair } from '../sync';
+import { GOTO_LOCK_MS, NO_LOCK, goToLocked, stepGoToLock, type GoToLock } from './goToLock';
 import { PANEL_TICK_MS, sensorLine, trendBaselineY, trendOutsidePath, trendPoints, trendSamples } from './sensorView';
 import { panelView } from './view';
 
@@ -24,6 +25,27 @@ export function Panel() {
   const sensorText = useRef<HTMLParagraphElement>(null);
   const trendLine = useRef<SVGPolylineElement>(null);
   const trendOutside = useRef<SVGPathElement>(null);
+
+  // The go-to button's target can change under the finger: lock it for a moment when it does (#80).
+  const goToId =
+    selected !== null ? panelView(selected, { faults, blackout, othersHolding }).goTo?.moduleId : undefined;
+  const lock = useRef<GoToLock>(NO_LOCK);
+  const [goToBusy, setGoToBusy] = useState(false);
+  useEffect(() => {
+    if (selected === null) {
+      lock.current = NO_LOCK;
+      return;
+    }
+    const now = performance.now();
+    lock.current = stepGoToLock(lock.current, selected, goToId ?? null, now);
+    if (!goToLocked(lock.current, now)) return;
+    setGoToBusy(true);
+    const id = setTimeout(() => setGoToBusy(false), GOTO_LOCK_MS);
+    return () => {
+      clearTimeout(id);
+      setGoToBusy(false);
+    };
+  }, [selected, goToId]);
 
   // While the hold is time-driven (holding, pending), tick every frame and paint the fill
   // directly on the element so no React state changes per frame.
@@ -116,7 +138,7 @@ export function Panel() {
       </div>
       <p ref={sensorText} className="sensor-line" />
       <svg
-        className={view.status === 'fault' ? 'trend trend-tall' : 'trend'}
+        className="trend"
         viewBox={`0 0 ${TREND_W} ${TREND_H}`}
         preserveAspectRatio="none"
         role="img"
@@ -126,42 +148,53 @@ export function Panel() {
         <polyline ref={trendLine} className="trend-line" />
         <path ref={trendOutside} className="trend-outside" />
       </svg>
-      {view.goTo && (
-        <button
-          type="button"
-          className="goto"
-          onClick={() => view.goTo && useStore.getState().select(view.goTo.moduleId)}
-        >
-          {view.goTo.label}
-        </button>
-      )}
-      {view.together && <p className="hint">{view.together}</p>}
-      {repairButton && (
-        <button
-          ref={button}
-          type="button"
-          className="repair"
-          disabled={!enabled}
-          onPointerDown={(e) => {
-            // `disabled` alone is not enough: some browsers still deliver pointer events.
-            if (!enabled || !fault || e.button > 0) return;
-            e.currentTarget.setPointerCapture(e.pointerId);
-            dispatch({ type: 'press', faultId: fault.id, now: performance.now() });
-          }}
-          onPointerUp={() => dispatch({ type: 'release', now: performance.now() })}
-          onPointerCancel={() => dispatch({ type: 'cancel', now: performance.now() })}
-          onPointerMove={(e) => {
-            const r = e.currentTarget.getBoundingClientRect();
-            const inside = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
-            if (!inside) dispatch({ type: 'cancel', now: performance.now() });
-          }}
-          onContextMenu={(e) => e.preventDefault()}
-        >
-          <span ref={fill} className="fill" />
-          <span className="label">{label}</span>
-        </button>
-      )}
-      {repairButton && !enabled && !incompatible && <p className="hint">연결되면 수리할 수 있어요</p>}
+      {/* One fixed-height slot for the action, so the card never changes size (the ✕ stays put). */}
+      <div className="panel-action">
+        {view.goTo && (
+          <button
+            type="button"
+            className={goToBusy ? 'goto goto-changed' : 'goto'}
+            aria-disabled={goToBusy}
+            // Keyed by target: a new target replays the change animation.
+            key={view.goTo.moduleId}
+            onClick={() => {
+              if (!view.goTo || goToLocked(lock.current, performance.now())) return;
+              useStore.getState().select(view.goTo.moduleId);
+            }}
+          >
+            {view.goTo.label}
+          </button>
+        )}
+        {repairButton && (
+          <button
+            ref={button}
+            type="button"
+            className="repair"
+            disabled={!enabled}
+            onPointerDown={(e) => {
+              // `disabled` alone is not enough: some browsers still deliver pointer events.
+              if (!enabled || !fault || e.button > 0) return;
+              e.currentTarget.setPointerCapture(e.pointerId);
+              dispatch({ type: 'press', faultId: fault.id, now: performance.now() });
+            }}
+            onPointerUp={() => dispatch({ type: 'release', now: performance.now() })}
+            onPointerCancel={() => dispatch({ type: 'cancel', now: performance.now() })}
+            onPointerMove={(e) => {
+              const r = e.currentTarget.getBoundingClientRect();
+              const inside = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+              if (!inside) dispatch({ type: 'cancel', now: performance.now() });
+            }}
+            onContextMenu={(e) => e.preventDefault()}
+          >
+            <span ref={fill} className="fill" />
+            <span className="label">{label}</span>
+          </button>
+        )}
+        {!view.goTo && !repairButton && <p className="action-none">지금 고장 난 곳이 없어요</p>}
+      </div>
+      <p className="hint">
+        {view.together ?? (repairButton && !enabled && !incompatible ? '연결되면 수리할 수 있어요' : '')}
+      </p>
     </aside>
   );
 }

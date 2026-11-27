@@ -97,8 +97,8 @@ describe('segments: wrap only between parts, never inside `0회` or `1분 전`',
 
 describe('faultCountLine: how close the blackout is', () => {
   it('shows the count and the blackout threshold while something is broken and it is not dark yet', () => {
-    expect(faultCountLine(1, null)).toBe('고장 1개 · 3개가 되면 정전');
-    expect(faultCountLine(2, null)).toBe('고장 2개 · 3개가 되면 정전');
+    expect(faultCountLine(1, null)).toBe('고장 1개 · 3개가 되면 정전 — 기지 불이 꺼져요');
+    expect(faultCountLine(2, null)).toBe('고장 2개 · 3개가 되면 정전 — 기지 불이 꺼져요');
   });
 
   it('nothing when healthy or during a blackout (the blackout banner says it)', () => {

@@ -2,7 +2,7 @@
 .fx-anchor {
   position: relative;
   padding-bottom: 9px; /* room for the leader line */
-  transform: translate(-50%, -100%);
+  transform: translate(calc(-50% + var(--fx-dx, 0px)), calc(-100% + var(--fx-dy, 0px)));
   transition: opacity 0.2s ease;
 }
 
@@ -10,7 +10,7 @@
 .fx-anchor::after {
   content: '';
   position: absolute;
-  left: 50%;
+  left: calc(50% - var(--fx-dx, 0px));
   bottom: 0;
   width: 1px;
   height: 9px;
@@ -19,6 +19,10 @@
 }
 
 /* Behind another module from here: faint, so it is not read as that module's label. */
+.fx-anchor.fx-lowered::after {
+  display: none;
+}
+
 .fx-anchor.fx-dim {
   opacity: 0.35;
 }
