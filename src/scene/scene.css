@@ -38,6 +38,22 @@
   pointer-events: none;
 }
 
+.perf-hud-toggle {
+  margin-top: 4px;
+  padding: 2px 6px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  pointer-events: auto;
+}
+
+.perf-hud-toggle[aria-pressed='true'] {
+  background: #9fe6b0;
+  color: #000;
+}
+
 /* Sky: the page gradient sits on the root, the dark one fades in over it behind the transparent canvas. */
 .sky-root {
   position: relative;
