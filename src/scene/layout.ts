@@ -123,6 +123,13 @@ export const OVERVIEW_POINTS = Object.values(LAYOUT).flatMap((l) => {
 
 export const BOUNDS = 14;
 
+/**
+ * The ground disc is solid out to `GROUND_RADIUS`, then fades into the sky by `GROUND_FADE_RADIUS`.
+ * All scenery stays inside the solid part (`scatter` rules, plan 007 A.0).
+ */
+export const GROUND_RADIUS = 48;
+export const GROUND_FADE_RADIUS = 80;
+
 /** Gap (world units) kept between two neighbouring floor rings at full size. */
 const RING_GAP = 0.3;
 

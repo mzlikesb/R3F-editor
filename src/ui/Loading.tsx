@@ -6,8 +6,9 @@ import '../scene/scene.css';
 /**
  * `기지를 불러오는 중…` over the canvas while models and the HDRI load (plan 005 A.4) and until the
  * first snapshot is in (playtest #47: the HUD said `기지 정상` under it). Until then it is the only
- * thing that speaks: the HUD, name tags and status lights wait for `selectReady`. Plain HTML outside
- * the canvas; it never blocks input.
+ * thing that speaks: the HUD, name tags, status lights and the panel field wait for `selectReady`,
+ * and the pill leaves in that same render, without a fade. Plain HTML outside the canvas; it never
+ * blocks input.
  */
 export function Loading() {
   const { active, progress } = useProgress();
