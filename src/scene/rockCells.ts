@@ -58,8 +58,16 @@ export const ROCKS = buildRocks(ROCK_SEED);
 export const RING_SPLIT = 28;
 /** Headings per ring, centred on south (+z), east (+x), north and west. */
 export const SECTORS = 4;
-/** Camera distance to a cell's centre beyond which the cell draws its simplified meshes. */
-export const LOD_DISTANCE = 32;
+/**
+ * Camera distance to the nearest point of a cell's bounds beyond which the cell draws its
+ * simplified meshes. Measured to the bounds, not the centre, so the near edge of a big outer cell
+ * is never drawn coarse right in front of the camera.
+ */
+export const LOD_DISTANCE = 20;
+/** Once near, a cell turns coarse only past `LOD_DISTANCE` times this (no flicker at the edge). */
+export const LOD_HYSTERESIS = 1.1;
+/** Top of the cell bounds: the tallest rock (rock-a, 0.5 at scale 1) at the largest scale. */
+const CELL_TOP = 0.5 * 1.5;
 
 export type Ring = 'inner' | 'outer';
 
@@ -77,6 +85,29 @@ export interface RockCell {
   center: { x: number; z: number };
   /** Positions relative to `center`. */
   rocks: Rock[];
+  /** World bounds of every footprint, ground to `CELL_TOP`: what the LOD distance is measured to. */
+  box: CellBox;
+}
+
+export interface CellBox {
+  minX: number;
+  maxX: number;
+  minZ: number;
+  maxZ: number;
+  top: number;
+}
+
+/** Distance from a point to the box (0 inside). No allocation: called per cell per frame. */
+export function boxDistance(b: CellBox, x: number, y: number, z: number): number {
+  const dx = Math.max(b.minX - x, 0, x - b.maxX);
+  const dy = Math.max(-y, 0, y - b.top);
+  const dz = Math.max(b.minZ - z, 0, z - b.maxZ);
+  return Math.hypot(dx, dy, dz);
+}
+
+/** Whether a cell draws its full models this frame, given whether it did last frame. */
+export function lodNear(wasNear: boolean, distance: number): boolean {
+  return distance < LOD_DISTANCE * (wasNear ? LOD_HYSTERESIS : 1);
 }
 
 /** Groups rocks by cell (empty cells left out) and moves them into cell-local coordinates. */
@@ -97,6 +128,13 @@ export function splitCells(rocks: readonly Rock[]): RockCell[] {
       sector: c.sector,
       center: { x, z },
       rocks: c.rocks.map((r) => ({ ...r, x: r.x - x, z: r.z - z })),
+      box: {
+        minX: Math.min(...c.rocks.map((r) => r.x - r.r)),
+        maxX: Math.max(...c.rocks.map((r) => r.x + r.r)),
+        minZ: Math.min(...c.rocks.map((r) => r.z - r.r)),
+        maxZ: Math.max(...c.rocks.map((r) => r.z + r.r)),
+        top: CELL_TOP,
+      },
     };
   });
 }

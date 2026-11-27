@@ -3,6 +3,7 @@ import { ASTEROIDS, ASTEROID_COUNT, BELT, BELT_SEED, beltCount, buildBelt, camer
 import { MAX_POLAR, maxCameraDistance, overviewDirAt, overviewDistanceAt } from './cameraPath';
 import { overviewFov } from './framing';
 import { BOUNDS, LAYOUT, OVERVIEW_POINTS, OVERVIEW_TARGET } from './layout';
+import { STAR_RADIUS, starPositions } from './stars';
 
 /**
  * The asteroid belt (plan 007 A.4, C.10 stage 3). Two numeric sight conditions (neon):
@@ -126,6 +127,25 @@ describe('asteroid belt sight lines', () => {
           }
         }
       }
+    }
+  });
+
+  it('stars: every star lies behind the belt from any allowed camera, inside the far plane', () => {
+    // The belt fits in a sphere of this radius around the base centre. A camera inside it sees a
+    // star outside it along a ray that leaves the sphere (and so passes every belt point) first.
+    const beltSphere = Math.hypot(BELT.outer + maxSize, BELT.high + maxSize);
+    for (const [w, h] of SCREENS) {
+      const fov = overviewFov(w / h);
+      const camFar = Math.hypot(cameraReach(fov, w, h), 4 + maxCameraDistance(fov, w, h));
+      expect(camFar).toBeLessThan(beltSphere);
+      expect(STAR_RADIUS + camFar).toBeLessThan(400);
+    }
+    const stars = starPositions();
+    expect(stars.length).toBeGreaterThan(0);
+    for (let i = 0; i < stars.length; i += 3) {
+      const [x, y, z] = [stars[i]!, stars[i + 1]!, stars[i + 2]!];
+      expect(Math.hypot(x, y, z)).toBeGreaterThan(beltSphere);
+      expect(y).toBeGreaterThan(0);
     }
   });
 

@@ -15,6 +15,11 @@ if (!input || !output || !ratioArg) {
   console.error('usage: node scripts/rock-lod.mjs <in.glb> <out.glb> <ratio>');
   process.exit(2);
 }
+const ratio = Number(ratioArg);
+if (!(ratio > 0 && ratio < 1)) {
+  console.error(`ratio must be a number between 0 and 1 (exclusive), got ${ratioArg}`);
+  process.exit(2);
+}
 
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({
   'draco3d.decoder': await draco3d.createDecoderModule(),
@@ -25,12 +30,7 @@ for (const mesh of doc.getRoot().listMeshes())
   for (const prim of mesh.listPrimitives())
     for (const name of ['NORMAL', 'TEXCOORD_0', 'TEXCOORD_1']) prim.setAttribute(name, null);
 for (const m of doc.getRoot().listMaterials()) m.setBaseColorTexture(null);
-await doc.transform(
-  weld(),
-  simplify({ simplifier: MeshoptSimplifier, ratio: Number(ratioArg), error: 0.05 }),
-  prune(),
-  draco(),
-);
+await doc.transform(weld(), simplify({ simplifier: MeshoptSimplifier, ratio, error: 0.05 }), prune(), draco());
 await io.write(output, doc);
 for (const mesh of doc.getRoot().listMeshes())
   for (const prim of mesh.listPrimitives()) {

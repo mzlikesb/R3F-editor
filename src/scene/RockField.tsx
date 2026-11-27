@@ -1,7 +1,9 @@
-import { Detailed, useGLTF } from '@react-three/drei';
+import { useGLTF } from '@react-three/drei';
+import { useFrame } from '@react-three/fiber';
 import { Suspense, useLayoutEffect, useMemo, useRef } from 'react';
 import {
   type BufferGeometry,
+  type Group,
   type InstancedMesh,
   type Material,
   Mesh,
@@ -12,7 +14,7 @@ import { selectReady, useStore } from '../store';
 import { SceneErrorBoundary } from './ErrorBoundary';
 import { fillInstances } from './instances';
 import { useQuality } from './qualityStore';
-import { LOD_DISTANCE, ROCK_CELLS, ROCK_KINDS, type Rock, type RockCell, type RockKind } from './rockCells';
+import { boxDistance, lodNear, ROCK_CELLS, ROCK_KINDS, type Rock, type RockCell, type RockKind } from './rockCells';
 
 const DRACO = '/draco/';
 const noRaycast = () => null;
@@ -88,23 +90,29 @@ function CellMesh({ look, rocks }: { look: Look; rocks: readonly Rock[] }) {
 
 function Cell({ cell, looks }: { cell: RockCell; looks: ReturnType<typeof useLooks> }) {
   const outerVisible = useQuality((s) => s.outerRocksVisible);
+  const near = useRef<Group>(null);
+  const far = useRef<Group>(null);
   const byKind = useMemo(() => ROCK_KINDS.map((k) => [k, cell.rocks.filter((r) => r.kind === k)] as const), [cell]);
   const level = (lv: 'near' | 'far') => (
-    <group>
+    <group ref={lv === 'near' ? near : far} visible={lv === 'far'}>
       {byKind.map(([k, rocks]) => rocks.length > 0 && <CellMesh key={k} look={looks[lv][k]} rocks={rocks} />)}
     </group>
   );
+  // One level at a time, by the camera's distance to the nearest point of the cell (not its centre).
+  useFrame(({ camera }) => {
+    const n = near.current;
+    const f = far.current;
+    if (!n || !f) return;
+    const p = camera.position;
+    n.visible = lodNear(n.visible, boxDistance(cell.box, p.x, p.y, p.z));
+    f.visible = !n.visible;
+  });
   // Quality stage 4 hides the outer ring. Not `count = 0`: three still issues a draw call for that.
   return (
-    <Detailed
-      distances={[0, LOD_DISTANCE]}
-      hysteresis={0.1}
-      position={[cell.center.x, 0, cell.center.z]}
-      visible={cell.ring === 'inner' || outerVisible}
-    >
+    <group position={[cell.center.x, 0, cell.center.z]} visible={cell.ring === 'inner' || outerVisible}>
       {level('near')}
       {level('far')}
-    </Detailed>
+    </group>
   );
 }
 
@@ -114,8 +122,10 @@ function Field() {
 }
 
 /**
- * About 1,500 instanced rocks (plan 007 A.3, A.5, B.8): 8 cells (2 rings x 4 headings), each an LOD
- * of two levels with one InstancedMesh per kind, so 16 draw calls at most. They never take taps.
+ * About 1,500 instanced rocks (plan 007 A.3, A.5, B.8): 8 cells (2 rings x 4 headings), each with
+ * two levels (full / simplified) and one InstancedMesh per kind, so 16 draw calls at most. The level
+ * follows the camera's distance to the cell's bounds (`boxDistance`), not drei `Detailed`, whose
+ * distance to the cell centre drew the near edge of a large outer cell coarse. They never take taps.
  */
 export function RockField() {
   const ready = useStore(selectReady);

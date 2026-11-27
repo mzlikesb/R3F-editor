@@ -8,11 +8,11 @@
 | B   | 인스턴스 행렬 쓰기 + 경계구                                                                          | 개발리드 | `src/scene/instances.ts`                                              | 행렬을 다 쓴 뒤 `computeBoundingSphere()` 1회, 경계구가 셀 인스턴스를 감쌈                                    | `rockCells.test.ts` (cell bounding sphere)      | 완료 |
 | C   | 소행성대 배치(순수): 약 1,000개, 시선 조건(반경·고도), 고르게 솎는 순서                              | 개발리드 | `src/scene/asteroids.ts`, `src/scene/cameraPath.ts`                   | 반경: 안쪽 가장자리 > 카메라 최대 수평 도달 거리. 고도: 오버뷰 시선 연장선이 띠 아래. 반감 시 섹터별 ±3%p 이내 | `asteroids.test.ts`                             | 완료 |
 | D   | 단순화 메시: `scripts/compress.sh --lod`(`scripts/rock-lod.mjs`, gltf-transform `simplify` + Draco)  | 개발리드 | `scripts/`, `public/models/*-low.glb`                                 | rock-a 176→74, rocks-small 60→30 삼각형                                                                       | 로컬 실행                                       | 완료 |
-| E   | 렌더: 셀 8개 × `Detailed` 2단계, 소행성대 그룹 회전, 품질 연동, 로딩 중 숨김                         | 개발리드 | `src/scene/RockField.tsx`, `src/scene/AsteroidBelt.tsx`, `BaseCanvas` | 드로우콜 70 이하, 삼각형 150k 이하, 단계 3 반감·단계 4 바깥 셀 숨김                                          | Playwright `?perf` (렌더링이라 단위 테스트 없음) | 완료 |
+| E   | 렌더: 셀 8개 × 2단계(카메라–셀 경계 상자 거리, 전환 20), 소행성대 그룹 회전, 품질 연동, 로딩 중 숨김                         | 개발리드 | `src/scene/RockField.tsx`, `src/scene/AsteroidBelt.tsx`, `BaseCanvas` | 드로우콜 70 이하, 삼각형 150k 이하, 단계 3 반감·단계 4 바깥 셀 숨김                                          | Playwright `?perf` (렌더링이라 단위 테스트 없음) | 완료 |
 
 ## B.7 LOD 전 실측 (로컬 `wrangler dev`, 헤드리스 Chromium)
 
-| 화면·시점          | LOD 없음(인스턴싱만)    | LOD 2단계(전환 거리 32) |
+| 화면·시점          | LOD 없음(인스턴싱만)    | LOD 2단계 |
 | ------------------ | ----------------------- | ----------------------- |
 | 1280×800 전체 시점 | 56 draws / 164,294 tris | 56 draws / 130,560 tris |
 | 1280×800 줌아웃    | 60 draws / 164,762 tris | 60 draws / 120,024 tris |
@@ -21,7 +21,10 @@
 
 인스턴싱만으로는 삼각형 상한(150k)을 넘는다. LOD로 상한 안에 든다.
 
+LOD 거리는 처음엔 drei `Detailed`(셀 중심까지, 32)로 쟀다. QA 지적에 따라 카메라에서 셀 경계 상자의 가장 가까운 점까지(20, 히스테리시스 1.1)로 바꿨다. 전체 시점 값은 같고, 낮은 궤도에서 앞쪽 바깥 셀이 원본으로 그려진다(1280 낮은 궤도 60 draws / 138,834 tris, 390 낮은 궤도 58 / 133,408).
+
 ## 결정
 
 - 기존 `Rocks.tsx`(손으로 놓은 큰 바위 8개·크레이터 2개)는 유지한다. 기지 가까이에서 그림자를 드리우는 큰 바위라 인스턴스 체계(그림자 안 드리움, 2종)와 역할이 다르고, 대체하면 rock-b·크레이터 인스턴스가 더 필요하다. 새 바위는 `PROP_KEEP_OUT`으로 이들을 피한다.
+- 별(`stars.ts`)은 반경 250 구면에 둔다. 소행성대 경계구(약 149) 밖이라 어느 카메라에서도 띠 뒤에 있다(`asteroids.test.ts`).
 - 단계 4의 바깥 셀은 `count = 0` 대신 `visible = false`로 숨긴다. three는 인스턴스 0개여도 드로우콜을 낸다. 셰이더 재컴파일은 어느 쪽도 없다.

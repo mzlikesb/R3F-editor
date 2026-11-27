@@ -4,6 +4,8 @@ import { fillInstances } from './instances';
 import { GROUND_RADIUS } from './layout';
 import { PANELS } from './panels';
 import {
+  LOD_DISTANCE,
+  LOD_HYSTERESIS,
   RING_SPLIT,
   ROCKS,
   ROCK_CELLS,
@@ -11,8 +13,10 @@ import {
   ROCK_RULE,
   ROCK_SEED,
   SECTORS,
+  boxDistance,
   buildRocks,
   cellOf,
+  lodNear,
   splitCells,
   type Rock,
 } from './rockCells';
@@ -117,6 +121,50 @@ describe('rock cells', () => {
     expect(cells[0]!.center).toEqual({ x: 0, z: 20 });
     expect(cells[0]!.rocks[0]).toMatchObject({ x: 0, z: 0 });
     expect(one[0]!.z).toBe(20);
+  });
+});
+
+describe('cell LOD distance', () => {
+  it('the cell box holds every footprint of its rocks, in world coordinates', () => {
+    for (const c of ROCK_CELLS)
+      for (const r of c.rocks) {
+        const w = world(c, r);
+        expect(w.x - r.r).toBeGreaterThanOrEqual(c.box.minX - 1e-9);
+        expect(w.x + r.r).toBeLessThanOrEqual(c.box.maxX + 1e-9);
+        expect(w.z - r.r).toBeGreaterThanOrEqual(c.box.minZ - 1e-9);
+        expect(w.z + r.r).toBeLessThanOrEqual(c.box.maxZ + 1e-9);
+      }
+  });
+
+  it('measures to the nearest point of the box, 0 inside', () => {
+    const b = { minX: 0, maxX: 10, minZ: 20, maxZ: 30, top: 1 };
+    expect(boxDistance(b, 5, 0.5, 25)).toBe(0);
+    expect(boxDistance(b, 5, 4, 25)).toBeCloseTo(3);
+    expect(boxDistance(b, -3, 0, 16)).toBeCloseTo(5);
+    expect(boxDistance(b, 13, 5, 34)).toBeCloseTo(Math.hypot(3, 4, 4));
+  });
+
+  it('a camera standing at the near edge of an outer cell draws it in full, however far its centre', () => {
+    for (const c of ROCK_CELLS.filter((cell) => cell.ring === 'outer')) {
+      const edge = c.rocks.reduce(
+        (best, r) => {
+          const w = world(c, r);
+          return Math.hypot(w.x, w.z) < Math.hypot(best.x, best.z) ? w : best;
+        },
+        world(c, c.rocks[0]!),
+      );
+      // Camera 6 up, 4 inward from the cell's innermost rock.
+      const d = Math.hypot(edge.x, edge.z);
+      const cam = { x: (edge.x * (d - 4)) / d, y: 6, z: (edge.z * (d - 4)) / d };
+      expect(lodNear(false, boxDistance(c.box, cam.x, cam.y, cam.z))).toBe(true);
+    }
+  });
+
+  it('switches with hysteresis: no flicker around the threshold', () => {
+    expect(lodNear(false, LOD_DISTANCE - 0.01)).toBe(true);
+    expect(lodNear(false, LOD_DISTANCE + 0.01)).toBe(false);
+    expect(lodNear(true, LOD_DISTANCE + 0.01)).toBe(true);
+    expect(lodNear(true, LOD_DISTANCE * LOD_HYSTERESIS + 0.01)).toBe(false);
   });
 });
 
