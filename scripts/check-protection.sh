@@ -42,7 +42,7 @@ actual=$(jq -r --argjson repo "$repo" '
   "allow_rebase_merge=" + (($repo.allow_rebase_merge // false) | tostring)
 ' <<<"$prot") || { echo "protection JSON을 읽지 못했다" >&2; exit 2; }
 
-expected='required_checks=ci,codex-reviewed,pr-check
+expected='required_checks=actionlint,ci,codex-reviewed,pr-check
 strict=false
 approvals=1
 dismiss_stale_reviews=true
