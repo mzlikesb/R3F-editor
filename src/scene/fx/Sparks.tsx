@@ -69,6 +69,7 @@ export function Sparks({ radius, height, token, soft = false }: SparksProps) {
         depthWrite: false,
         blending: AdditiveBlending,
         toneMapped: false,
+        fog: false,
       }),
     [],
   );

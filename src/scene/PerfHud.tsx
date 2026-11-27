@@ -1,6 +1,7 @@
 import { Html } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { useRef } from 'react';
+import { LOOK, LOOK_INFO } from './look';
 import { useQuality } from './qualityStore';
 import './scene.css';
 
@@ -22,7 +23,8 @@ export function PerfHud() {
     if (elapsed.current < INTERVAL) return;
     const node = el.current;
     if (node) {
-      const { calls, triangles } = gl.info.render;
+      // `?look=max`: the composer's last pass resets the counters, so Post.tsx keeps the frame total.
+      const { calls, triangles } = LOOK === 'max' ? LOOK_INFO : gl.info.render;
       const programs = gl.info.programs?.length ?? 0;
       const { stage, tier, dpr } = useQuality.getState();
       node.textContent =

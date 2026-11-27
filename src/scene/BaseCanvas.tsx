@@ -18,6 +18,9 @@ import { Rocks } from './Rocks';
 import { SolarPanels } from './SolarPanels';
 import { SKY_GRADIENT, SKY_GRADIENT_DARK, Stars } from './Sky';
 import { isTap } from './tap';
+import { LookFog } from './LookFog';
+import { LOOK } from './look';
+import { PostRoot } from './post/Post';
 
 /**
  * The canvas and everything in it: sky, asteroid belt, lights, HDRI, ground, rocks, solar panels,
@@ -33,6 +36,7 @@ export function BaseCanvas() {
       <div className="sky-dark" style={{ background: SKY_GRADIENT_DARK, opacity: blackout ? 1 : 0 }} />
       <Canvas
         shadows
+        flat={LOOK === 'max'}
         dpr={dpr}
         camera={{ position: [...OVERVIEW_START], fov: 50, near: 0.5, far: 400 }}
         onPointerDown={(e) => {
@@ -43,21 +47,45 @@ export function BaseCanvas() {
           if (isTap(down.current, { x: e.clientX, y: e.clientY })) useStore.getState().select(null);
         }}
       >
-        <Stars />
-        <Lighting />
-        <Ground />
-        <Rocks />
-        <RockField />
-        <SolarPanels />
-        <AsteroidBelt />
-        <LabelPlanProvider>
-          {MODULES.map((m) => (
-            <Module key={m.id} id={m.id} />
-          ))}
-        </LabelPlanProvider>
-        <CameraRig />
-        <QualityController />
-        {PERF_ENABLED && <PerfHud />}
+        {LOOK === 'max' ? (
+          <PostRoot>
+            <LookFog />
+            <Stars />
+            <Lighting />
+            <Ground />
+            <Rocks />
+            <RockField />
+            <SolarPanels />
+            <AsteroidBelt />
+            <LabelPlanProvider>
+              {MODULES.map((m) => (
+                <Module key={m.id} id={m.id} />
+              ))}
+            </LabelPlanProvider>
+            <CameraRig />
+            <QualityController />
+            {PERF_ENABLED && <PerfHud />}
+          </PostRoot>
+        ) : (
+          <>
+            {LOOK === 'budget' && <LookFog />}
+            <Stars />
+            <Lighting />
+            <Ground />
+            <Rocks />
+            <RockField />
+            <SolarPanels />
+            <AsteroidBelt />
+            <LabelPlanProvider>
+              {MODULES.map((m) => (
+                <Module key={m.id} id={m.id} />
+              ))}
+            </LabelPlanProvider>
+            <CameraRig />
+            <QualityController />
+            {PERF_ENABLED && <PerfHud />}
+          </>
+        )}
       </Canvas>
     </div>
   );

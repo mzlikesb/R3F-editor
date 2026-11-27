@@ -22,6 +22,7 @@ export function createRingMaterial(color: Color, additive = false): MeshBasicMat
     depthWrite: false,
     side: DoubleSide,
     toneMapped: false,
+    fog: false,
     blending: additive ? AdditiveBlending : undefined,
   });
 }

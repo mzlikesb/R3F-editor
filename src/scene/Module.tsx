@@ -7,6 +7,9 @@ import { useStore } from '../store';
 import { SceneErrorBoundary } from './ErrorBoundary';
 import { ModuleFx } from './fx/ModuleFx';
 import { LAYOUT, MODEL_BOUNDS } from './layout';
+import { LOOK } from './look';
+import { PostSelect } from './post/LookSelect';
+import { SelectRing, useHull } from './SelectLook';
 import { pickTap, type TapHit } from './tapPick';
 import type { ModuleHandle } from './moduleTypes';
 import './scene.css';
@@ -51,6 +54,7 @@ export function Module({ id, position, scale, rotationY }: ModuleProps) {
         </Suspense>
       </SceneErrorBoundary>
       <ModuleFx id={id} handle={handle} />
+      {LOOK !== 'none' && handle && <SelectRing id={id} radius={handle.radius} />}
       <TapBox id={id} />
     </group>
   );
@@ -82,11 +86,9 @@ function GltfModel({ id, onHandle }: ModelProps) {
   }, [scene, id]);
   const group = useRef<Group>(null);
   useHandle(group, materials, onHandle);
-  return (
-    <group ref={group}>
-      <primitive object={object} />
-    </group>
-  );
+  useHull(object, id);
+  const model = <primitive object={object} />;
+  return <group ref={group}>{LOOK === 'max' ? <PostSelect id={id}>{model}</PostSelect> : model}</group>;
 }
 
 /** The M1 generator cube for the generator, a plain cylinder for the others. */

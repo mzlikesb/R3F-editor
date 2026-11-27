@@ -33,6 +33,7 @@ export function Glow({ radius, height, token }: { radius: number; height: number
         depthWrite: false,
         blending: AdditiveBlending,
         toneMapped: false,
+        fog: false,
       }),
     [texture],
   );
