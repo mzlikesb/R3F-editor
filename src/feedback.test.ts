@@ -25,6 +25,7 @@ function run(events: FeedbackEvent[], start: FeedbackState = initialFeedback): F
 describe('toastText', () => {
   it('names the module with the right particle', () => {
     expect(toastText({ kind: 'mine', moduleId: 'oxygen' })).toBe('내가 고쳤어요 +1');
+    expect(toastText({ kind: 'helped', moduleId: 'oxygen' })).toBe('함께 고쳤어요 +1');
     expect(toastText({ kind: 'beaten', moduleId: 'oxygen' })).toBe('같이 눌렀는데 다른 사람이 한발 먼저 고쳤어요');
     expect(toastText({ kind: 'other', moduleId: 'generator' })).toBe('누군가 발전기를 고쳤어요');
     expect(toastText({ kind: 'other', moduleId: 'greenhouse' })).toBe('누군가 온실을 고쳤어요');
@@ -34,25 +35,37 @@ describe('toastText', () => {
 });
 
 describe('classifyRepaired', () => {
+  const msg = (mine: boolean, helped = false, faultId = 'f1') => ({ faultId, mine, helped });
+
   it('is mine whenever the server says so', () => {
     for (const hold of [idle, holding, pending]) {
-      expect(classifyRepaired(hold, { faultId: 'f1', mine: true })).toBe('mine');
+      expect(classifyRepaired(hold, msg(true))).toBe('mine');
+    }
+  });
+
+  it('is helped whenever the server says I was holding it (#56), whatever this tab thinks', () => {
+    for (const hold of [idle, holding, pending]) {
+      expect(classifyRepaired(hold, msg(false, true))).toBe('helped');
     }
   });
 
   it('is beaten when I was holding or pending on that fault, other otherwise', () => {
-    expect(classifyRepaired(holding, { faultId: 'f1', mine: false })).toBe('beaten');
-    expect(classifyRepaired(pending, { faultId: 'f1', mine: false })).toBe('beaten');
-    expect(classifyRepaired(idle, { faultId: 'f1', mine: false })).toBe('other');
-    expect(classifyRepaired(holding, { faultId: 'f2', mine: false })).toBe('other');
+    expect(classifyRepaired(holding, msg(false))).toBe('beaten');
+    expect(classifyRepaired(pending, msg(false))).toBe('beaten');
+    expect(classifyRepaired(idle, msg(false))).toBe('other');
+    expect(classifyRepaired(holding, msg(false, false, 'f2'))).toBe('other');
   });
 });
 
 describe('effectsFor', () => {
   it('sweeps on every repair, bursts only on mine, pings and glows only on someone else', () => {
-    expect(effectsFor('mine')).toEqual({ sweep: true, burst: true, ringPing: false, afterglow: false });
-    expect(effectsFor('beaten')).toEqual({ sweep: true, burst: false, ringPing: true, afterglow: true });
-    expect(effectsFor('other')).toEqual({ sweep: true, burst: false, ringPing: true, afterglow: true });
+    expect(effectsFor('mine')).toEqual({ sweep: true, burst: true, soft: false, ringPing: false, afterglow: false });
+    expect(effectsFor('beaten')).toEqual({ sweep: true, burst: false, soft: false, ringPing: true, afterglow: true });
+    expect(effectsFor('other')).toEqual({ sweep: true, burst: false, soft: false, ringPing: true, afterglow: true });
+  });
+
+  it('helped bursts softly: no flash, a smaller punch and fewer sparks (#56)', () => {
+    expect(effectsFor('helped')).toEqual({ sweep: true, burst: true, soft: true, ringPing: false, afterglow: false });
   });
 
   it('the afterglow lasts three seconds (playtest #47: someone else was here)', () => {

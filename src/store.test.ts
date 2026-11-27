@@ -48,6 +48,8 @@ function repaired(mine: boolean, overrides: Partial<RepairedMessage> = {}): Repa
     moduleId: 'oxygen',
     repairs: 3,
     mine,
+    helped: false,
+    helpers: 0,
     at: T + 100,
     blackoutEnd: null,
     ...overrides,
@@ -106,6 +108,16 @@ describe('store.receive', () => {
     s().receive(repaired(false), 400, T);
     expect(s().repair.hold.kind).toBe('idle');
     expect(s().feedback.toast?.kind).toBe('beaten');
+  });
+
+  it('a tab the server counts as a helper hears "we repaired it together" (#56)', () => {
+    s().receive(snapshot(), 0, T);
+    s().dispatchHold({ type: 'press', faultId: 'f1', now: 0 });
+    s().receive(repaired(false, { helped: true, helpers: 1 }), 400, T);
+    expect(s().repair.hold.kind).toBe('idle');
+    expect(s().feedback.toast).toMatchObject({ kind: 'helped', moduleId: 'oxygen' });
+    expect(s().feedback.effect).toMatchObject({ outcome: 'helped', moduleId: 'oxygen' });
+    expect(s().sync.base?.repairs).toBe(3);
   });
 
   it('an idle tab hears "someone repaired <module>"', () => {

@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { Fault } from '../shared/protocol';
-import { HOLD_EXPIRY_MS, activityFor, earliestExpiry, isExpired, releaseHold, startHold, type Hold } from './holds';
+import {
+  HOLD_EXPIRY_MS,
+  activityFor,
+  earliestExpiry,
+  helps,
+  isExpired,
+  releaseHold,
+  startHold,
+  type Hold,
+} from './holds';
 
 const faults: Fault[] = [
   { id: 'f1', moduleId: 'oxygen', createdAt: 0 },
@@ -70,5 +79,27 @@ describe("activityFor (neon (b): the server leaves out the receiver's own hold)"
     const cleared = all.map((x) => releaseHold(x, 'f1'));
     expect(activityFor(cleared, null)).toEqual({ f2: 1 });
     expect(activityFor(cleared, c)).toEqual({});
+  });
+});
+
+describe('helps (#56)', () => {
+  const now = 1000 + 500;
+
+  it('a protocol-2 socket holding that fault, not yet expired, helped', () => {
+    expect(helps({ protocol: 2, hold: h('f1') }, 'f1', now)).toBe(true);
+    expect(helps({ protocol: 2, hold: h('f1') }, 'f1', 1000 + HOLD_EXPIRY_MS - 1)).toBe(true);
+  });
+
+  it('an expired hold did not help, even if the alarm has not dropped it yet', () => {
+    expect(helps({ protocol: 2, hold: h('f1') }, 'f1', 1000 + HOLD_EXPIRY_MS)).toBe(false);
+  });
+
+  it('no hold, or a hold on another fault, did not help', () => {
+    expect(helps({ protocol: 2, hold: null }, 'f1', now)).toBe(false);
+    expect(helps({ protocol: 2, hold: h('f2') }, 'f1', now)).toBe(false);
+  });
+
+  it('a protocol-1 socket never helps (old tabs keep their own path)', () => {
+    expect(helps({ protocol: 1, hold: h('f1') }, 'f1', now)).toBe(false);
   });
 });
