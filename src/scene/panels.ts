@@ -1,5 +1,5 @@
 import { GROUND_RADIUS } from './layout';
-import { PROP_KEEP_OUT, baseKeepOut, scatter, type ScatterRule } from './scatter';
+import { PROP_KEEP_OUT, baseKeepOut, gridScatter, type GridRule } from './scatter';
 
 /**
  * The solar panel field and its lights (plan 007 A.2). Pure: placement, relight timing and the
@@ -7,22 +7,24 @@ import { PROP_KEEP_OUT, baseKeepOut, scatter, type ScatterRule } from './scatter
  */
 
 export const PANEL_SEED = 2007;
-export const PANEL_COUNT = 600;
 
-/** South sector (+z) of the outer ring, panels facing the sun. Rocks added later avoid `PANELS`. */
-export const PANEL_RULE: ScatterRule = {
-  inner: 15,
+/**
+ * North of the base (-z): behind it in the default overview, so the field fills the view above the
+ * modules without covering them. Rows of wide panels; rocks added later avoid `PANELS`.
+ */
+export const PANEL_RULE: GridRule = {
+  inner: 19,
   outer: GROUND_RADIUS - 2,
-  arc: { center: 0, half: (Math.PI * 65) / 180 },
-  radius: 0.62,
-  scale: [0.9, 1],
-  gap: 0.3,
+  arc: { center: Math.PI, half: (Math.PI * 70) / 180 },
+  spacing: [3, 3],
+  jitter: 0.12,
+  radius: 1.25,
+  gap: 0.2,
   avoid: [...baseKeepOut(), ...PROP_KEEP_OUT],
-  yaw: { base: 0, jitter: 0.06 },
-  tries: 200,
+  yaw: { base: 0, jitter: 0.04 },
 };
 
-export const PANELS = scatter(PANEL_SEED, PANEL_COUNT, PANEL_RULE);
+export const PANELS = gridScatter(PANEL_SEED, PANEL_RULE);
 
 /** Lights come back over this long after the blackout ends, nearest the generator first. */
 export const RELIGHT_MS = 1500;

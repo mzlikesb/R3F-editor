@@ -129,3 +129,47 @@ export function scatter(seed: number, count: number, rule: ScatterRule): Placeme
   }
   return out;
 }
+
+/** A field laid out in rows: a world-aligned grid clipped to an arc of the ring, each point jittered a little. */
+export interface GridRule {
+  inner: number;
+  outer: number;
+  arc: { center: number; half: number };
+  /** Grid step along x (columns) and z (rows). */
+  spacing: readonly [number, number];
+  /** Largest shift of an item from its grid point, on each axis. */
+  jitter: number;
+  /** Footprint radius of one item. */
+  radius: number;
+  gap: number;
+  avoid: readonly Circle[];
+  yaw: { base: number; jitter: number };
+}
+
+/**
+ * Deterministic rows (plan 007 A.2): every grid point whose jittered footprint fits inside the arc and
+ * the annulus and clears the avoided circles by `gap`. Pure: same seed, same field. Neighbours stay
+ * `gap` apart as long as `spacing - 2 * jitter >= 2 * radius + gap` (the tests check it).
+ */
+export function gridScatter(seed: number, rule: GridRule): Placement[] {
+  const rand = random(seed);
+  const [sx, sz] = rule.spacing;
+  const r = rule.radius;
+  const out: Placement[] = [];
+  const nx = Math.ceil(rule.outer / sx);
+  const nz = Math.ceil(rule.outer / sz);
+  for (let j = -nz; j <= nz; j++)
+    for (let i = -nx; i <= nx; i++) {
+      // Draw for every grid point, kept or not, so one rule change does not reshuffle the rest.
+      const x = i * sx + (rand() * 2 - 1) * rule.jitter;
+      const z = j * sz + (rand() * 2 - 1) * rule.jitter;
+      const rotationY = rule.yaw.base + (rand() * 2 - 1) * rule.yaw.jitter;
+      const d = Math.hypot(x, z);
+      const a = Math.atan2(x, z) - rule.arc.center;
+      if (Math.abs(Math.atan2(Math.sin(a), Math.cos(a))) > rule.arc.half) continue;
+      if (d - r < rule.inner || d + r > rule.outer) continue;
+      if (rule.avoid.some((c) => Math.hypot(x - c.x, z - c.z) < c.r + r + rule.gap)) continue;
+      out.push({ x, z, rotationY, scale: 1, r });
+    }
+  return out;
+}

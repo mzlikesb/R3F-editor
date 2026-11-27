@@ -2,7 +2,10 @@ import { useFrame } from '@react-three/fiber';
 import { useLayoutEffect, useMemo, useRef } from 'react';
 import {
   BoxGeometry,
+  type BufferGeometry,
+  Color,
   DynamicDrawUsage,
+  Float32BufferAttribute,
   InstancedBufferAttribute,
   type InstancedMesh,
   MeshBasicMaterial,
@@ -15,25 +18,50 @@ import { selectBlackout, useStore } from '../store';
 import { LAYOUT } from './layout';
 import { PANELS, createPanelLights, relightDelays, stepPanelLights, type PanelLights } from './panels';
 
-/** Board size (x by z), its tilt toward the sun (south, +z) and its height on the post. */
-const BOARD = { w: 1, d: 0.6, t: 0.04, tilt: 0.5, y: 0.55 } as const;
-const POST = 0.08;
+/**
+ * A wide, low board tilted 30 degrees toward +z (the default overview camera), so its face reads
+ * from above. Footprint stays inside `PANEL_RULE.radius` (half diagonal 1.24).
+ */
+const BOARD = { w: 2.2, d: 1.3, t: 0.06, tilt: Math.PI / 6, y: 0.45, rim: 0.09 } as const;
+const POST = 0.1;
+const FRAME_COLOR = new Color('#c9d2de');
+const FACE_COLOR = new Color('#16264a');
+const POST_COLOR = new Color('#7d838d');
 
-/** Board and post as one geometry: one primitive, one material, one draw call for the whole field. */
-function panelGeometry() {
-  const board = new BoxGeometry(BOARD.w, BOARD.t, BOARD.d).rotateX(BOARD.tilt).translate(0, BOARD.y, 0);
-  const post = new BoxGeometry(POST, BOARD.y, POST).translate(0, BOARD.y / 2, 0);
-  return mergeGeometries([board, post]);
+/** One solid colour per vertex, so frame, face and post share one material. */
+function paint<T extends BufferGeometry>(g: T, c: Color): T {
+  const n = g.getAttribute('position').count;
+  const rgb = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) rgb.set([c.r, c.g, c.b], i * 3);
+  g.setAttribute('color', new Float32BufferAttribute(rgb, 3));
+  return g;
 }
 
+/** Built flat around the board centre, then tilted and lifted onto the post. */
+const onPost = <T extends BufferGeometry>(g: T) => g.rotateX(BOARD.tilt).translate(0, BOARD.y, 0);
+
 /**
- * A flat light strip lying on the board's upper edge, in the same panel frame. It faces up, so it is
- * seen from the base side (the board's back) as well as from the south.
+ * Light frame, dark face inset on top, short post: one geometry with vertex colours, one material,
+ * one draw call for the whole field.
  */
+function panelGeometry() {
+  const frame = paint(onPost(new BoxGeometry(BOARD.w, BOARD.t, BOARD.d)), FRAME_COLOR);
+  const face = paint(
+    onPost(new BoxGeometry(BOARD.w - BOARD.rim * 2, 0.02, BOARD.d - BOARD.rim * 2).translate(0, BOARD.t / 2, 0)),
+    FACE_COLOR,
+  );
+  const post = paint(new BoxGeometry(POST, BOARD.y, POST).translate(0, BOARD.y / 2, 0), POST_COLOR);
+  return mergeGeometries([frame, face, post]);
+}
+
+/** A light strip on the face along its upper (far, -z) edge. */
 function lightGeometry() {
-  const edgeY = BOARD.y + (BOARD.d / 2) * Math.sin(BOARD.tilt) + BOARD.t;
-  const edgeZ = -(BOARD.d / 2) * Math.cos(BOARD.tilt);
-  return new PlaneGeometry(BOARD.w * 0.9, 0.12).rotateX(-Math.PI / 2).translate(0, edgeY, edgeZ);
+  const inner = BOARD.d / 2 - BOARD.rim;
+  return onPost(
+    new PlaneGeometry(BOARD.w - BOARD.rim * 4, 0.12)
+      .rotateX(-Math.PI / 2)
+      .translate(0, BOARD.t / 2 + 0.02, -inner + 0.1),
+  );
 }
 
 const noRaycast = () => null;
@@ -45,7 +73,7 @@ function stepLights(mesh: InstancedMesh, state: PanelLights, nowMs: number) {
 }
 
 /**
- * The solar panel field south of the base (plan 007 A.2): one InstancedMesh for the panels and one
+ * The solar panel field north of the base (plan 007 A.2): one InstancedMesh for the panels and one
  * for their lights, so two draw calls. Panels only receive shadows; nothing here takes taps. The
  * lights are a basic material coloured per instance; they go dark together in a blackout and come
  * back from the generator outwards, the colour buffer uploaded only while that happens.
@@ -62,7 +90,7 @@ export function SolarPanels() {
       color,
       panelGeometry: panelGeometry(),
       lightGeometry: lightGeometry(),
-      panelMaterial: new MeshStandardMaterial({ color: '#22324f', metalness: 0.35, roughness: 0.45 }),
+      panelMaterial: new MeshStandardMaterial({ vertexColors: true, metalness: 0.3, roughness: 0.5 }),
       lightMaterial: new MeshBasicMaterial({ toneMapped: false }),
     };
   }, []);
