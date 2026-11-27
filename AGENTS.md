@@ -102,7 +102,7 @@ README·UI·커밋 메시지는 작품 자체로 설명한다.
 
 목표 범위: 정상 경로는 서버가 검증하고, 계정을 바꾸려는 시도는 훅이 막는다. 사용자 컴퓨터에 `mzlikesb` 토큰이 있으므로 완전한 격리는 아니다.
 
-- 브랜치 보호(main): 필수 체크 `ci`·`pr-check`, 필수 상태 `codex-reviewed`, Approve 1개 필수, 새 커밋 시 기존 Approve 해제, 마지막 push도 승인 필요, `enforce_admins` 켬(`--admin` 머지·main 직접 push 거절), squash만 허용
+- 브랜치 보호(main): 필수 체크 `ci`·`pr-check`·`actionlint`(게이트를 만드는 워크플로 파일을 지키는 체크, #75), 필수 상태 `codex-reviewed`, Approve 1개 필수, 새 커밋 시 기존 Approve 해제, 마지막 push도 승인 필요, `enforce_admins` 켬(`--admin` 머지·main 직접 push 거절), squash만 허용
 - **승인 = 사용자의 GitHub Approve.** 에이전트 계정은 작성자라 자기 PR을 Approve할 수 없다(서버가 막음)
 - small: 에이전트가 PR을 ready로 열면서 `gh pr merge --auto --squash`로 예약한다 → 사용자가 Approve하면 체크 통과 후 자동 머지
 - large: 사용자가 Approve 후 직접 머지. 에이전트의 `gh pr merge`는 `--auto`(small만)와 `--disable-auto`만 훅이 허용한다

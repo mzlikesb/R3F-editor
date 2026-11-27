@@ -20,21 +20,22 @@ check() { # check <name> <want-exit> <want-substring> <prot> <repo>
   else echo "FAIL $1 (exit $code, want $2; out: $out)"; fail=1; fi
 }
 
-OK_P=$(prot '["ci","pr-check","codex-reviewed"]' false 1 true true true)
+OK_P=$(prot '["ci","pr-check","codex-reviewed","actionlint"]' false 1 true true true)
 OK_R=$(repo true false false)
 
 check "matches" 0 "일치" "$OK_P" "$OK_R"
-check "context order does not matter" 0 "일치" "$(prot '["codex-reviewed","ci","pr-check"]' false 1 true true true)" "$OK_R"
-check "missing codex-reviewed" 1 "required_checks" "$(prot '["ci","pr-check"]' false 1 true true true)" "$OK_R"
-check "extra check" 1 "required_checks" "$(prot '["ci","pr-check","codex-reviewed","x"]' false 1 true true true)" "$OK_R"
-check "strict on" 1 "strict" "$(prot '["ci","pr-check","codex-reviewed"]' true 1 true true true)" "$OK_R"
-check "zero approvals" 1 "approvals" "$(prot '["ci","pr-check","codex-reviewed"]' false 0 true true true)" "$OK_R"
-check "stale not dismissed" 1 "dismiss_stale_reviews" "$(prot '["ci","pr-check","codex-reviewed"]' false 1 false true true)" "$OK_R"
-check "no last push approval" 1 "require_last_push_approval" "$(prot '["ci","pr-check","codex-reviewed"]' false 1 true false true)" "$OK_R"
-check "admins not enforced" 1 "enforce_admins" "$(prot '["ci","pr-check","codex-reviewed"]' false 1 true true false)" "$OK_R"
+check "context order does not matter" 0 "일치" "$(prot '["codex-reviewed","actionlint","ci","pr-check"]' false 1 true true true)" "$OK_R"
+check "missing codex-reviewed" 1 "required_checks" "$(prot '["ci","pr-check","actionlint"]' false 1 true true true)" "$OK_R"
+check "missing actionlint" 1 "required_checks" "$(prot '["ci","pr-check","codex-reviewed"]' false 1 true true true)" "$OK_R"
+check "extra check" 1 "required_checks" "$(prot '["ci","pr-check","codex-reviewed","actionlint","x"]' false 1 true true true)" "$OK_R"
+check "strict on" 1 "strict" "$(prot '["ci","pr-check","codex-reviewed","actionlint"]' true 1 true true true)" "$OK_R"
+check "zero approvals" 1 "approvals" "$(prot '["ci","pr-check","codex-reviewed","actionlint"]' false 0 true true true)" "$OK_R"
+check "stale not dismissed" 1 "dismiss_stale_reviews" "$(prot '["ci","pr-check","codex-reviewed","actionlint"]' false 1 false true true)" "$OK_R"
+check "no last push approval" 1 "require_last_push_approval" "$(prot '["ci","pr-check","codex-reviewed","actionlint"]' false 1 true false true)" "$OK_R"
+check "admins not enforced" 1 "enforce_admins" "$(prot '["ci","pr-check","codex-reviewed","actionlint"]' false 1 true true false)" "$OK_R"
 check "merge commit allowed" 1 "allow_merge_commit" "$OK_P" "$(repo true true false)"
 check "rebase allowed, squash off" 1 "allow_squash_merge" "$OK_P" "$(repo false false true)"
-check "no reviews block" 1 "approvals" '{"required_status_checks":{"contexts":["ci","pr-check","codex-reviewed"],"strict":false},"enforce_admins":{"enabled":true}}' "$OK_R"
+check "no reviews block" 1 "approvals" '{"required_status_checks":{"contexts":["ci","pr-check","codex-reviewed","actionlint"],"strict":false},"enforce_admins":{"enabled":true}}' "$OK_R"
 
 # gh failures: stub gh on PATH, real (non-fixture) mode. stub <body> <stderr>
 mkdir "$tmp/bin"
