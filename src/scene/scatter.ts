@@ -67,7 +67,7 @@ export function baseKeepOut(): Circle[] {
 }
 
 /** mulberry32: small, fast, and the same on every client. */
-function random(seed: number): () => number {
+export function seededRandom(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
     a = (a + 0x6d2b79f5) >>> 0;
@@ -84,7 +84,7 @@ function random(seed: number): () => number {
  * sampling over a uniform grid; stops early when the area is full. Pure: same seed, same field.
  */
 export function scatter(seed: number, count: number, rule: ScatterRule): Placement[] {
-  const rand = random(seed);
+  const rand = seededRandom(seed);
   const [sMin, sMax] = rule.scale ?? [1, 1];
   const maxR = rule.radius * sMax;
   // Two footprints can only clash closer than one cell, so the 3x3 cells around are enough.
@@ -153,7 +153,7 @@ export interface GridRule {
  * `gap` apart as long as `spacing - 2 * jitter >= 2 * radius + gap` (the tests check it).
  */
 export function gridScatter(seed: number, rule: GridRule): Placement[] {
-  const rand = random(seed);
+  const rand = seededRandom(seed);
   const [sx, sz] = rule.spacing;
   const r = rule.radius;
   const out: Placement[] = [];

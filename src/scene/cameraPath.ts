@@ -50,3 +50,13 @@ export function overviewDistanceMax(fovDeg: number, width: number, height: numbe
   for (let i = 0; i < 24; i++) m = Math.max(m, overviewDistanceAt((i / 24) * Math.PI * 2, fovDeg, width, height));
   return m;
 }
+
+/** Lowest the camera may orbit: polar angle from straight up (CameraControls `maxPolarAngle`). */
+export const MAX_POLAR = Math.PI * 0.47;
+/** Zoom-out limit never below this, so a wide screen can still back off a little. */
+const MIN_MAX_DISTANCE = 38;
+
+/** CameraControls `maxDistance`: a margin past the farthest overview fit. */
+export function maxCameraDistance(fovDeg: number, width: number, height: number): number {
+  return Math.max(MIN_MAX_DISTANCE, overviewDistanceMax(fovDeg, width, height) * 1.25);
+}

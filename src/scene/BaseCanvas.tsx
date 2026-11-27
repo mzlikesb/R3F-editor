@@ -2,6 +2,7 @@ import { Canvas } from '@react-three/fiber';
 import { useRef } from 'react';
 import { selectBlackout, useStore } from '../store';
 import { MODULES } from '../modules';
+import { AsteroidBelt } from './AsteroidBelt';
 import { CameraRig } from './CameraRig';
 import { Ground } from './Ground';
 import { OVERVIEW_START } from './layout';
@@ -12,14 +13,15 @@ import { PERF_ENABLED } from './perf';
 import { PerfHud } from './PerfHud';
 import { QualityController } from './QualityController';
 import { useQuality } from './qualityStore';
+import { RockField } from './RockField';
 import { Rocks } from './Rocks';
 import { SolarPanels } from './SolarPanels';
 import { SKY_GRADIENT, SKY_GRADIENT_DARK, Stars } from './Sky';
 import { isTap } from './tap';
 
 /**
- * The canvas and everything in it: sky, lights, HDRI, ground, rocks, solar panels, modules, camera,
- * tap-vs-drag, `?perf` HUD (plan 005 A, E), adaptive quality (plan 007 C).
+ * The canvas and everything in it: sky, asteroid belt, lights, HDRI, ground, rocks, solar panels,
+ * modules, camera, tap-vs-drag, `?perf` HUD (plan 005 A, E), adaptive quality (plan 007 C).
  */
 export function BaseCanvas() {
   const down = useRef({ x: 0, y: 0 });
@@ -45,7 +47,9 @@ export function BaseCanvas() {
         <Lighting />
         <Ground />
         <Rocks />
+        <RockField />
         <SolarPanels />
+        <AsteroidBelt />
         <LabelPlanProvider>
           {MODULES.map((m) => (
             <Module key={m.id} id={m.id} />
