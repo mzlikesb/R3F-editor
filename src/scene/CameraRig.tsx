@@ -8,8 +8,9 @@ import {
   nearestAzimuth,
   outwardAzimuth,
   overviewDirAt,
+  MAX_POLAR,
+  maxCameraDistance,
   overviewDistanceAt,
-  overviewDistanceMax,
   polarPose,
 } from './cameraPath';
 import { overviewFov } from './framing';
@@ -27,7 +28,6 @@ const FOCUS_Y = 0.8;
  * it above the bottom panel.
  */
 const FOCUS_OFFSET = { desktop: -0.06, phone: -0.08 } as const;
-const MIN_MAX_DISTANCE = 38;
 
 /**
  * One CameraControls: orbit/zoom/pan by hand, smooth focus on the selected module, back to the whole
@@ -43,7 +43,7 @@ export function CameraRig() {
   const height = useThree((s) => s.size.height);
   const { fov, maxDistance } = useMemo(() => {
     const f = overviewFov(width / Math.max(1, height));
-    return { fov: f, maxDistance: overviewDistanceMax(f, width, height) };
+    return { fov: f, maxDistance: maxCameraDistance(f, width, height) };
   }, [width, height]);
 
   useEffect(() => {
@@ -119,9 +119,9 @@ export function CameraRig() {
     <CameraControls
       ref={controls}
       makeDefault
-      maxPolarAngle={Math.PI * 0.47}
+      maxPolarAngle={MAX_POLAR}
       minDistance={3}
-      maxDistance={Math.max(MIN_MAX_DISTANCE, maxDistance * 1.25)}
+      maxDistance={maxDistance}
       smoothTime={0.35}
     />
   );

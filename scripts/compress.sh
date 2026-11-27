@@ -2,6 +2,7 @@
 # Builds the committed static assets of the base scene (plan 005 A.1-A.2).
 #   scripts/compress.sh           models + HDRI + Draco decoder
 #   scripts/compress.sh --draco   only copy the Draco decoder from the installed three
+#   scripts/compress.sh --lod     only rebuild the far-level rocks from the committed models
 # Originals go to assets-src/ (gitignored). Outputs: public/models, public/hdri, public/draco.
 # Nothing downloaded is executed; only the listed files are unzipped (unzip -j).
 set -euo pipefail
@@ -39,8 +40,21 @@ copy_draco() {
   echo "draco decoder copied from $src"
 }
 
+# Far LOD level of the instanced rocks (plan 007 B.8), simplified from the committed models.
+# <model> <target ratio>; the error limit (scripts/rock-lod.mjs) usually stops it first.
+LOD_FILES=("rock-a 0.25" "rocks-small 0.25")
+build_lod() {
+  for e in "${LOD_FILES[@]}"; do
+    node scripts/rock-lod.mjs "public/models/${e%% *}.glb" "public/models/${e%% *}-low.glb" "${e##* }"
+  done
+}
+
 if [ "${1:-}" = "--draco" ]; then
   copy_draco
+  exit 0
+fi
+if [ "${1:-}" = "--lod" ]; then
+  build_lod
   exit 0
 fi
 
@@ -82,6 +96,7 @@ for e in "${KENNEY_FILES[@]}"; do
   echo "$in: $b -> $a bytes ($out)"
 done
 echo "models total: $before -> $after bytes"
+build_lod
 
 # HDRI: download once, verify, halve to 512x256.
 hdr="assets-src/kloofendal_1k.hdr"
