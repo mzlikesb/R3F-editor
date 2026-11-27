@@ -114,6 +114,8 @@ describe('parseServerMessage: events', () => {
       moduleId: 'oxygen',
       repairs: 3,
       mine: true,
+      helped: false,
+      helpers: 0,
       at: 4000,
       blackoutEnd: null,
     };
@@ -133,6 +135,24 @@ describe('parseServerMessage: events', () => {
     const base = { type: 'repaired', version: 6, faultId: 'f1', moduleId: 'oxygen', repairs: 3, at: 4000 };
     for (const mine of [undefined, 'true', 1, null, {}]) {
       expect((parseServerMessage(json({ ...base, mine })) as RepairedMessage).mine).toBe(false);
+    }
+  });
+
+  it('reads only the boolean true as helped (#56)', () => {
+    const base = { type: 'repaired', version: 6, faultId: 'f1', moduleId: 'oxygen', repairs: 3, at: 4000, mine: false };
+    expect((parseServerMessage(json({ ...base, helped: true })) as RepairedMessage).helped).toBe(true);
+    for (const helped of [undefined, 'true', 1, null, {}]) {
+      expect((parseServerMessage(json({ ...base, helped })) as RepairedMessage).helped).toBe(false);
+    }
+  });
+
+  it('reads helpers as a count; missing or malformed is 0, never a rejection (#56)', () => {
+    const base = { type: 'repaired', version: 6, faultId: 'f1', moduleId: 'oxygen', repairs: 3, at: 4000, mine: true };
+    expect((parseServerMessage(json({ ...base, helpers: 2 })) as RepairedMessage).helpers).toBe(2);
+    for (const helpers of [undefined, null, -1, 1.5, '2', {}]) {
+      const msg = parseServerMessage(json({ ...base, helpers })) as RepairedMessage;
+      expect(msg).not.toBeNull();
+      expect(msg.helpers).toBe(0);
     }
   });
 

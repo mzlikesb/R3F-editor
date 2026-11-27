@@ -46,6 +46,8 @@ function repaired(overrides: Partial<RepairedMessage> = {}): RepairedMessage {
     moduleId: 'oxygen',
     repairs: 3,
     mine: false,
+    helped: false,
+    helpers: 0,
     at: T + 100,
     blackoutEnd: null,
     ...overrides,
@@ -78,7 +80,7 @@ describe('snapshot', () => {
 
   it('keeps who-repaired unknown for a last repair from the snapshot', () => {
     const s = run([snapshot({ lastRepair: { moduleId: 'comms', at: T - 5000 } })]);
-    expect(s.base?.lastRepair).toEqual({ moduleId: 'comms', at: T - 5000, mine: null });
+    expect(s.base?.lastRepair).toEqual({ moduleId: 'comms', at: T - 5000, mine: null, helpers: 0 });
   });
 
   it('drops a snapshot with a lower version from the same base', () => {
@@ -151,7 +153,12 @@ describe('repaired', () => {
     const s = run([snapshot({ faults: [oxy, comms] }), repaired({ mine: true })]);
     expect(s.base?.faults).toEqual([comms]);
     expect(s.base?.repairs).toBe(3);
-    expect(s.base?.lastRepair).toEqual({ moduleId: 'oxygen', at: T + 100, mine: true });
+    expect(s.base?.lastRepair).toEqual({ moduleId: 'oxygen', at: T + 100, mine: true, helpers: 0 });
+  });
+
+  it('remembers how many helped (#56)', () => {
+    const s = run([snapshot(), repaired({ helped: true, helpers: 2 })]);
+    expect(s.base?.lastRepair).toEqual({ moduleId: 'oxygen', at: T + 100, mine: false, helpers: 2 });
   });
 
   it('ignores a stale repaired', () => {

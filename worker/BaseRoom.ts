@@ -11,7 +11,7 @@ import {
   type ServerMessage,
 } from '../shared/protocol';
 import { broadcastEach } from './broadcast';
-import { activityFor, earliestExpiry, isExpired, releaseHold, startHold, type Hold } from './holds';
+import { activityFor, earliestExpiry, helps, isExpired, releaseHold, startHold, type Hold } from './holds';
 import { legacyUpdate, toLegacyRepaired, toLegacySnapshot } from './legacy';
 import { admit, createRateLimiter } from './rateLimit';
 import { isMine, newAttachment, readAttachment, type SocketInfo } from './socketId';
@@ -53,7 +53,8 @@ export const INSTANCE_ID_KEY = 'instanceId';
  * - `fetch` `GET /api/base` / `GET /api/history`: pure reads. No migration write, no `arrive`, no
  *   alarm. A missing `STATE_KEY` is answered from the migrated or initial state without saving.
  * - `webSocketMessage`: parse → `admit` (rate limit; `release` always passes) →
- *   `repair`: `repair()`; on success save, `repaired` to protocol-2 sockets (`mine` per socket),
+ *   `repair`: `repair()`; on success save, `repaired` to protocol-2 sockets (`mine` per socket,
+ *   `helped` on the other sockets whose hold on it had not expired, `helpers` = how many; #56),
  *   `legacyUpdate` to protocol-1 sockets, `releaseHold` of that fault on every socket and an
  *   `activity` to protocol-2 sockets if any hold was cleared.
  *   `hold` / `release`: update this socket's attachment (`startHold` / `releaseHold`); if it changed,
@@ -146,6 +147,8 @@ export class BaseRoom extends DurableObject<Env> {
         state = result.state;
         await this.save(state);
         const generatorRepaired = legacyUpdate(before, state, result.fault);
+        // Read before the holds on this fault are released below.
+        const helped = new Set([...peers.values()].filter((info) => info !== me && helps(info, msg.faultId, now)));
         this.sendAll(peers, (info) => {
           if (info.protocol === 2) {
             return {
@@ -155,6 +158,8 @@ export class BaseRoom extends DurableObject<Env> {
               moduleId: result.fault.moduleId,
               repairs: state.repairs,
               mine: isMine(me.id, info.id),
+              helped: helped.has(info),
+              helpers: helped.size,
               at: now,
               blackoutEnd: result.blackoutEnd,
             } satisfies RepairedMessage;

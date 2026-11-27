@@ -134,15 +134,26 @@ describe('banners', () => {
 });
 
 describe('lastRepairLine', () => {
-  it('says who and which module', () => {
-    expect(lastRepairLine({ moduleId: 'oxygen', at: T, mine: true }, T + 1000)).toBe('마지막: 나 · 산소 탱크 · 방금');
-    expect(lastRepairLine({ moduleId: 'oxygen', at: T, mine: false }, T + 12_400)).toBe(
-      '마지막: 다른 사람 · 산소 탱크 · 12초 전',
-    );
+  const last = (mine: boolean | null, helpers = 0, moduleId: 'oxygen' | 'comms' = 'oxygen') => ({
+    moduleId,
+    at: T,
+    mine,
+    helpers,
   });
 
-  it('leaves out who when it came from the snapshot', () => {
-    expect(lastRepairLine({ moduleId: 'comms', at: T, mine: null }, T + 3 * MIN)).toBe('마지막: 통신탑 · 3분 전');
+  it('says who and which module', () => {
+    expect(lastRepairLine(last(true), T + 1000)).toBe('마지막: 나 · 산소 탱크 · 방금');
+    expect(lastRepairLine(last(false), T + 12_400)).toBe('마지막: 다른 사람 · 산소 탱크 · 12초 전');
+  });
+
+  it('counts the helpers after whoever made it count (#56)', () => {
+    expect(lastRepairLine(last(true, 1), T + 1000)).toBe('마지막: 나 외 1명 · 산소 탱크 · 방금');
+    expect(lastRepairLine(last(true, 2), T + 1000)).toBe('마지막: 나 외 2명 · 산소 탱크 · 방금');
+    expect(lastRepairLine(last(false, 2), T + 1000)).toBe('마지막: 다른 사람 외 2명 · 산소 탱크 · 방금');
+  });
+
+  it('leaves out who when it came from a snapshot', () => {
+    expect(lastRepairLine(last(null, 0, 'comms'), T + 3 * MIN)).toBe('마지막: 통신탑 · 3분 전');
   });
 
   it('shows nothing without a repair', () => {

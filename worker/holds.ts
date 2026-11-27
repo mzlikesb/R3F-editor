@@ -64,3 +64,13 @@ export function activityFor(holds: readonly (Hold | null)[], own: Hold | null): 
   }
   return counts;
 }
+
+/**
+ * Whether a socket helped repair `faultId` at `now` (#56): a protocol-2 socket whose hold on it has
+ * not expired, even if the alarm has not dropped it yet. `BaseRoom` leaves out the requester and
+ * asks before it releases the holds on `faultId`. Protocol-1 tabs keep their old `repaired`.
+ */
+export function helps(socket: { protocol: 1 | 2; hold: Hold | null }, faultId: string, now: number): boolean {
+  const { hold } = socket;
+  return socket.protocol === 2 && hold !== null && hold.faultId === faultId && !isExpired(hold, now);
+}

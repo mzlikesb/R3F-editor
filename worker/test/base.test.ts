@@ -549,6 +549,126 @@ describe('activity: who is repairing right now', () => {
   });
 });
 
+/** Ages every socket's hold past `HOLD_EXPIRY_MS` without waiting (the alarm has not run yet). */
+async function ageHolds(): Promise<void> {
+  await runInDurableObject(stub(), (_i, state) => {
+    for (const ws of state.getWebSockets()) {
+      const att = ws.deserializeAttachment() as { hold: { startedAt: number } | null } | null;
+      if (att?.hold) ws.serializeAttachment({ ...att, hold: { ...att.hold, startedAt: Date.now() - 4000 } });
+    }
+  });
+}
+
+describe('helped: who was holding when it was repaired (#56)', () => {
+  it('two holders: the requester gets mine, the other helped, everyone helpers 1; repairs +1', async () => {
+    await withFaults(fault('oxygen'));
+    const a = await fresh();
+    const b = await fresh();
+    const c = await fresh();
+    const before = (await fetchBase()).repairs;
+    a.send({ type: 'hold', faultId: 'seed-oxygen' });
+    b.send({ type: 'hold', faultId: 'seed-oxygen' });
+    await c.waitFor((m) => isActivity(m) && m.holds['seed-oxygen'] === 2);
+    a.send({ type: 'repair', faultId: 'seed-oxygen' });
+    const [ra, rb, rc] = await Promise.all([a.waitFor(isRepaired), b.waitFor(isRepaired), c.waitFor(isRepaired)]);
+    expect(ra).toMatchObject({ mine: true, helped: false, helpers: 1 });
+    expect(rb).toMatchObject({ mine: false, helped: true, helpers: 1 });
+    expect(rc).toMatchObject({ mine: false, helped: false, helpers: 1 });
+    expect(ra.repairs).toBe(before + 1);
+    expect((await readState())!.repairs).toBe(before + 1);
+  });
+
+  it('three holders: the two others are helped, helpers 2 for everyone', async () => {
+    await withFaults(fault('oxygen'));
+    const a = await fresh();
+    const b = await fresh();
+    const c = await fresh();
+    const d = await fresh();
+    for (const x of [a, b, c]) x.send({ type: 'hold', faultId: 'seed-oxygen' });
+    await d.waitFor((m) => isActivity(m) && m.holds['seed-oxygen'] === 3);
+    b.send({ type: 'repair', faultId: 'seed-oxygen' });
+    const [ra, rb, rc, rd] = await Promise.all([a, b, c, d].map((x) => x.waitFor(isRepaired)));
+    expect(rb).toMatchObject({ mine: true, helped: false, helpers: 2 });
+    expect(ra).toMatchObject({ mine: false, helped: true, helpers: 2 });
+    expect(rc).toMatchObject({ mine: false, helped: true, helpers: 2 });
+    expect(rd).toMatchObject({ mine: false, helped: false, helpers: 2 });
+  });
+
+  it('the requester is never its own helper: holding alone gives helpers 0', async () => {
+    await withFaults(fault('oxygen'));
+    const a = await fresh();
+    const b = await fresh();
+    a.send({ type: 'hold', faultId: 'seed-oxygen' });
+    await b.waitFor((m) => isActivity(m) && m.holds['seed-oxygen'] === 1);
+    a.send({ type: 'repair', faultId: 'seed-oxygen' });
+    const [ra, rb] = await Promise.all([a.waitFor(isRepaired), b.waitFor(isRepaired)]);
+    expect(ra).toMatchObject({ mine: true, helped: false, helpers: 0 });
+    expect(rb).toMatchObject({ mine: false, helped: false, helpers: 0 });
+  });
+
+  it('a hold on another fault does not help', async () => {
+    await withFaults(fault('oxygen'), fault('comms'));
+    const a = await fresh();
+    const b = await fresh();
+    b.send({ type: 'hold', faultId: 'seed-comms' });
+    await a.waitFor((m) => isActivity(m) && m.holds['seed-comms'] === 1);
+    a.send({ type: 'repair', faultId: 'seed-oxygen' });
+    const rb = await b.waitFor(isRepaired);
+    expect(rb).toMatchObject({ helped: false, helpers: 0 });
+  });
+
+  it('an expired hold the alarm has not dropped yet does not help', async () => {
+    await withFaults(fault('oxygen'));
+    const a = await fresh();
+    const b = await fresh();
+    b.send({ type: 'hold', faultId: 'seed-oxygen' });
+    await a.waitFor((m) => isActivity(m) && m.holds['seed-oxygen'] === 1);
+    await ageHolds();
+    a.send({ type: 'repair', faultId: 'seed-oxygen' });
+    const [ra, rb] = await Promise.all([a.waitFor(isRepaired), b.waitFor(isRepaired)]);
+    expect(ra.helpers).toBe(0);
+    expect(rb).toMatchObject({ helped: false, helpers: 0 });
+  });
+
+  it('a protocol-1 tab holding the fault is not sent helped and is not counted', async () => {
+    await withFaults(fault(GENERATOR));
+    const old = await LegacyClient.connect();
+    await old.waitFor(() => old.view().base?.fault?.id === `seed-${GENERATOR}`);
+    const a = await fresh();
+    old.send({ type: 'hold', faultId: `seed-${GENERATOR}` });
+    await quiet();
+    a.send({ type: 'repair', faultId: `seed-${GENERATOR}` });
+    const ra = await a.waitFor(isRepaired);
+    expect(ra.helpers).toBe(0);
+    await old.waitFor(() => old.messages().some((m) => m?.type === 'repaired'));
+    const frame = old.frames.find((f) => f.includes('"repaired"'))!;
+    expect(frame).not.toContain('helped');
+    expect(frame).not.toContain('helpers');
+    expect(old.messages().find((m) => m?.type === 'repaired')).toMatchObject({ mine: false });
+  });
+
+  it('helped comes before the holds are cleared, and a late repair of the same fault helps nobody again', async () => {
+    await withFaults(fault('oxygen'));
+    const a = await fresh();
+    const b = await fresh();
+    b.send({ type: 'hold', faultId: 'seed-oxygen' });
+    await a.waitFor((m) => isActivity(m) && m.holds['seed-oxygen'] === 1);
+    const mark = b.messages.length;
+    a.send({ type: 'repair', faultId: 'seed-oxygen' });
+    const rb = await b.waitFor(isRepaired, mark);
+    expect(rb).toMatchObject({ helped: true, helpers: 1 });
+    await a.waitFor((m) => isActivity(m) && m.holds['seed-oxygen'] === undefined);
+    // b's own repair lands just after: already repaired, so nothing is sent again.
+    b.send({ type: 'repair', faultId: 'seed-oxygen' });
+    await quiet();
+    const after = b.messages.slice(mark);
+    expect(after.filter(isRepaired)).toHaveLength(1);
+    // The hold is released only after helped was sent.
+    expect(after.indexOf(rb)).toBeLessThan(after.findIndex((m) => isActivity(m) && !m.holds['seed-oxygen']));
+    expect((await readState())!.repairs).toBe(rb.repairs);
+  });
+});
+
 describe('presence and leaving', () => {
   it('tells everyone when someone joins and leaves', async () => {
     const a = await Client.connect();

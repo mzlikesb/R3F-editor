@@ -16,11 +16,13 @@ import './fx.css';
 interface Tokens {
   sweep: number;
   burst: number;
+  /** The burst is a helper's (#56): smaller punch, half the sparks, no glow. */
+  soft: boolean;
   ping: number;
   afterglow: number;
 }
 
-const NO_TOKENS: Tokens = { sweep: 0, burst: 0, ping: 0, afterglow: 0 };
+const NO_TOKENS: Tokens = { sweep: 0, burst: 0, soft: false, ping: 0, afterglow: 0 };
 
 /**
  * Everything that shows a module's state, drawn inside the module's group (local origin = module
@@ -50,6 +52,7 @@ export function ModuleFx({ id, handle }: ModuleFxProps) {
       setTokens({
         sweep: fx.sweep ? effect.seq : 0,
         burst: fx.burst ? effect.seq : 0,
+        soft: fx.soft,
         ping: fx.ringPing ? effect.seq : 0,
         afterglow: fx.afterglow ? effect.seq : 0,
       });
@@ -57,7 +60,7 @@ export function ModuleFx({ id, handle }: ModuleFxProps) {
   }
 
   useEmissive(handle, faulted, tokens.sweep, id, blackout, tokens.afterglow);
-  usePunch(handle, tokens.burst);
+  usePunch(handle, tokens.burst, tokens.soft);
 
   const height = handle?.height ?? 1;
   const radius = handle?.radius ?? 0.6;
@@ -81,8 +84,8 @@ export function ModuleFx({ id, handle }: ModuleFxProps) {
           ) : null}
           <SweepRing radius={radius} height={height} token={tokens.sweep} />
           <RingPing radius={radius} token={tokens.ping} />
-          <Sparks radius={radius} height={height} token={tokens.burst} />
-          <Glow radius={radius} height={height} token={tokens.burst} />
+          <Sparks radius={radius} height={height} token={tokens.burst} soft={tokens.soft} />
+          <Glow radius={radius} height={height} token={tokens.soft ? 0 : tokens.burst} />
         </>
       ) : null}
     </group>

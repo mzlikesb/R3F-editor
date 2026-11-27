@@ -21,6 +21,8 @@ export interface LastRepairView {
   /** Server epoch ms. */
   at: number;
   mine: boolean | null;
+  /** Others who were holding it when it counted (`repaired.helpers`, #56); 0 from a snapshot. */
+  helpers: number;
 }
 
 /** The versioned part of the base, as last heard from the server. */
@@ -70,7 +72,7 @@ export const initialSync: SyncState = {
  * - `fault` (version not lower, base known): adds the fault (replacing one with the same id); with
  *   `blackoutStart`: `blackout`, `uptimeStartedAt` null, `longestUptimeMs`, and the record at the
  *   front of `blackouts` (cut to `SNAPSHOT_BLACKOUTS`).
- * - `repaired` (same check): removes that fault, `repairs`, `lastRepair` (`mine` from the message);
+ * - `repaired` (same check): removes that fault, `repairs`, `lastRepair` (`mine`, `helpers` from the message);
  *   with `blackoutEnd`: `blackout` null, `uptimeStartedAt`, `longestUptimeMs`, that record's
  *   `endedAt`. Drops the fault from `activity`.
  * - `activity`: replaces `activity`. `presence`: replaces the count.
@@ -115,7 +117,7 @@ export function applyServerMessage(state: SyncState, msg: ServerMessage, dateNow
         faults: base.faults.filter((f) => f.id !== msg.faultId),
         repairs: msg.repairs,
         version: msg.version,
-        lastRepair: { moduleId: msg.moduleId, at: msg.at, mine: msg.mine },
+        lastRepair: { moduleId: msg.moduleId, at: msg.at, mine: msg.mine, helpers: msg.helpers },
       };
       const end = msg.blackoutEnd;
       if (end) {
@@ -144,7 +146,7 @@ function baseFromSnapshot(msg: SnapshotMessage): BaseView {
     longestUptimeMs: msg.longestUptimeMs,
     blackout: msg.blackout,
     blackouts: msg.blackouts,
-    lastRepair: msg.lastRepair ? { ...msg.lastRepair, mine: null } : null,
+    lastRepair: msg.lastRepair ? { ...msg.lastRepair, mine: null, helpers: 0 } : null,
   };
 }
 
