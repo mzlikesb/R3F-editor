@@ -1,24 +1,22 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '../store';
+import { clockNow, subscribeClock } from './clock';
 import { historyView } from './view';
-
-/** The open record panel re-reads the clock this often. */
-const RECORD_TICK_MS = 1000;
 
 /** The base's record (plan 006 C.20): uptime now, the longest, recent blackouts. Never open with the repair panel. */
 export function RecordPanel() {
   const base = useStore((s) => s.sync.base);
   const offset = useStore((s) => s.sync.clockOffsetMs);
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow] = useState(clockNow);
 
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), RECORD_TICK_MS);
+    const off = subscribeClock(setNow);
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') useStore.getState().openHistory(false);
     };
     window.addEventListener('keydown', onKey);
     return () => {
-      clearInterval(id);
+      off();
       window.removeEventListener('keydown', onKey);
     };
   }, []);

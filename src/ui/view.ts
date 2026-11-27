@@ -68,12 +68,12 @@ export function segments(line: string): string[] {
 }
 
 /**
- * Under the HUD while something is broken and it is not dark yet: `고장 2개 · 3개가 되면 정전`, so the
- * count means something. Null when healthy or in a blackout (the blackout banner says it).
+ * Under the HUD while something is broken and it is not dark yet: `고장 2개 · 3개가 되면 정전 — 기지 불이 꺼져요`,
+ * so the count means something and what the blackout does is said (#80). Null when healthy or in a blackout (the blackout banner says it).
  */
 export function faultCountLine(faultCount: number, blackout: Blackout | null): string | null {
   if (blackout !== null || faultCount <= 0) return null;
-  return `고장 ${faultCount}개 · ${MAX_FAULTS}개가 되면 정전`;
+  return `고장 ${faultCount}개 · ${MAX_FAULTS}개가 되면 정전 — 기지 불이 꺼져요`;
 }
 
 /**

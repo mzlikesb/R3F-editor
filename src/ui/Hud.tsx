@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef } from 'react';
 import { selectFaults, selectReady, selectServerNow, useStore } from '../store';
+import { subscribeClock } from './clock';
 import {
   blackoutBanner,
   connectionLabel,
@@ -11,9 +12,6 @@ import {
   updateBanner,
   uptimeLine,
 } from './view';
-
-/** Re-reads the clock-driven HUD text (uptime, `마지막: … 12초 전`) this often. */
-const HUD_TICK_MS = 1000;
 
 /**
  * One block at the top (plan 006 C.18-C.19): blackout banner, the tappable HUD (uptime and the
@@ -131,10 +129,8 @@ function UptimeLine() {
     const node = el.current;
     if (!node) return;
     const base = { uptimeStartedAt, longestUptimeMs, blackout };
-    const paint = () => paintSegments(node, uptimeLine(base, selectServerNow(useStore.getState(), Date.now())));
-    paint();
-    const id = setInterval(paint, HUD_TICK_MS);
-    return () => clearInterval(id);
+    // The shared clock, so the record card reads the same second (#80).
+    return subscribeClock((now) => paintSegments(node, uptimeLine(base, selectServerNow(useStore.getState(), now))));
   }, [uptimeStartedAt, longestUptimeMs, blackout]);
   return <span ref={el} />;
 }
@@ -146,13 +142,10 @@ function LastRepair() {
   useLayoutEffect(() => {
     const node = line.current;
     if (!node || !last) return;
-    const paint = () => {
-      const text = lastRepairLine(last, selectServerNow(useStore.getState(), Date.now()));
+    return subscribeClock((now) => {
+      const text = lastRepairLine(last, selectServerNow(useStore.getState(), now));
       if (text) paintSegments(node, text);
-    };
-    paint();
-    const id = setInterval(paint, HUD_TICK_MS);
-    return () => clearInterval(id);
+    });
   }, [last]);
   if (!last) return null;
   return <span ref={line} className="hud-line hud-last" />;

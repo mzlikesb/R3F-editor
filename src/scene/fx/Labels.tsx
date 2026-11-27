@@ -7,6 +7,7 @@ import { moduleName, type BaseModuleId } from '../../modules';
 import { selectReady, selectServerNow, useStore } from '../../store';
 import { isLabelOccluded } from './labelOcclusion';
 import { badgeText, dotText } from './labelRules';
+import { labelShift } from './labelClamp';
 import { STATUS_LIGHT_TOP } from './StatusLight';
 import './fx.css';
 
@@ -47,9 +48,11 @@ function Anchored({
 }) {
   const anchor = useRef<HTMLDivElement>(null);
   const dim = useRef(false);
+  const shift = useRef({ dx: 0, dy: 0 });
   useFrame(({ camera }) => {
     const el = anchor.current;
     if (!el) return;
+    clampToScreen(el, shift.current);
     const next =
       useStore.getState().selected !== id &&
       isLabelOccluded(id, camera.position.x, camera.position.y, camera.position.z);
@@ -62,6 +65,34 @@ function Anchored({
       <AnchorBox anchor={anchor}>{children}</AnchorBox>
     </Html>
   );
+}
+
+/** The HUD column's bottom edge in px, 0 while it is not on screen. */
+function hudBottom(): number {
+  const wrap = document.querySelector('.hud-wrap');
+  const r = wrap?.getBoundingClientRect();
+  return r && r.height > 0 ? r.bottom : 0;
+}
+
+/**
+ * Keeps the label inside the screen and under the HUD (#80). The node's rect includes the shift
+ * applied last frame, so subtract it to see where the label would be unshifted. Writes only when
+ * the shift changes.
+ */
+function clampToScreen(el: HTMLElement, shift: { dx: number; dy: number }) {
+  const r = el.getBoundingClientRect();
+  if (r.width === 0) return;
+  const next = labelShift(
+    { left: r.left - shift.dx, right: r.right - shift.dx, top: r.top - shift.dy },
+    document.documentElement.clientWidth,
+    hudBottom(),
+  );
+  if (Math.abs(next.dx - shift.dx) < 0.5 && Math.abs(next.dy - shift.dy) < 0.5) return;
+  shift.dx = next.dx;
+  shift.dy = next.dy;
+  el.style.setProperty('--fx-dx', `${Math.round(next.dx)}px`);
+  el.style.setProperty('--fx-dy', `${Math.round(next.dy)}px`);
+  el.classList.toggle('fx-lowered', next.dy > 0);
 }
 
 /**
@@ -92,6 +123,23 @@ export function NameTag({ id, height, unit }: { id: BaseModuleId; height: number
   );
 }
 
+/** The sensor reading line, rewritten by this effect (not React) twice a second. */
+function BadgeReading({ id, fault }: { id: BaseModuleId; fault: Fault }) {
+  const reading = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const el = reading.current;
+    if (!el) return;
+    const update = () => {
+      const now = selectServerNow(useStore.getState(), Date.now());
+      el.textContent = sensorReading(id, sensorValue(id, fault, now));
+    };
+    update();
+    const timer = setInterval(update, SENSOR_TICK_MS);
+    return () => clearInterval(timer);
+  }, [id, fault]);
+  return <span ref={reading} className="fx-badge-reading" />;
+}
+
 /**
  * Two lines: what to do (`⚠ 발전기 고장 · 눌러서 수리`), then the sensor reading, small. The reading
  * is owned by this effect, not by React, so it can change every 0.5 s without a render. It lives in
@@ -108,22 +156,11 @@ function BadgeButton({
   othersHolding: boolean;
   panelOpen: boolean;
 }) {
-  const reading = useRef<HTMLSpanElement>(null);
-  useLayoutEffect(() => {
-    const el = reading.current;
-    if (!el) return;
-    const update = () => {
-      const now = selectServerNow(useStore.getState(), Date.now());
-      el.textContent = sensorReading(id, sensorValue(id, fault, now));
-    };
-    update();
-    const timer = setInterval(update, SENSOR_TICK_MS);
-    return () => clearInterval(timer);
-  }, [id, fault]);
   return (
     <button type="button" className="fx-badge" onClick={(e) => selectModule(e, id)}>
       <span className="fx-badge-head">{badgeText(id, { othersHolding, panelOpen })}</span>
-      <span ref={reading} className="fx-badge-reading" />
+      {/* While this module's panel is open it shows the reading itself; two numbers a tick apart disagreed (#80). */}
+      {panelOpen ? null : <BadgeReading id={id} fault={fault} />}
     </button>
   );
 }

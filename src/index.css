@@ -40,10 +40,11 @@ body {
   flex-direction: column;
   align-items: center;
   max-width: 100%;
+  min-height: 44px;
   padding: 6px 16px;
   border: 0;
   border-radius: 16px;
-  background: rgba(16, 18, 22, 0.8);
+  background: rgba(16, 18, 22, 0.94);
   color: inherit;
   font: inherit;
   text-align: center;
@@ -65,15 +66,23 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 3px;
+  position: relative;
   margin-left: 8px;
-  padding: 1px 7px;
+  padding: 4px 10px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.1);
   color: #c9ced6;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   white-space: nowrap;
   vertical-align: 1px;
+}
+
+/* The pill is small, the touch target is not: 44 px tall. */
+.hud-cue::before {
+  content: '';
+  position: absolute;
+  inset: -8px -6px;
 }
 
 .hud-cue-icon {
@@ -141,10 +150,12 @@ body {
 }
 
 .healthy {
+  box-sizing: border-box;
+  max-width: 100%;
   margin: 0;
   padding: 4px 12px;
-  border-radius: 999px;
-  background: rgba(16, 18, 22, 0.7);
+  border-radius: 14px;
+  background: rgba(16, 18, 22, 0.9);
   font-size: 12px;
   color: #8fd4a6;
   text-align: center;
@@ -273,10 +284,7 @@ body {
 .trend {
   display: block;
   width: 100%;
-  height: 26px;
-}
-
-.trend-tall {
+  /* One height for a healthy and a broken module: the card must not change size (#80). */
   height: 40px;
   margin-bottom: 8px;
 }
@@ -329,16 +337,58 @@ body {
   color: #aeb4bd;
 }
 
+/* The action slot is as tall as the repair button, whatever it holds. */
+.panel-action {
+  display: flex;
+  min-height: 52px;
+}
+
+.action-none {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+  border: 1px dashed rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  color: #8f97a3;
+  font-size: 13px;
+}
+
+/* An outline with an arrow: "go there". The repair button is a filled green bar: "hold here". */
 .goto {
   width: 100%;
-  min-height: 44px;
-  margin-bottom: 4px;
-  border: 1px solid #ff7a7a;
+  min-height: 52px;
+  border: 1.5px solid #ff7a7a;
   border-radius: 10px;
   background: transparent;
   color: #ff7a7a;
   font: inherit;
   cursor: pointer;
+}
+
+.goto::after {
+  content: ' →';
+}
+
+/* The target just changed: shown faint and still for a moment, flashing in the new name. */
+.goto-changed {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.goto {
+  animation: goto-swap 0.3s ease-out;
+}
+
+@keyframes goto-swap {
+  from {
+    background: rgba(255, 122, 122, 0.35);
+  }
+  to {
+    background: transparent;
+  }
 }
 
 .toast,
