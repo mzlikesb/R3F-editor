@@ -14,7 +14,7 @@ import {
   PlaneGeometry,
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { selectBlackout, useStore } from '../store';
+import { selectBlackout, selectReady, useStore } from '../store';
 import { LAYOUT } from './layout';
 import { PANELS, createPanelLights, relightDelays, stepPanelLights, type PanelLights } from './panels';
 
@@ -82,6 +82,7 @@ function stepLights(mesh: InstancedMesh, state: PanelLights, nowMs: number) {
 export function SolarPanels() {
   const panels = useRef<InstancedMesh>(null);
   const lights = useRef<InstancedMesh>(null);
+  const ready = useStore(selectReady);
   const res = useMemo(() => {
     const state = createPanelLights(relightDelays(PANELS, LAYOUT.generator));
     const color = new InstancedBufferAttribute(state.colors, 3);
@@ -122,9 +123,10 @@ export function SolarPanels() {
   });
 
   return (
-    <>
+    // Hidden with the rest of the loading state (`selectReady`), so the field never shows alone.
+    <group visible={ready}>
       <instancedMesh ref={panels} args={[res.panelGeometry, res.panelMaterial, PANELS.length]} raycast={noRaycast} />
       <instancedMesh ref={lights} args={[res.lightGeometry, res.lightMaterial, PANELS.length]} raycast={noRaycast} />
-    </>
+    </group>
   );
 }

@@ -5,8 +5,6 @@
   align-items: center;
   justify-content: center;
   pointer-events: none;
-  opacity: 1;
-  transition: opacity 0.4s ease;
 }
 
 .loading-text {
@@ -18,8 +16,10 @@
   letter-spacing: 0.02em;
 }
 
+/* Gone in the same frame the HUD appears: a fade here stalls on the reveal's shader compiles. */
 .loading-done {
-  opacity: 0;
+  visibility: hidden;
+  transition: none;
 }
 
 /* Inside drei <Html fullscreen>, whose wrapper is transformed: `fixed` would be relative to it. */
