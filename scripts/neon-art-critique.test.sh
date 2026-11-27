@@ -55,12 +55,33 @@ echo "## 판정"
 echo "수정 요청 @codex review ($HOME/x/page-1.png)"
 STUB
 chmod +x "$tmp/bin/gh" "$tmp/bin/agy"
-run() { (cd "$repo" && env PATH="$tmp/bin:$PATH" FAKE_LOG="$tmp/log" "$@" scripts/neon-art-critique.sh 7 "$res" >"$tmp/log/out" 2>&1); }
+run() { (cd "$repo" && env PATH="$tmp/bin:$PATH" FAKE_LOG="$tmp/log" "$@" scripts/neon-art-critique.sh 7 "$res" ${RUN_SHA_ARG:-} >"$tmp/log/out" 2>&1); }
+
+# No run.json and no argument: fails, posts nothing (never falls back to HEAD).
+rm -f "$tmp/log/body"
+run env
+[ ! -e "$tmp/log/body" ]
+check "no tested sha: fails without posting" "$?" 0
+grep -q 'SHA' "$tmp/log/out"
+check "no tested sha: says why" "$?" 0
+
+# Explicit argument.
+rm -f "$tmp/log/body"
+RUN_SHA_ARG=abc1234 run env
+head1=$(head -1 "$tmp/log/body")
+check "header uses explicit sha and folder name" "$head1" '## neon art critique · `abc1234` · `res`'
+
+# run.json wins over the argument.
+printf '{"url":"u","sha":"def5678"}\n' >"$res/run.json"
+rm -f "$tmp/log/body"
+RUN_SHA_ARG=abc1234 run env
+head1=$(head -1 "$tmp/log/body")
+check "run.json sha wins" "$head1" '## neon art critique · `def5678` · `res`'
 
 rm -f "$tmp/log/body"
 run env
 head1=$(head -1 "$tmp/log/body")
-case "$head1" in '## neon art critique · `'*'`') echo "ok   header" ;; *) echo "FAIL header [$head1]"; fail=1 ;; esac
+check "header from run.json" "$head1" '## neon art critique · `def5678` · `res`'
 grep -q "@$zwj" "$tmp/log/body" && ! grep -q '@codex' "$tmp/log/body"
 check "body mention neutral" "$?" 0
 grep -qF "$HOME" "$tmp/log/body"

@@ -2,18 +2,20 @@
 # Runs the neon (Antigravity CLI) art/UX critique on playtest screenshots and posts it to the
 # PR as the agent account. agy has no image flag: it opens image files named by path in the
 # prompt, so the selected screenshots are listed by absolute path.
-# Usage: scripts/neon-art-critique.sh <pr-number> <playtest-result-dir>
+# Usage: scripts/neon-art-critique.sh <pr-number> <playtest-result-dir> [tested-sha]
+# The tested SHA is the revision the screenshots were taken on: run.json's sha in the result
+# folder, else the explicit third argument (the checkout's HEAD is never assumed).
 set -euo pipefail
 
 pr=${1:?usage: scripts/neon-art-critique.sh <pr-number> <result-dir>}
 resdir=${2:?usage: scripts/neon-art-critique.sh <pr-number> <result-dir>}
 resdir=${resdir/#\~/$HOME}
+arg_sha=${3:-}
 agent=chillingdaisy-worker1
 repo=$(gh repo view --json nameWithOwner -q .nameWithOwner)
 cd "$(git rev-parse --show-toplevel)"
 # shellcheck source=scripts/neon-lib.sh
 . scripts/neon-lib.sh
-sha=$(git rev-parse --short HEAD)
 
 who=$(gh api user -q .login 2>/dev/null || echo "?")
 if [ "$who" != "$agent" ]; then
@@ -21,6 +23,12 @@ if [ "$who" != "$agent" ]; then
   exit 1
 fi
 [ -d "$resdir" ] || { echo "neon-art-critique: 결과 폴더가 없다: $resdir" >&2; exit 1; }
+
+sha=$(neon_run_sha "$resdir" "$arg_sha") || {
+  echo "neon-art-critique: 테스트한 SHA를 알 수 없다. 결과 폴더에 run.json의 sha가 없으면 세 번째 인자로 준다" >&2
+  exit 1
+}
+runname=$(basename "$resdir")
 
 shots=$(neon_pick_screenshots "$resdir" "${NEON_ART_PER_PERSONA:-3}" "${NEON_ART_TOTAL:-9}")
 [ -n "$shots" ] || { echo "neon-art-critique: 스크린샷이 없다: $resdir" >&2; exit 1; }
@@ -33,7 +41,7 @@ prompt=$(
   echo
   cat .claude/prompts/neon-art-critique.md
   echo
-  echo "--- 리뷰 대상 스크린샷 ${count}장 (플레이테스트 결과, 커밋 $sha) ---"
+  echo "--- 리뷰 대상 스크린샷 ${count}장 (플레이테스트 결과, 테스트한 커밋 $sha) ---"
   while IFS= read -r f; do echo "$f"; done <<<"$shots"
 )
 
@@ -50,11 +58,11 @@ folder=$(neon_shorten_home <<<"$resdir")
 names=$(while IFS= read -r f; do printf '`%s` ' "$(basename "$f")"; done <<<"$shots")
 
 if [ "$verdict" = done ]; then
-  head_line=$(printf '## neon art critique · `%s`' "$sha")
+  head_line=$(printf '## neon art critique · `%s` · `%s`' "$sha" "$runname")
 else
-  head_line=$(printf '## neon art critique · `%s` · skipped' "$sha")
+  head_line=$(printf '## neon art critique · `%s` · `%s` · skipped' "$sha" "$runname")
 fi
 body=$(printf '%s\n\n%s\n\n결과 폴더: `%s` · 대상 %s장: %s' "$head_line" "$text" "$folder" "$count" "$names")
 
 gh pr comment "$pr" --repo "$repo" --body "$body" >/dev/null
-echo "neon art critique $verdict for $sha (PR #$pr, posted as $agent)"
+echo "neon art critique $verdict for $sha ($runname) (PR #$pr, posted as $agent)"

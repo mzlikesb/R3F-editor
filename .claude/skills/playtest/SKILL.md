@@ -17,6 +17,7 @@ description: 기획 에이전트가 PR을 stage:playtest로 넘길 때 쓰는 �
 scripts/playtest.sh https://pr-N-outpost.<계정>.workers.dev
 ```
 
+- 그 PR의 Preview 코멘트(`Preview 배포` 봇 코멘트)에 적힌 `대상 커밋`을 `--sha <SHA>`로 넘긴다(`scripts/playtest.sh --sha <SHA> <URL>`). 결과 폴더의 `run.json`(대상 URL, 시작 시각, sha)에 남아 4단계 neon 아트 크리틱이 테스트한 커밋으로 쓴다
 - 기본은 3명 동시다. 한도·부하로 실패하면 `--serial`로 다시 돌린다
 - 페르소나만 고르려면 URL 뒤에 이름을 준다(`phone-casual`, `pc-dev`, `first-visitor`)
 - 마지막 줄이 결과 폴더(`~/.local/share/outpost-playtests/pr-N-<시각>/`)다. 안에 페르소나별 `report.md`(머리에 상태·실행 모드·기기·시간·토큰)와 스크린샷이 있다. 저장소에 커밋하지 않는다. 실행기는 홈을 `~`로 줄여 찍는다
@@ -48,7 +49,7 @@ scripts/playtest.sh https://pr-N-outpost.<계정>.workers.dev
 
 ## 4. neon 아트 크리틱
 
-`scripts/neon-art-critique.sh N <결과 폴더>`로 돌린다. 페르소나별 스크린샷 중 처음·중간·마지막 몇 장(합계 9장 이내)을 neon(`agy`)이 직접 열어 보고, 결과가 PR에 `## neon art critique · <SHA>` 코멘트로 올라간다(에이전트 계정, `@` 무력화. 실패·한도면 `skipped(사유)`). 기준 프롬프트는 `.claude/prompts/neon-art-critique.md`.
+`scripts/neon-art-critique.sh N <결과 폴더>`로 돌린다(`run.json`에 sha가 없으면 `<테스트한 SHA>`를 세 번째 인자로 준다. 둘 다 없으면 실패한다). 페르소나별 스크린샷 중 처음·중간·마지막 몇 장(합계 9장 이내)을 neon(`agy`)이 직접 열어 보고, 결과가 PR에 `## neon art critique · <테스트한 SHA> · <결과 폴더 이름>` 코멘트로 올라간다(에이전트 계정, `@` 무력화. 실패·한도면 `skipped(사유)`). 기준 프롬프트는 `.claude/prompts/neon-art-critique.md`.
 
 - 지적은 `art-ux` 라벨 이슈로 올린다(맨 위 `결정할 것` 줄, 그 PR의 마일스톤, 근거 스크린샷 파일 이름)
 - 판정과 이슈 번호는 3단계 요약 코멘트에도 한 줄 적는다

@@ -1,0 +1,60 @@
+name: codex-gate
+
+# Sets the `codex-reviewed` commit status on a PR's current head: success only when
+# Codex reviewed exactly that commit, pending otherwise. Branch protection requires it,
+# so an Approve that lands before Codex cannot merge the PR.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  issue_comment:
+    types: [created, edited]
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  statuses: write
+  pull-requests: read
+  contents: read
+
+concurrency:
+  group: codex-gate-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    # Comments on plain issues are not PR comments.
+    if: github.event_name != 'issue_comment' || github.event.issue.pull_request
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Always the default branch's script: a PR must not be able to edit the judge and
+      # pass itself. (The workflow definition itself comes from the PR branch on
+      # pull_request events; branch protection and user Approve guard .github changes.)
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Judge and set status
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number || github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          # Read the current head; the event payload may be stale.
+          head=$(gh api "repos/$REPO/pulls/$PR" --jq .head.sha)
+          gh api --paginate "repos/$REPO/issues/$PR/comments?per_page=100" | jq -s 'add // []' > comments.json
+          gh api --paginate "repos/$REPO/pulls/$PR/reviews?per_page=100" | jq -s 'add // []' > reviews.json
+          if [ ! -f scripts/codex-gate.sh ]; then
+            # Before this workflow's first merge the default branch has no script.
+            verdict='{"state":"pending","description":"판정 스크립트가 아직 기본 브랜치에 없음 (머지 후 동작)"}'
+          else
+            verdict=$(bash scripts/codex-gate.sh "$head" comments.json reviews.json)
+          fi
+          echo "$verdict"
+          gh api -X POST "repos/$REPO/statuses/$head" \
+            -f context=codex-reviewed \
+            -f state="$(jq -r .state <<<"$verdict")" \
+            -f description="$(jq -r .description <<<"$verdict")" \
+            -f target_url="${GITHUB_SERVER_URL}/${REPO}/pull/${PR}"

@@ -99,10 +99,11 @@ README·UI·커밋 메시지는 작품 자체로 설명한다.
 
 목표 범위: 정상 경로는 서버가 검증하고, 계정을 바꾸려는 시도는 훅이 막는다. 사용자 컴퓨터에 `mzlikesb` 토큰이 있으므로 완전한 격리는 아니다.
 
-- 브랜치 보호(main): 필수 체크 `ci`·`pr-check`, Approve 1개 필수, 새 커밋 시 기존 Approve 해제, 마지막 push도 승인 필요, `enforce_admins` 켬(`--admin` 머지·main 직접 push 거절), squash만 허용
+- 브랜치 보호(main): 필수 체크 `ci`·`pr-check`, 필수 상태 `codex-reviewed`, Approve 1개 필수, 새 커밋 시 기존 Approve 해제, 마지막 push도 승인 필요, `enforce_admins` 켬(`--admin` 머지·main 직접 push 거절), squash만 허용
 - **승인 = 사용자의 GitHub Approve.** 에이전트 계정은 작성자라 자기 PR을 Approve할 수 없다(서버가 막음)
 - small: 에이전트가 PR을 ready로 열면서 `gh pr merge --auto --squash`로 예약한다 → 사용자가 Approve하면 체크 통과 후 자동 머지
 - large: 사용자가 Approve 후 직접 머지. 에이전트의 `gh pr merge`는 `--auto`(small만)와 `--disable-auto`만 훅이 허용한다
+- **`codex-reviewed` 상태(`.github/workflows/codex-gate.yml`)**: PR의 현재 head SHA를 Codex가 리뷰했을 때만 success다(영수증 또는 요약 state가 head와 일치). Approve가 먼저 들어가도 이 상태가 초록이 될 때까지 머지되지 않는다. 문서만 바뀐 PR도 같다. 판정 스크립트는 항상 기본 브랜치 것을 쓴다. 다만 워크플로 정의는 pull_request에서 PR 브랜치 것이 쓰이므로 `.github` 변경은 사용자 Approve로 지킨다. 새 커밋을 push하면 pending으로 돌아가므로 `@codex review`를 다시 요청한다
 - **Codex가 최종 커밋 리뷰를 마치면 에이전트가 PR에 "Approve·머지 가능" 코멘트를 단다.** 사용자는 그 코멘트를 보고 Approve한다(Approve가 Codex보다 먼저 들어가 리뷰 전에 머지된 일이 #8·#11에서 있었다)
 - small → large 전환: **auto-merge 예약을 먼저 해제한 뒤** 라벨을 바꾼다(`pr-check`가 large + 예약 켜짐을 실패로 본다)
 - **사용자는 에이전트 PR 브랜치에 직접 push하지 않는다**(웹의 "Update branch"·"Apply suggestion" 포함). 마지막 push가 `mzlikesb`면 아무도 Approve할 수 없게 된다. 실수했으면 에이전트가 브랜치를 다시 push(빈 커밋 등)해 마지막 pusher를 에이전트 계정으로 되돌린다

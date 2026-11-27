@@ -84,15 +84,26 @@ export function parseTarget(input) {
 /** @returns {{ serial: boolean, url: string, personas: string[] }} throws on bad usage. */
 export function parseArgs(argv) {
   let serial = false;
+  let sha = null;
   const rest = [];
-  for (const a of argv) {
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
     if (a === '--serial') serial = true;
+    else if (a === '--sha') {
+      sha = argv[++i];
+      if (!sha || sha.startsWith('--')) throw new Error('--sha 값이 없다');
+    } else if (a.startsWith('--sha=')) sha = a.slice(6) || null;
     else if (a.startsWith('--')) throw new Error(`알 수 없는 옵션: ${a}`);
     else rest.push(a);
   }
-  if (rest.length === 0) throw new Error('사용법: playtest.sh [--serial] <URL> [페르소나…]');
+  if (rest.length === 0) throw new Error('사용법: playtest.sh [--serial] [--sha <SHA>] <URL> [페르소나…]');
   const [url, ...personas] = rest;
-  return { serial, url, personas };
+  return { serial, sha, url, personas };
+}
+
+/** Metadata saved as run.json in the result folder. sha is the tested commit, when given. */
+export function buildRunInfo({ url, startedAt, sha }) {
+  return { url, startedAt: startedAt.toISOString(), sha: sha ?? null };
 }
 
 /** @returns {{ kind: 'device', name: string } | { kind: 'viewport', size: string }} throws if missing. */

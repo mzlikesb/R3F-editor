@@ -43,3 +43,15 @@ neon_pick_screenshots() {
     picked=$((picked + 1))
   done
 }
+
+# neon_run_sha <result-dir> [explicit-sha]: the tested SHA. run.json's "sha" wins; else the
+# explicit argument; else fail (no fallback to the current checkout).
+neon_run_sha() {
+  local sha=""
+  if [ -f "$1/run.json" ]; then
+    sha=$(sed -n 's/.*"sha"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$1/run.json" | head -1)
+  fi
+  [ -n "$sha" ] || sha=${2:-}
+  [ -n "$sha" ] || return 1
+  printf '%s' "$sha"
+}
