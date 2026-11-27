@@ -36,16 +36,17 @@ check "merge commit allowed" 1 "allow_merge_commit" "$OK_P" "$(repo true true fa
 check "rebase allowed, squash off" 1 "allow_squash_merge" "$OK_P" "$(repo false false true)"
 check "no reviews block" 1 "approvals" '{"required_status_checks":{"contexts":["ci","pr-check","codex-reviewed"],"strict":false},"enforce_admins":{"enabled":true}}' "$OK_R"
 
-# 403 from gh: stub gh on PATH, real (non-fixture) mode.
+# gh failures: stub gh on PATH, real (non-fixture) mode. stub <body> <stderr>
 mkdir "$tmp/bin"
-cat >"$tmp/bin/gh" <<'STUB'
-#!/usr/bin/env bash
-echo '{"message":"Resource not accessible by personal access token","status":"403"}'
-echo "gh: Resource not accessible by personal access token (HTTP 403)" >&2
-exit 1
-STUB
-chmod +x "$tmp/bin/gh"
-out=$(PATH="$tmp/bin:$PATH" bash check-protection.sh 2>&1); code=$?
-if [ "$code" = 2 ] && grep -q "읽기 권한 없음" <<<"$out"; then echo "ok   403 exits 2"; else echo "FAIL 403 (exit $code: $out)"; fail=1; fi
+gh_case() { # gh_case <name> <want-exit> <want-substring> <body> <stderr>
+  printf '#!/usr/bin/env bash\necho %q\necho %q >&2\nexit 1\n' "$4" "$5" >"$tmp/bin/gh"
+  chmod +x "$tmp/bin/gh"
+  local out code
+  out=$(PATH="$tmp/bin:$PATH" bash check-protection.sh 2>&1); code=$?
+  if [ "$code" = "$2" ] && grep -q -- "$3" <<<"$out"; then echo "ok   $1"; else echo "FAIL $1 (exit $code: $out)"; fail=1; fi
+}
+gh_case "403 exits 2" 2 "읽기 권한 없음" '{"message":"Resource not accessible by personal access token","status":"403"}' "gh: Resource not accessible by personal access token (HTTP 403)"
+gh_case "404 Not Found (no permission) exits 2" 2 "읽기 권한 없음" '{"message":"Not Found","status":"404"}' "gh: Not Found (HTTP 404)"
+gh_case "404 Branch not protected exits 1" 1 "보호 없음" '{"message":"Branch not protected","status":"404"}' "gh: Branch not protected (HTTP 404)"
 
 exit "$fail"

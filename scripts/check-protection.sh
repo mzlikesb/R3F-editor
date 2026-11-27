@@ -15,6 +15,11 @@ if [ $# -eq 2 ]; then
 else
   err=$(mktemp); trap 'rm -f "$err"' EXIT
   if ! prot=$(gh api "repos/$REPO/branches/main/protection" 2>"$err"); then
+    # gh prints the error body on stdout and a summary on stderr; look at both.
+    if grep -qi 'Branch not protected' <<<"$prot"$'\n'"$(cat "$err")"; then
+      echo "차이 branch_protection: AGENTS.md=보호 켜짐 실제=보호 없음(Branch not protected)"
+      exit 1
+    fi
     if grep -qE '403|404|Resource not accessible|Not Found' "$err"; then
       echo "읽기 권한 없음 — 사용자 계정으로 실행 (사용자 터미널에서 scripts/check-protection.sh)"
       exit 2
