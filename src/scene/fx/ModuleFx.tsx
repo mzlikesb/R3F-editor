@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { effectsFor } from '../../feedback';
 import { selectBlackout, selectModuleFault, selectOthersHolding, selectReady, useStore } from '../../store';
-import { floorRingRange } from '../layout';
+import { floorRingRange, LAYOUT, MODEL_BOUNDS } from '../layout';
 import type { ModuleFxProps } from '../moduleTypes';
 import { Glow } from './Glow';
 import { FaultBadge, FaultDot, NameTag } from './Labels';
@@ -66,22 +66,26 @@ export function ModuleFx({ id, handle }: ModuleFxProps) {
   const radius = handle?.radius ?? 0.6;
   const label = plan.badge === id ? 'badge' : plan.dots.includes(id) ? 'dot' : plan.tag === id ? 'tag' : null;
   // The model's parent is the module group, the only scaled ancestor (`scene/Module.tsx`).
-  const unit = 1 / (handle?.model.parent?.scale.x || 1);
+  const unit = 1 / (handle?.model.parent?.scale.x || LAYOUT[id].scale);
+  // Labels do not wait for the model: they mount from the layout's known bounds as soon as the base
+  // is in, so `Html`'s separate root is rendered before the HUD appears (#61). The real height
+  // replaces it when the model arrives.
+  const labelHeight = handle?.height ?? MODEL_BOUNDS[id].height;
 
   return (
     <group>
+      {label === 'badge' && fault ? (
+        <FaultBadge id={id} fault={fault} height={labelHeight} unit={unit} othersHolding={othersHolding} />
+      ) : label === 'dot' ? (
+        <FaultDot id={id} height={labelHeight} unit={unit} />
+      ) : label === 'tag' ? (
+        <NameTag id={id} height={labelHeight} unit={unit} />
+      ) : null}
       {handle ? (
         <>
           <FloorRing range={floorRingRange(id)} fault={faulted} />
           {faulted || !ready ? null : <StatusLight height={height} />}
           {othersHolding ? <HoldingRing height={height} radius={radius} /> : null}
-          {label === 'badge' && fault ? (
-            <FaultBadge id={id} fault={fault} height={height} unit={unit} othersHolding={othersHolding} />
-          ) : label === 'dot' ? (
-            <FaultDot id={id} height={height} unit={unit} />
-          ) : label === 'tag' ? (
-            <NameTag id={id} height={height} unit={unit} />
-          ) : null}
           <SweepRing radius={radius} height={height} token={tokens.sweep} />
           <RingPing radius={radius} token={tokens.ping} />
           <Sparks radius={radius} height={height} token={tokens.burst} soft={tokens.soft} />

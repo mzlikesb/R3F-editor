@@ -173,6 +173,15 @@ export function selectReady(s: Store): boolean {
   return hudReady({ loaded: s.loaded, hasBase: s.sync.base !== null, incompatible: s.sync.incompatible });
 }
 
+/**
+ * The first snapshot is in and compatible, whether or not the scene has finished loading. Labels
+ * mount on this (hidden until `selectReady`) so `Html`'s separate React root is already rendered
+ * when the HUD appears (#61); showing them still waits for `selectReady`.
+ */
+export function selectBaseIn(s: Store): boolean {
+  return s.sync.base !== null && !s.sync.incompatible;
+}
+
 export function selectBlackout(s: Store): boolean {
   return (s.sync.base?.blackout ?? null) !== null;
 }

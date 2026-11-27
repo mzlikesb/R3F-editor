@@ -1,5 +1,5 @@
 import { useMemo, type ReactNode } from 'react';
-import { selectActivity, selectBlackout, selectFaults, selectReady, useStore } from '../../store';
+import { selectActivity, selectBlackout, selectBaseIn, selectFaults, useStore } from '../../store';
 import { LabelPlanContext } from './labelPlanContext';
 import { holdingModules, labelPlan } from './labelRules';
 
@@ -9,7 +9,8 @@ export function LabelPlanProvider({ children }: { children: ReactNode }) {
   const selected = useStore((s) => s.selected);
   const blackout = useStore(selectBlackout);
   const activity = useStore(selectActivity);
-  const ready = useStore(selectReady);
+  // Mounted as soon as the base is in; `Anchored` keeps the label hidden until `selectReady` (#61).
+  const ready = useStore(selectBaseIn);
   const plan = useMemo(
     () => labelPlan({ ready, faults, selected, blackout, holding: holdingModules(faults, activity) }),
     [ready, faults, selected, blackout, activity],
