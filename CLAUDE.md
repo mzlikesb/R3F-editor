@@ -27,7 +27,7 @@ neon은 리뷰만 한다. **훅이 자동으로 부른다**(`scripts/hooks/neon-
 - 기획: PR 머지 후 `retro`
 - 기획: 작업 착수 시 `start-task`
 - QA: `/code-review medium`
-- 마일스톤이 끝날 때마다 `doc-lint`로 문서 주장을 실상태와 대조한다
+- 마일스톤이 끝날 때와 회고 PR을 올릴 때마다 `doc-lint`로 문서 주장을 실상태와 대조한다
 
 ## PR 감시와 리뷰 반영
 
