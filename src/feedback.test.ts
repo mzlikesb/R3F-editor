@@ -3,6 +3,7 @@ import {
   TOAST_MS,
   bottomStack,
   classifyRepaired,
+  AFTERGLOW_MS,
   effectsFor,
   hintVisible,
   initialFeedback,
@@ -48,10 +49,14 @@ describe('classifyRepaired', () => {
 });
 
 describe('effectsFor', () => {
-  it('sweeps on every repair, bursts only on mine, pings only on someone else', () => {
-    expect(effectsFor('mine')).toEqual({ sweep: true, burst: true, ringPing: false });
-    expect(effectsFor('beaten')).toEqual({ sweep: true, burst: false, ringPing: true });
-    expect(effectsFor('other')).toEqual({ sweep: true, burst: false, ringPing: true });
+  it('sweeps on every repair, bursts only on mine, pings and glows only on someone else', () => {
+    expect(effectsFor('mine')).toEqual({ sweep: true, burst: true, ringPing: false, afterglow: false });
+    expect(effectsFor('beaten')).toEqual({ sweep: true, burst: false, ringPing: true, afterglow: true });
+    expect(effectsFor('other')).toEqual({ sweep: true, burst: false, ringPing: true, afterglow: true });
+  });
+
+  it('the afterglow lasts three seconds (playtest #47: someone else was here)', () => {
+    expect(AFTERGLOW_MS).toBe(3000);
   });
 });
 

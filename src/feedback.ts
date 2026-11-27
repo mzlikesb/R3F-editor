@@ -33,7 +33,12 @@ export interface RepairEffects {
   sweep: boolean;
   burst: boolean;
   ringPing: boolean;
+  /** A soft green glow on the module for `AFTERGLOW_MS`: someone else was just here. */
+  afterglow: boolean;
 }
+
+/** How long the afterglow of someone else's repair lasts (playtest #47, principle 1). */
+export const AFTERGLOW_MS = 3000;
 
 /** The latest repair to animate. `seq` goes up by one per repair, so the scene can react exactly once. */
 export interface RepairEffect {
@@ -95,7 +100,7 @@ export function classifyRepaired(hold: HoldState, msg: { faultId: string; mine: 
 
 export function effectsFor(outcome: RepairOutcome): RepairEffects {
   const mine = outcome === 'mine';
-  return { sweep: true, burst: mine, ringPing: !mine };
+  return { sweep: true, burst: mine, ringPing: !mine, afterglow: !mine };
 }
 
 /**

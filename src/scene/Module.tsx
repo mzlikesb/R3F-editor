@@ -1,11 +1,13 @@
 import { useGLTF } from '@react-three/drei';
 import { Suspense, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
-import { Box3, Color, Matrix4, Mesh, MeshStandardMaterial, Vector3, type Group } from 'three';
+import type { ThreeEvent } from '@react-three/fiber';
+import { Box3, Color, Matrix4, Mesh, MeshBasicMaterial, MeshStandardMaterial, Vector3, type Group } from 'three';
 import type { BaseModuleId } from '../modules';
 import { useStore } from '../store';
 import { SceneErrorBoundary } from './ErrorBoundary';
 import { ModuleFx } from './fx/ModuleFx';
-import { LAYOUT } from './layout';
+import { LAYOUT, MODEL_BOUNDS } from './layout';
+import { pickTap, type TapHit } from './tapPick';
 import type { ModuleHandle } from './moduleTypes';
 import './scene.css';
 
@@ -13,6 +15,14 @@ const DRACO = '/draco/';
 const FALLBACK_COLOR = new Color('#6f8296');
 const METALNESS = 0.3;
 const ROUGHNESS = 0.7;
+/**
+ * The greenhouse and the habitat dome are the same hangar model; a tint on their own material clones
+ * tells them apart without a name tag (neon): green glass for the greenhouse, warm for the dome.
+ */
+const TINT: Partial<Record<BaseModuleId, Color>> = {
+  greenhouse: new Color('#a9e8b4'),
+  habitat: new Color('#ffc890'),
+};
 
 export interface ModuleProps {
   id: BaseModuleId;
@@ -63,11 +73,13 @@ function GltfModel({ id, onHandle }: ModelProps) {
       o.receiveShadow = true;
       const m = (o.material as MeshStandardMaterial).clone();
       initMaterial(m);
+      const tint = TINT[id];
+      if (tint) m.color.multiply(tint);
       o.material = m;
       own.push(m);
     });
     return { object: clone, materials: own };
-  }, [scene]);
+  }, [scene, id]);
   const group = useRef<Group>(null);
   useHandle(group, materials, onHandle);
   return (
@@ -143,20 +155,50 @@ function useHandle(
   }, [group, materials, onHandle]);
 }
 
-/** Generous invisible box; the only thing in a module that takes taps. */
+const TAP_MATERIAL = new MeshBasicMaterial({ colorWrite: false, depthWrite: false });
+
+/**
+ * Picks from everything under the pointer (`e.intersections`, nearest first), not just the box that
+ * was hit first: a margin box can stand in front of another module's model (`scene/tapPick.ts`).
+ */
+function onTap(e: ThreeEvent<MouseEvent>) {
+  e.stopPropagation();
+  const hits = e.intersections
+    .map((i) => i.object.userData as Partial<TapHit>)
+    .filter((d): d is TapHit => d.moduleId !== undefined && d.part !== undefined);
+  const id = pickTap(hits);
+  if (id) useStore.getState().select(id);
+}
+
+/**
+ * Two invisible boxes, the only things in a module that take taps: `body` over the model and a
+ * generous `margin` around it for fingers. Neither is drawn (`visible={false}`).
+ */
 function TapBox({ id }: { id: BaseModuleId }) {
   const { tapHalf, tapHeight } = LAYOUT[id];
+  const body = MODEL_BOUNDS[id];
+  const bodyHit: TapHit = useMemo(() => ({ moduleId: id, part: 'body' }), [id]);
+  const marginHit: TapHit = useMemo(() => ({ moduleId: id, part: 'margin' }), [id]);
   return (
-    <mesh
-      visible={false}
-      position={[0, tapHeight / 2, 0]}
-      onClick={(e) => {
-        e.stopPropagation();
-        useStore.getState().select(id);
-      }}
-    >
-      <boxGeometry args={[tapHalf[0] * 2, tapHeight, tapHalf[2] * 2]} />
-      <meshBasicMaterial colorWrite={false} depthWrite={false} />
-    </mesh>
+    <>
+      <mesh
+        visible={false}
+        position={[0, body.height / 2, 0]}
+        userData={bodyHit}
+        material={TAP_MATERIAL}
+        onClick={onTap}
+      >
+        <boxGeometry args={[body.halfX * 2, body.height, body.halfZ * 2]} />
+      </mesh>
+      <mesh
+        visible={false}
+        position={[0, tapHeight / 2, 0]}
+        userData={marginHit}
+        material={TAP_MATERIAL}
+        onClick={onTap}
+      >
+        <boxGeometry args={[tapHalf[0] * 2, tapHeight, tapHalf[2] * 2]} />
+      </mesh>
+    </>
   );
 }

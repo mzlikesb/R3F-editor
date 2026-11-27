@@ -2,6 +2,7 @@ import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
 import { Color } from 'three';
 import type { ModuleId } from '../../../shared/protocol';
+import { AFTERGLOW_MS } from '../../feedback';
 import { relightDelayMs } from '../blackout';
 import type { ModuleHandle } from '../moduleTypes';
 import { FAULT_COLOR, OK_COLOR, step, SWEEP_S, useOneShot } from './shared';
@@ -25,6 +26,10 @@ const BLACKOUT_BODY = 0.3;
 /** Seconds a module takes to come back to full light once its turn in the relight order arrives. */
 const RELIGHT_FADE_S = 0.35;
 const RELIGHT_FLASH = 0.7;
+/** Someone else's repair leaves the module softly green for `AFTERGLOW_MS` (principle 1). */
+const AFTERGLOW_S = AFTERGLOW_MS / 1000;
+const AFTERGLOW_PEAK = 0.8;
+const AFTERGLOW_COLOR = new Color('#5cf2a0');
 
 function write(handle: ModuleHandle, bases: readonly Color[], color: Color, intensity: number, dim: number): void {
   handle.materials.forEach((m, i) => {
@@ -43,6 +48,9 @@ function write(handle: ModuleHandle, bases: readonly Color[], color: Color, inte
  * During a blackout healthy bodies go dark (the red pulse of broken ones does not). When it ends
  * (true → false) each module lights up `relightDelayMs(id)` after the others before it; a blackout
  * that was already over at mount plays nothing.
+ *
+ * `afterglowToken` (someone else's repair): after the sweep, a soft green that fades out over
+ * `AFTERGLOW_MS`, on the module's own materials (no extra draw call).
  */
 export function useEmissive(
   handle: ModuleHandle | null,
@@ -50,8 +58,10 @@ export function useEmissive(
   sweepToken: number,
   id: ModuleId,
   blackout: boolean,
+  afterglowToken: number,
 ): void {
   const sweepRef = useOneShot(sweepToken);
+  const afterglowRef = useOneShot(afterglowToken);
   // The model's own colors (palette map tint), taken once per handle before anything dims them.
   const bases = useMemo(() => handle?.materials.map((m) => m.color.clone()) ?? [], [handle]);
 
@@ -86,8 +96,12 @@ export function useEmissive(
     let color: Color = FAULT_COLOR;
     let intensity = 0;
     let dim = body;
+    // Advance every frame so the glow keeps its 3 s from the repair, under the sweep too.
+    const glow = step(afterglowRef, delta, AFTERGLOW_S);
+    const glowIntensity = glow >= 0 && glow < 1 ? AFTERGLOW_PEAK * Math.sqrt(1 - glow) : 0;
     if (faulted) {
       sweepRef.current = -1;
+      afterglowRef.current = -1;
       const wave = 0.5 + 0.5 * Math.sin(state.clock.elapsedTime * PULSE_RATE);
       intensity = PULSE_MIN + (PULSE_MAX - PULSE_MIN) * wave;
       if (blackoutRef.current && id === 'generator') intensity *= BLACKOUT_GENERATOR_BOOST;
@@ -96,8 +110,12 @@ export function useEmissive(
       const p = step(sweepRef, delta, SWEEP_S);
       if (p >= 0 && p < 1) {
         color = tmp.copy(FAULT_COLOR).lerp(OK_COLOR, Math.min(1, p * 2));
-        intensity = 1.1 * (1 - p * p);
+        // The sweep's green hands over to the afterglow without a dip.
+        intensity = Math.max(1.1 * (1 - p * p), glowIntensity);
       }
+    } else if (glowIntensity > 0) {
+      color = AFTERGLOW_COLOR;
+      intensity = glowIntensity;
     } else if (lit > 0 && lit < 1) {
       color = RELIGHT_COLOR;
       intensity = RELIGHT_FLASH * Math.sin(Math.PI * lit);

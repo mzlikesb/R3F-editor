@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { effectsFor } from '../../feedback';
-import { selectBlackout, selectModuleFault, selectOthersHolding, useStore } from '../../store';
+import { selectBlackout, selectModuleFault, selectOthersHolding, selectReady, useStore } from '../../store';
+import { floorRingRange } from '../layout';
 import type { ModuleFxProps } from '../moduleTypes';
 import { Glow } from './Glow';
 import { FaultBadge, FaultDot, NameTag } from './Labels';
@@ -16,14 +17,17 @@ interface Tokens {
   sweep: number;
   burst: number;
   ping: number;
+  afterglow: number;
 }
 
-const NO_TOKENS: Tokens = { sweep: 0, burst: 0, ping: 0 };
+const NO_TOKENS: Tokens = { sweep: 0, burst: 0, ping: 0, afterglow: 0 };
 
 /**
  * Everything that shows a module's state, drawn inside the module's group (local origin = module
  * ground center): emissive pulse and red→green blend, status light, name tag / fault badge, floor
- * ring, sweep ring, punch, sparks, glow, ring ping (plan 005 B, C, D.11).
+ * ring, sweep ring, punch, sparks, glow, ring ping (plan 005 B, C, D.11), and the afterglow of
+ * someone else's repair. The status light waits for the base: green before the first snapshot
+ * would claim a healthy base (playtest #47).
  */
 export function ModuleFx({ id, handle }: ModuleFxProps) {
   const fault = useStore((s) => selectModuleFault(s, id));
@@ -32,6 +36,7 @@ export function ModuleFx({ id, handle }: ModuleFxProps) {
   const plan = useLabelPlan();
   const othersHolding = useStore((s) => selectOthersHolding(s, id)) > 0;
   const effect = useStore((s) => s.feedback.effect);
+  const ready = useStore(selectReady);
 
   // A repair that was already there at mount does not play. Adjusting state while rendering
   // (instead of in an effect) starts the one-shots in the same pass the new `seq` arrives.
@@ -46,11 +51,12 @@ export function ModuleFx({ id, handle }: ModuleFxProps) {
         sweep: fx.sweep ? effect.seq : 0,
         burst: fx.burst ? effect.seq : 0,
         ping: fx.ringPing ? effect.seq : 0,
+        afterglow: fx.afterglow ? effect.seq : 0,
       });
     }
   }
 
-  useEmissive(handle, faulted, tokens.sweep, id, blackout);
+  useEmissive(handle, faulted, tokens.sweep, id, blackout, tokens.afterglow);
   usePunch(handle, tokens.burst);
 
   const height = handle?.height ?? 1;
@@ -63,8 +69,8 @@ export function ModuleFx({ id, handle }: ModuleFxProps) {
     <group>
       {handle ? (
         <>
-          <FloorRing radius={radius} fault={faulted} />
-          {faulted ? null : <StatusLight height={height} />}
+          <FloorRing range={floorRingRange(id)} fault={faulted} />
+          {faulted || !ready ? null : <StatusLight height={height} />}
           {othersHolding ? <HoldingRing height={height} radius={radius} /> : null}
           {label === 'badge' && fault ? (
             <FaultBadge id={id} fault={fault} height={height} unit={unit} othersHolding={othersHolding} />
