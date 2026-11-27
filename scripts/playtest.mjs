@@ -127,10 +127,17 @@ async function runPersona({ name, personaText, device, target, template, outDir,
     });
     if (child.pid !== undefined) active.add(child.pid);
 
+    // Output can still arrive after we stopped listening (a helper holding the pipes open).
+    // Late lines are dropped and stream errors never take the runner down.
+    let collecting = true;
     const stream = createWriteStream(join(outDir, 'stream.jsonl'));
+    stream.on('error', () => {});
+    child.stdout.on('error', () => {});
+    child.stderr.on('error', () => {});
     const lines = createInterface({ input: child.stdout });
     const linesClosed = new Promise((resolve) => lines.on('close', resolve));
     lines.on('line', (line) => {
+      if (!collecting) return;
       stream.write(`${line}\n`);
       let e;
       try {
@@ -140,7 +147,7 @@ async function runPersona({ name, personaText, device, target, template, outDir,
       }
       events.push(e);
       if (e.type === 'system' && e.subtype === 'init' && !abort) {
-        const check = checkIsolation(e);
+        const check = checkIsolation(e); // never throws
         if (!check.ok) {
           abort = '격리';
           abortDetail = check.reason;
@@ -149,6 +156,7 @@ async function runPersona({ name, personaText, device, target, template, outDir,
       }
     });
     child.stderr.on('data', (d) => {
+      if (!collecting) return;
       stderrTail.push(String(d));
       while (stderrTail.join('').length > 600) stderrTail.shift();
     });
@@ -165,6 +173,7 @@ async function runPersona({ name, personaText, device, target, template, outDir,
       active.delete(child.pid);
     }
     await Promise.race([linesClosed, sleep(2000)]);
+    collecting = false;
     await new Promise((resolve) => stream.end(resolve));
 
     const run = classifyRun({ events, timedOut, exitCode, abort });
@@ -254,6 +263,7 @@ async function main() {
   };
   process.on('SIGINT', onSignal);
   process.on('SIGTERM', onSignal);
+  process.on('SIGHUP', onSignal);
 
   const launch = (p) =>
     runPersona({ ...p, target, template, outDir: join(runDir, p.name), mode }).catch((err) => ({

@@ -48,7 +48,7 @@ const shots = (n) => {
     writeFileSync(join(outDir, `page-2026-11-27T00-00-${String(i).padStart(2, '0')}-000Z.png`), 'png');
   writeFileSync(join(outDir, 'console-2026-11-27T00-00-00-000Z.log'), 'log');
 };
-const init = (tools = ALLOWED_TOOLS) =>
+const init = (tools = ALLOWED_TOOLS, extra = {}) =>
   emit({
     type: 'system',
     subtype: 'init',
@@ -58,6 +58,7 @@ const init = (tools = ALLOWED_TOOLS) =>
     slash_commands: [],
     skills: [],
     plugins: [{ name: 'cc-plugin-telemetry', source: 'cc-plugin-telemetry@builtin' }],
+    ...extra,
   });
 const success = (result) =>
   emit({ type: 'result', subtype: 'success', is_error: false, result, duration_ms: 4321, usage: usage(20, 300) });
@@ -80,6 +81,25 @@ switch (scenario) {
     shots(3);
     await sleep(400); // long enough for concurrent runs to overlap
     success(`REPORT ${scenario}`);
+    break;
+  case 'late': {
+    // A detached helper keeps the output pipes open and writes after the runner stopped listening.
+    const helper = spawn(
+      process.execPath,
+      ['-e', 'setTimeout(() => { console.log(\'{"type":"late"}\'); console.error(\'late\'); }, 2600)'],
+      { detached: true, stdio: ['ignore', 1, 2] },
+    );
+    helper.unref();
+    init();
+    shots(1);
+    success('REPORT late');
+    break;
+  }
+  case 'weird':
+    // Unexpected init shapes: null server entry, plugins missing.
+    startBrowser();
+    init(ALLOWED_TOOLS, { mcp_servers: [null], plugins: undefined });
+    await hangForever();
     break;
   case 'many':
     init();

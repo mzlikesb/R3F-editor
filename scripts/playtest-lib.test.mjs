@@ -240,6 +240,30 @@ test('checkIsolation rejects user plugins, skills, slash commands, other MCP ser
   assert.equal(checkIsolation(undefined).ok, false);
 });
 
+test('checkIsolation fails (never throws) on unexpected init shapes', () => {
+  const mutate = (f) => {
+    const i = goodInit();
+    f(i);
+    return i;
+  };
+  const cases = [
+    mutate((i) => (i.mcp_servers = [null])),
+    mutate((i) => (i.mcp_servers = ['playwright'])),
+    mutate((i) => (i.mcp_servers = {})),
+    mutate((i) => delete i.mcp_servers),
+    mutate((i) => delete i.plugins),
+    mutate((i) => (i.plugins = null)),
+    mutate((i) => (i.plugins = 'x')),
+    mutate((i) => (i.plugins = { name: 'x' })),
+    mutate((i) => (i.plugins = [null])),
+    mutate((i) => (i.plugins = ['x@builtin'])),
+    mutate((i) => (i.tools = [null])),
+    null,
+    'init',
+  ];
+  for (const c of cases) assert.equal(checkIsolation(c).ok, false, JSON.stringify(c));
+});
+
 // ---------- usage ----------
 
 const asst = (id, usage, content = [{ type: 'text', text: '' }]) => ({
