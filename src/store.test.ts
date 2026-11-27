@@ -10,6 +10,7 @@ import {
   selectModuleFault,
   selectModuleStatus,
   selectOthersHolding,
+  selectBaseIn,
   selectReady,
   selectServerNow,
   setClientSender,
@@ -285,6 +286,18 @@ describe('selectReady (playtest #47: no "healthy" while loading)', () => {
     s().setLoaded();
     expect(selectReady(s())).toBe(false);
     s().receive(snapshot(), 0, T);
+    expect(selectReady(s())).toBe(true);
+  });
+});
+
+describe('selectBaseIn (#61: labels mount before the scene finishes loading)', () => {
+  it('is true from the first snapshot on, without waiting for setLoaded', () => {
+    useStore.setState({ loaded: false, sync: initialSync });
+    expect(selectBaseIn(s())).toBe(false);
+    s().receive(snapshot(), 0, T);
+    expect(selectBaseIn(s())).toBe(true);
+    expect(selectReady(s())).toBe(false);
+    s().setLoaded();
     expect(selectReady(s())).toBe(true);
   });
 });

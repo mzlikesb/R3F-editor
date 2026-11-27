@@ -1,10 +1,10 @@
 import { Html } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
-import { useLayoutEffect, useRef, type MouseEvent, type ReactNode } from 'react';
+import { useLayoutEffect, useRef, type MouseEvent, type ReactNode, type RefObject } from 'react';
 import { sensorReading, sensorValue } from '../../../shared/sensors';
 import type { Fault } from '../../../shared/protocol';
 import { moduleName, type BaseModuleId } from '../../modules';
-import { selectServerNow, useStore } from '../../store';
+import { selectReady, selectServerNow, useStore } from '../../store';
 import { isLabelOccluded } from './labelOcclusion';
 import { badgeText, dotText } from './labelRules';
 import { STATUS_LIGHT_TOP } from './StatusLight';
@@ -59,10 +59,27 @@ function Anchored({
   });
   return (
     <Html position={[0, height + lift * unit, 0]} pointerEvents="none" zIndexRange={[0, 0]}>
-      <div ref={anchor} className="fx-anchor">
-        {children}
-      </div>
+      <AnchorBox anchor={anchor}>{children}</AnchorBox>
     </Html>
+  );
+}
+
+/**
+ * The label's root element. `Html` renders in its own React root, which only gets going a render or
+ * two after the label mounts (seconds on a slow phone while the first frames are heavy), so labels
+ * mount as soon as the base is in and wait here, hidden, for `selectReady`. This component
+ * subscribes to the store itself, so it flips in the same tick as the HUD instead of going through
+ * `Html`'s re-render (#61).
+ */
+/** Style, not a class: `useFrame` toggles `fx-dim` on this node and a className re-render would wipe it. */
+const HELD = { visibility: 'hidden' } as const;
+
+function AnchorBox({ anchor, children }: { anchor: RefObject<HTMLDivElement | null>; children: ReactNode }) {
+  const ready = useStore(selectReady);
+  return (
+    <div ref={anchor} className="fx-anchor" style={ready ? undefined : HELD}>
+      {children}
+    </div>
   );
 }
 
