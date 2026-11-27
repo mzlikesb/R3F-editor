@@ -1,23 +1,48 @@
 import { CameraControls } from '@react-three/drei';
 import type { CameraControls as CameraControlsImpl } from '@react-three/drei';
-import { useEffect, useRef } from 'react';
-import { Box3, Vector3 } from 'three';
+import { useThree } from '@react-three/fiber';
+import { useEffect, useMemo, useRef } from 'react';
+import { Box3, PerspectiveCamera, Vector3 } from 'three';
 import { useStore } from '../store';
-import { BOUNDS, LAYOUT, OVERVIEW } from './layout';
+import { fitDistance, overviewFov } from './framing';
+import { BOUNDS, LAYOUT, OVERVIEW_DIR, OVERVIEW_POINTS, OVERVIEW_TARGET } from './layout';
 
 const PHONE = '(max-width: 600px)';
 /** A portrait phone sees a much narrower slice horizontally, so focus from further away. */
 const PHONE_FOCUS_SCALE = 1.7;
+/** Focused module's look-at height (world). Kept above the boundary floor so panning never snaps it. */
+const FOCUS_Y = 0.8;
+/**
+ * Screen-space shift of the focused module, as a fraction of the camera distance (CameraControls
+ * focal offset, camera-up axis; negative moves the module down the screen). Both push it a little
+ * down so its badge or name tag clears the HUD; on a phone the steeper, farther camera already keeps
+ * it above the bottom panel.
+ */
+const FOCUS_OFFSET = { desktop: -0.06, phone: -0.08 } as const;
+/** Pixels the overview keeps free: HUD on top, hint/toast at the bottom. */
+const OVERVIEW_MARGIN = { side: 12, top: 130, bottom: 70 } as const;
+const MIN_MAX_DISTANCE = 38;
 
 /**
  * One CameraControls: orbit/zoom/pan by hand, smooth focus on the selected module, back to the whole
- * base when nothing is selected. On a phone the focused view is raised so the bottom panel does not
- * cover the module.
+ * base when nothing is selected. The overview distance and field of view follow the screen shape, so
+ * a portrait phone shows all five modules.
  */
 export function CameraRig() {
   const controls = useRef<CameraControlsImpl>(null);
   const first = useRef(true);
+  const lastSelected = useRef<string | null>(null);
   const selected = useStore((s) => s.selected);
+  const width = useThree((s) => s.size.width);
+  const height = useThree((s) => s.size.height);
+  const { fov, overviewDistance } = useMemo(() => {
+    const f = overviewFov(width / Math.max(1, height));
+    const d = fitDistance(
+      { target: OVERVIEW_TARGET, dir: OVERVIEW_DIR, fovDeg: f, width, height, margin: OVERVIEW_MARGIN },
+      OVERVIEW_POINTS,
+    );
+    return { fov: f, overviewDistance: d };
+  }, [width, height]);
 
   useEffect(() => {
     const c = controls.current;
@@ -27,24 +52,45 @@ export function CameraRig() {
 
   useEffect(() => {
     const c = controls.current;
-    if (!c) return;
+    if (!c || width === 0 || height === 0) return;
     const phone = window.matchMedia(PHONE).matches;
-    const animate = !first.current;
+    // Animate only when the selection changed; a resize or the first frame jumps.
+    const animate = !first.current && lastSelected.current !== selected;
     first.current = false;
+    lastSelected.current = selected;
+
+    const cam = c.camera;
+    if (cam instanceof PerspectiveCamera && cam.fov !== fov) {
+      cam.fov = fov;
+      cam.updateProjectionMatrix();
+    }
+    const d = overviewDistance;
+
     if (selected === null) {
-      const o = phone ? OVERVIEW.phone : OVERVIEW.desktop;
-      void c.setLookAt(0, o.y, o.z, 0, 0.5, 0, animate);
+      const len = Math.hypot(OVERVIEW_DIR.x, OVERVIEW_DIR.y, OVERVIEW_DIR.z);
+      const t = OVERVIEW_TARGET;
+      void c.setFocalOffset(0, 0, 0, animate);
+      void c.setLookAt(
+        t.x + (OVERVIEW_DIR.x / len) * d,
+        t.y + (OVERVIEW_DIR.y / len) * d,
+        t.z + (OVERVIEW_DIR.z / len) * d,
+        t.x,
+        t.y,
+        t.z,
+        animate,
+      );
       return;
     }
     const l = LAYOUT[selected];
     const len = Math.hypot(l.x, l.z);
     const dx = len > 0.01 ? l.x / len : 0;
     const dz = len > 0.01 ? l.z / len : 1;
-    const d = l.focusDistance * (phone ? PHONE_FOCUS_SCALE : 1);
-    const ty = phone ? -0.8 : 0.8;
-    const cy = phone ? d * 1.15 : d * 0.55;
-    void c.setLookAt(l.x + dx * d, cy, l.z + dz * d, l.x, ty, l.z, animate);
-  }, [selected]);
+    const fd = l.focusDistance * (phone ? PHONE_FOCUS_SCALE : 1);
+    const cy = phone ? fd * 1.15 : fd * 0.55;
+    const offset = (phone ? FOCUS_OFFSET.phone : FOCUS_OFFSET.desktop) * Math.hypot(fd, cy);
+    void c.setFocalOffset(0, offset, 0, animate);
+    void c.setLookAt(l.x + dx * fd, cy, l.z + dz * fd, l.x, FOCUS_Y, l.z, animate);
+  }, [selected, width, height, fov, overviewDistance]);
 
   return (
     <CameraControls
@@ -52,7 +98,7 @@ export function CameraRig() {
       makeDefault
       maxPolarAngle={Math.PI * 0.47}
       minDistance={3}
-      maxDistance={38}
+      maxDistance={Math.max(MIN_MAX_DISTANCE, overviewDistance * 1.25)}
       smoothTime={0.35}
     />
   );

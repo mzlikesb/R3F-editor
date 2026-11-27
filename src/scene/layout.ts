@@ -85,5 +85,24 @@ export const PROPS: readonly Prop[] = [
   { model: 'crater', x: -12, z: -11, scale: 7, rotationY: 1.4 },
 ];
 
-export const OVERVIEW = { desktop: { y: 13, z: 19 }, phone: { y: 18, z: 27 } } as const;
+/** The overview looks at this point from this direction; the distance comes from `framing.fitDistance`. */
+export const OVERVIEW_TARGET = { x: 0, y: 0.5, z: 0 } as const;
+export const OVERVIEW_DIR = { x: 0, y: 12.5, z: 19 } as const;
+/** Camera position before the first fit (the desktop overview). */
+export const OVERVIEW_START = [0, 13, 19] as const;
+
+/** Each module's footprint corners and top (tap box, so a little generous) in world units: what the overview must show. */
+export const OVERVIEW_POINTS = Object.values(LAYOUT).flatMap((l) => {
+  const rx = l.tapHalf[0] * l.scale;
+  const rz = l.tapHalf[2] * l.scale;
+  const top = l.tapHeight * l.scale;
+  return [
+    { x: l.x - rx, y: 0, z: l.z },
+    { x: l.x + rx, y: 0, z: l.z },
+    { x: l.x, y: 0, z: l.z - rz },
+    { x: l.x, y: 0, z: l.z + rz },
+    { x: l.x, y: top, z: l.z },
+  ];
+});
+
 export const BOUNDS = 14;

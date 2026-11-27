@@ -4,7 +4,7 @@ import { useStore } from '../store';
 import { MODULES } from '../modules';
 import { CameraRig } from './CameraRig';
 import { Ground } from './Ground';
-import { OVERVIEW } from './layout';
+import { OVERVIEW_START } from './layout';
 import { Lighting } from './Lighting';
 import { Module } from './Module';
 import { PERF_ENABLED } from './perf';
@@ -23,7 +23,7 @@ export function BaseCanvas() {
     <Canvas
       shadows
       dpr={[1, 2]}
-      camera={{ position: [0, OVERVIEW.desktop.y, OVERVIEW.desktop.z], fov: 50, near: 0.5, far: 400 }}
+      camera={{ position: [...OVERVIEW_START], fov: 50, near: 0.5, far: 400 }}
       style={{ background: SKY_GRADIENT }}
       onPointerDown={(e) => {
         down.current = { x: e.clientX, y: e.clientY };
