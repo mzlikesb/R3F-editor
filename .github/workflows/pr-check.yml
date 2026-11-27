@@ -20,10 +20,12 @@ permissions:
   pull-requests: read
   contents: read
 
-# Only the latest state matters and the job changes nothing, so superseded runs are cancelled.
+# The job is short and changes nothing, so runs queue per PR instead of cancelling each other.
+# With cancel-in-progress the newest run could be the cancelled one and leave the required
+# check red (PR #77). Queued, the newest event always runs last and decides the result.
 concurrency:
   group: pr-check-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 # Approval is GitHub's own review (branch protection), not a label. This check only
 # validates the PR's metadata and that large PRs are never queued for auto-merge.
