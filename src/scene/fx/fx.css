@@ -1,0 +1,71 @@
+.fx-tag,
+.fx-badge {
+  padding: 3px 9px;
+  border-radius: 6px;
+  background: rgba(16, 18, 22, 0.85);
+  color: #e6e9ee;
+  font: inherit;
+  font-size: 13px;
+  white-space: nowrap;
+  user-select: none;
+  pointer-events: none;
+  animation: fx-fade-in 0.18s ease-out;
+}
+
+.fx-badge {
+  border: 1px solid rgba(255, 122, 122, 0.6);
+  color: #ff8a8a;
+  pointer-events: auto;
+  cursor: pointer;
+  min-height: 32px;
+  animation:
+    fx-fade-in 0.18s ease-out,
+    fx-badge-pulse 1.6s ease-in-out infinite;
+}
+
+.fx-badge:active {
+  background: rgba(40, 18, 18, 0.95);
+}
+
+.fx-flash {
+  position: fixed;
+  inset: 0;
+  background: #fff;
+  opacity: 0;
+  pointer-events: none;
+  animation: fx-flash 0.35s ease-out forwards;
+}
+
+@keyframes fx-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fx-badge-pulse {
+  50% {
+    border-color: rgba(255, 122, 122, 0.15);
+  }
+}
+
+@keyframes fx-flash {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fx-badge {
+    animation: none;
+  }
+  .fx-flash {
+    animation-duration: 0.2s;
+    background: rgba(255, 255, 255, 0.5);
+  }
+}
