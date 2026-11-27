@@ -86,6 +86,8 @@ describe('asteroid belt sight lines', () => {
       { x: BOUNDS, y: 4, z: BOUNDS },
       { x: -BOUNDS, y: 0, z: -BOUNDS },
     ];
+    // One expect at the end: tens of thousands of expect() calls timed out on CI (#86).
+    let farthest = 0;
     for (const t of targets)
       for (let ai = 0; ai < 12; ai++)
         for (const polar of [0.05, MAX_POLAR / 2, MAX_POLAR])
@@ -96,9 +98,10 @@ describe('asteroid belt sight lines', () => {
                 const s = k / 20;
                 const x = c.x + (p.x - c.x) * s;
                 const z = c.z + (p.z - c.z) * s;
-                expect(Math.hypot(x, z)).toBeLessThan(BELT.inner - maxSize);
+                farthest = Math.max(farthest, Math.hypot(x, z));
               }
           }
+    expect(farthest).toBeLessThan(BELT.inner - maxSize);
   });
 
   it('altitude: past each base point the overview sight line stays under the belt', () => {
