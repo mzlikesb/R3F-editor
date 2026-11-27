@@ -17,6 +17,8 @@ export function Panel() {
   const othersHolding = useStore((s) => (s.selected ? selectOthersHolding(s, s.selected) : 0));
   const enabled = useStore((s) => fault !== null && canRepair(s.sync, s.connection, fault.id));
   const holdKind = useStore((s) => s.repair.hold.kind);
+  // An incompatible server also disables the button; the update banner already says why.
+  const incompatible = useStore((s) => s.sync.incompatible);
   const button = useRef<HTMLButtonElement>(null);
   const fill = useRef<HTMLSpanElement>(null);
   const sensorText = useRef<HTMLParagraphElement>(null);
@@ -155,7 +157,7 @@ export function Panel() {
           <span className="label">{label}</span>
         </button>
       )}
-      {repairButton && !enabled && <p className="hint">연결되면 수리할 수 있어요</p>}
+      {repairButton && !enabled && !incompatible && <p className="hint">연결되면 수리할 수 있어요</p>}
     </aside>
   );
 }
