@@ -39,6 +39,6 @@ check "null bodies" pending '[{"user":{"login":"x"},"body":null}]' '[{"user":{"l
 
 # Description names the head or the reviewed commit.
 echo '[]' >"$tmp/c.json"; echo '[]' >"$tmp/r.json"
-d=$(bash codex-gate.sh "$HEAD" "$tmp/c.json" "$tmp/r.json" | jq -r .description)
+d=$(cd "$tmp" && bash "$OLDPWD/codex-gate.sh" "$HEAD" c.json r.json | jq -r .description)
 case "$d" in *c9eb979*"@codex review"*) echo "ok   pending description";; *) echo "FAIL description: $d"; fail=1;; esac
 exit $fail
