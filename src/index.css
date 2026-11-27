@@ -16,17 +16,62 @@ body {
   overscroll-behavior: none;
 }
 
-.hud {
+.hud-wrap {
   position: fixed;
   top: 12px;
   left: 50%;
   transform: translateX(-50%);
-  padding: 6px 14px;
-  border-radius: 999px;
-  background: rgba(16, 18, 22, 0.8);
-  font-size: 14px;
-  white-space: nowrap;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100vw - 32px);
   pointer-events: none;
+}
+
+.hud {
+  padding: 6px 16px;
+  border-radius: 16px;
+  background: rgba(16, 18, 22, 0.8);
+  text-align: center;
+}
+
+.hud-repairs {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.hud-people {
+  font-size: 13px;
+  color: #aeb4bd;
+}
+
+/* Plays again whenever the element's key changes: a short grow-and-return, no count-up. */
+.bump {
+  display: inline-block;
+  animation: bump 0.4s ease-out;
+}
+
+@keyframes bump {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.18);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.healthy {
+  margin: 0;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(16, 18, 22, 0.7);
+  font-size: 12px;
+  color: #8fd4a6;
+  text-align: center;
 }
 
 .ok {
@@ -37,14 +82,27 @@ body {
   color: #ff7a7a;
 }
 
-.panel {
+.bottom-stack {
   position: fixed;
-  right: 16px;
-  top: 64px;
-  width: 240px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px calc(12px + env(safe-area-inset-bottom));
+  pointer-events: none;
+}
+
+.panel {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 360px;
   padding: 16px;
   border-radius: 12px;
   background: rgba(24, 27, 33, 0.92);
+  pointer-events: auto;
   /* Long-press defenses: no text selection, callout, or browser gestures while holding. */
   touch-action: none;
   user-select: none;
@@ -96,40 +154,63 @@ body {
   position: relative;
 }
 
-.hint,
-.notice {
+.hint {
   margin: 8px 0 0;
   min-height: 1.2em;
   font-size: 13px;
   color: #aeb4bd;
 }
 
-.notice {
-  color: #6fcf8f;
+.goto {
+  width: 100%;
+  min-height: 44px;
+  margin-bottom: 4px;
+  border: 1px solid #ff7a7a;
+  border-radius: 10px;
+  background: transparent;
+  color: #ff7a7a;
+  font: inherit;
+  cursor: pointer;
 }
 
-.badge {
-  padding: 2px 8px;
-  border-radius: 6px;
-  background: rgba(16, 18, 22, 0.85);
-  font-size: 13px;
-  white-space: nowrap;
+.toast,
+.hint-bar {
+  margin: 0;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(24, 27, 33, 0.92);
+  font-size: 14px;
+  text-align: center;
   pointer-events: none;
-  user-select: none;
 }
 
-.badge-fault {
+.toast {
+  color: #8fd4a6;
+  animation: toast-in 0.25s ease-out;
+}
+
+.toast-warn {
   color: #ff7a7a;
 }
 
-@media (max-width: 600px) {
-  .panel {
-    right: 0;
-    left: 0;
-    top: auto;
-    bottom: 0;
-    width: auto;
-    border-radius: 12px 12px 0 0;
-    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+.hint-bar {
+  color: #aeb4bd;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bump,
+  .toast {
+    animation: none;
   }
 }

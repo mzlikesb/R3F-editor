@@ -145,8 +145,7 @@ export function parseServerMessage(raw: string): ServerMessage | null {
     case 'repaired':
       if (!isCount(m.version) || !isCount(m.repairs)) return null;
       if (typeof m.faultId !== 'string' || m.faultId === '') return null;
-      // TODO(share, plan 005 D.11): read `mine` (only `true` counts; missing or mistyped → false).
-      return { type: 'repaired', version: m.version, faultId: m.faultId, repairs: m.repairs, mine: false };
+      return { type: 'repaired', version: m.version, faultId: m.faultId, repairs: m.repairs, mine: m.mine === true };
     case 'presence':
       if (!isCount(m.count)) return null;
       return { type: 'presence', count: m.count };

@@ -1,10 +1,10 @@
 /** Client store. It mirrors server state through the pure reducers; it never changes the base itself. */
 import { create } from 'zustand';
 import type { RepairRequest, ServerMessage, SnapshotMessage } from '../shared/protocol';
-import { initialFeedback, type FeedbackEvent, type FeedbackState } from './feedback';
+import { classifyRepaired, initialFeedback, reduceFeedback, type FeedbackEvent, type FeedbackState } from './feedback';
 import { initialRepairUi, reduceHold, type HoldEvent, type RepairUi } from './hold';
 import type { BaseModuleId } from './modules';
-import { applyRestSnapshot, initialSync, type ConnectionStatus, type SyncState } from './sync';
+import { applyRestSnapshot, applyServerMessage, initialSync, type ConnectionStatus, type SyncState } from './sync';
 
 export interface Store {
   sync: SyncState;
@@ -47,19 +47,34 @@ export const useStore = create<Store>((set, get) => ({
   repair: initialRepairUi,
   feedback: initialFeedback,
   receive: (msg, now) => {
-    void msg;
-    void now;
-    throw new Error('TODO(share): store.receive');
+    const before = get();
+    const sync = applyServerMessage(before.sync, msg);
+    let feedback = before.feedback;
+    let repair = before.repair;
+    if (msg.type === 'repaired') {
+      // A stale repaired (base unchanged) does nothing at all.
+      if (sync.base !== before.sync.base) {
+        const outcome = classifyRepaired(before.repair.hold, msg);
+        feedback = reduceFeedback(feedback, { type: 'repaired', outcome, now });
+        repair = reduceHold(repair, { type: 'repaired', faultId: msg.faultId, now }).ui;
+      }
+    } else if (msg.type === 'snapshot') {
+      repair = reduceHold(repair, { type: 'snapshot', now }).ui;
+    }
+    if (msg.type !== 'presence') {
+      feedback = reduceFeedback(feedback, { type: 'base', faulted: sync.base?.fault != null, now });
+    }
+    set({ sync, feedback, repair });
   },
   applyRest: (snap) => set((s) => ({ sync: applyRestSnapshot(s.sync, snap) })),
   setConnection: (connection) => set({ connection }),
   select: (selected) => {
-    // TODO(share, plan 005 B.8): a non-null selection also dispatches `moduleTapped`.
     // The repair button lives in the panel of the selected module. If selection moves away
     // mid-hold (e.g. a second finger taps the canvas), the button unmounts without a
     // pointerup, so cancel the hold here or it would complete on its own.
     if (selected !== get().selected) get().dispatchHold({ type: 'cancel', now: performance.now() });
     set({ selected });
+    if (selected !== null) get().dispatchFeedback({ type: 'moduleTapped' });
   },
   dispatchHold: (event) => {
     const { ui, send } = reduceHold(get().repair, event);
@@ -67,8 +82,8 @@ export const useStore = create<Store>((set, get) => ({
     if (send) sender?.(send);
   },
   dispatchFeedback: (event) => {
-    void event;
-    throw new Error('TODO(share): store.dispatchFeedback');
+    const next = reduceFeedback(get().feedback, event);
+    if (next !== get().feedback) set({ feedback: next });
   },
 }));
 
@@ -76,13 +91,10 @@ export const useStore = create<Store>((set, get) => ({
 
 /** True while the server reports a fault (only the generator can break in this milestone). */
 export function selectFaulted(s: Store): boolean {
-  void s;
-  throw new Error('TODO(share): selectFaulted');
+  return s.sync.base?.fault != null;
 }
 
 /** `fault` when the current fault is on module `id`, else `ok` (also `ok` before the first snapshot). */
 export function selectModuleStatus(s: Store, id: BaseModuleId): 'fault' | 'ok' {
-  void s;
-  void id;
-  throw new Error('TODO(share): selectModuleStatus');
+  return s.sync.base?.fault?.moduleId === id ? 'fault' : 'ok';
 }

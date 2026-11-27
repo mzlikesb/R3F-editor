@@ -1,7 +1,8 @@
 import { DurableObject } from 'cloudflare:workers';
 import { PING, PONG, parseClientMessage, type ServerMessage } from '../shared/protocol';
-import { broadcast } from './broadcast';
+import { broadcast, broadcastEach } from './broadcast';
 import { createRateLimiter } from './rateLimit';
+import { isMine, newAttachment, readSocketId } from './socketId';
 import {
   countPresence,
   decideOnAlarm,
@@ -40,6 +41,7 @@ export class BaseRoom extends DurableObject<Env> {
 
     const { 0: client, 1: server } = new WebSocketPair();
     this.ctx.acceptWebSocket(server);
+    server.serializeAttachment(newAttachment(() => crypto.randomUUID()));
 
     let state = await this.loadState();
     const sockets = this.ctx.getWebSockets();
@@ -76,15 +78,14 @@ export class BaseRoom extends DurableObject<Env> {
     const after = repair(before, msg.faultId);
     if (after !== before) {
       await this.ctx.storage.put(STATE_KEY, after);
-      broadcast(
-        this.ctx.getWebSockets(),
+      const requesterId = readSocketId(ws.deserializeAttachment());
+      broadcastEach(this.ctx.getWebSockets(), (socket) =>
         JSON.stringify({
           type: 'repaired',
           version: after.version,
           faultId: msg.faultId,
           repairs: after.repairs,
-          // TODO(share, plan 005 D.11): true only for the requesting socket (see ./socketId).
-          mine: false,
+          mine: isMine(requesterId, readSocketId(socket.deserializeAttachment())),
         } satisfies ServerMessage),
       );
     }

@@ -11,8 +11,7 @@ export interface SocketAttachment {
 
 /** A fresh attachment with id `newId()` (`BaseRoom` passes `() => crypto.randomUUID()`). */
 export function newAttachment(newId: () => string): SocketAttachment {
-  void newId;
-  throw new Error('TODO(share): newAttachment');
+  return { id: newId() };
 }
 
 /**
@@ -20,13 +19,12 @@ export function newAttachment(newId: () => string): SocketAttachment {
  * whose `id` is a non-empty string (sockets opened before this deploy have no attachment).
  */
 export function readSocketId(attachment: unknown): string | null {
-  void attachment;
-  throw new Error('TODO(share): readSocketId');
+  if (typeof attachment !== 'object' || attachment === null || Array.isArray(attachment)) return null;
+  const id = (attachment as { id?: unknown }).id;
+  return typeof id === 'string' && id !== '' ? id : null;
 }
 
 /** True only when both ids exist and are equal. Two missing ids are not the same socket. */
 export function isMine(requesterId: string | null, socketId: string | null): boolean {
-  void requesterId;
-  void socketId;
-  throw new Error('TODO(share): isMine');
+  return requesterId !== null && socketId !== null && requesterId === socketId;
 }

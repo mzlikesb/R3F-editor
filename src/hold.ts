@@ -61,8 +61,9 @@ export function reduceHold(ui: RepairUi, event: HoldEvent): HoldResult {
     case 'disconnect':
       return hold.kind === 'holding' ? { ui: { ...ui, hold: { kind: 'idle' } }, send: null } : keep;
     case 'repaired':
-      // TODO(share, plan 005 D.11): holding or pending on `event.faultId` → idle; anything else unchanged.
-      throw new Error('TODO(share): reduceHold repaired');
+      return (hold.kind === 'holding' || hold.kind === 'pending') && hold.faultId === event.faultId
+        ? { ui: { ...ui, hold: { kind: 'idle' } }, send: null }
+        : keep;
     case 'snapshot':
       return hold.kind === 'pending' ? { ui: { ...ui, hold: { kind: 'idle' } }, send: null } : keep;
     case 'tick': {

@@ -80,14 +80,14 @@ export type FeedbackEvent =
 
 /** Classifies a `repaired` from the hold state *before* `reduceHold` handles it. */
 export function classifyRepaired(hold: HoldState, msg: { faultId: string; mine: boolean }): RepairOutcome {
-  void hold;
-  void msg;
-  throw new Error('TODO(share): classifyRepaired');
+  if (msg.mine) return 'mine';
+  const busyOnIt = (hold.kind === 'holding' || hold.kind === 'pending') && hold.faultId === msg.faultId;
+  return busyOnIt ? 'beaten' : 'other';
 }
 
 export function effectsFor(outcome: RepairOutcome): RepairEffects {
-  void outcome;
-  throw new Error('TODO(share): effectsFor');
+  const mine = outcome === 'mine';
+  return { sweep: true, burst: mine, ringPing: !mine };
 }
 
 /**
@@ -99,16 +99,35 @@ export function effectsFor(outcome: RepairOutcome): RepairEffects {
  * Returns `state` itself when nothing changes.
  */
 export function reduceFeedback(state: FeedbackState, event: FeedbackEvent): FeedbackState {
-  void state;
-  void event;
-  throw new Error('TODO(share): reduceFeedback');
+  switch (event.type) {
+    case 'repaired':
+      return {
+        ...state,
+        toast: { kind: event.outcome, until: event.now + TOAST_MS },
+        effect: { outcome: event.outcome, seq: (state.effect?.seq ?? 0) + 1, at: event.now },
+      };
+    case 'base': {
+      if (!event.faulted) {
+        return state.healthySince === null ? { ...state, healthySince: event.now } : state;
+      }
+      if (state.healthySince === null) return state;
+      const refault = event.now - state.healthySince >= REFAULT_TOAST_MIN_HEALTHY_MS;
+      return {
+        ...state,
+        healthySince: null,
+        toast: refault ? { kind: 'refault', until: event.now + TOAST_MS } : state.toast,
+      };
+    }
+    case 'moduleTapped':
+      return state.hintDismissed ? state : { ...state, hintDismissed: true };
+    case 'tick':
+      return state.toast && event.now >= state.toast.until ? { ...state, toast: null } : state;
+  }
 }
 
 /** The bottom hint `고장 난 모듈을 눌러 보세요`: only while faulted, until a module is tapped. */
 export function hintVisible(faulted: boolean, state: FeedbackState): boolean {
-  void faulted;
-  void state;
-  throw new Error('TODO(share): hintVisible');
+  return faulted && !state.hintDismissed;
 }
 
 export type BottomItem = 'panel' | 'toast' | 'hint';
@@ -118,6 +137,6 @@ export type BottomItem = 'panel' | 'toast' | 'hint';
  * visible ones, so a toast takes the panel's slot when there is no panel, and sits above it otherwise.
  */
 export function bottomStack(visible: { panel: boolean; toast: boolean; hint: boolean }): BottomItem[] {
-  void visible;
-  throw new Error('TODO(share): bottomStack');
+  const order: BottomItem[] = ['panel', 'toast', 'hint'];
+  return order.filter((item) => visible[item]);
 }
