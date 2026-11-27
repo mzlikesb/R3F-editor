@@ -65,7 +65,7 @@ export function ModuleFx({ id, handle }: ModuleFxProps) {
         <>
           <FloorRing radius={radius} fault={faulted} />
           {faulted ? null : <StatusLight height={height} />}
-          {othersHolding ? <HoldingRing height={height} unit={unit} /> : null}
+          {othersHolding ? <HoldingRing height={height} radius={radius} /> : null}
           {label === 'badge' && fault ? (
             <FaultBadge id={id} fault={fault} height={height} unit={unit} othersHolding={othersHolding} />
           ) : label === 'dot' ? (

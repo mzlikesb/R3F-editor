@@ -29,13 +29,16 @@ export function Lighting() {
   const ambientBase = envFailed ? AMBIENT_NO_ENV : AMBIENT;
   const sunBase = envFailed ? DIRECTIONAL_NO_ENV : DIRECTIONAL;
 
-  useFrame((_, delta) => {
+  useFrame(({ scene }, delta) => {
     const dark = selectBlackout(useStore.getState());
     const target = dark ? BLACKOUT_LEVEL : 1;
     const rate = dark ? DIM_RATE : RESTORE_RATE;
     level.current += (target - level.current) * Math.min(1, delta * rate);
     if (ambient.current) ambient.current.intensity = ambientBase * level.current;
     if (sun.current) sun.current.intensity = sunBase * level.current;
+    // The HDRI lights the ground and rocks more than the direct lights do; without this the blackout
+    // barely darkens them. Written every frame, so `Environment` re-applying 1 on a render is undone.
+    scene.environmentIntensity = level.current;
   });
 
   return (

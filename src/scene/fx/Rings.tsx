@@ -123,23 +123,27 @@ const HOLD_GEOMETRY = new RingGeometry(0.8, 1, 40, 1, 0, Math.PI * 1.5);
 const HOLD_MATERIAL = createRingMaterial(new Color('#ffd166'));
 HOLD_MATERIAL.opacity = 0.9;
 const HOLD_SPIN = 2.4;
-/** World-space radius and gap above the module's top. */
-const HOLD_RADIUS = 0.45;
-const HOLD_LIFT = 0.4;
+/**
+ * The ring circles the module's body at this share of its height, this much wider than its
+ * footprint. Above the top it rose into the badge or `⚠` dot (which sit `LABEL_LIFT` above the top)
+ * and hid behind them, most of all on a phone.
+ */
+const HOLD_HEIGHT_SHARE = 0.55;
+const HOLD_RADIUS_SCALE = 1.3;
 
 /**
- * A small spinning arc above a module while someone else is repairing it. One mesh; geometry and
- * material are shared by all modules. `unit` = local units per world unit (1 / module scale).
+ * A spinning arc around a module's body while someone else is repairing it. One mesh; geometry and
+ * material are shared by all modules. `radius` and `height` are the module's, in its local units.
  */
-export function HoldingRing({ height, unit }: { height: number; unit: number }) {
+export function HoldingRing({ height, radius }: { height: number; radius: number }) {
   const mesh = useRef<Mesh>(null);
   useFrame((_, delta) => {
     const m = mesh.current;
     if (m) m.rotation.z -= delta * HOLD_SPIN;
   });
-  const s = HOLD_RADIUS * unit;
+  const s = radius * HOLD_RADIUS_SCALE;
   return (
-    <group position-y={height + HOLD_LIFT * unit} rotation-x={-Math.PI / 2} scale={[s, s, 1]}>
+    <group position-y={height * HOLD_HEIGHT_SHARE} rotation-x={-Math.PI / 2} scale={[s, s, 1]}>
       <mesh ref={mesh} geometry={HOLD_GEOMETRY} material={HOLD_MATERIAL} raycast={() => null} />
     </group>
   );
