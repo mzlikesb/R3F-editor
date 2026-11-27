@@ -305,7 +305,7 @@ describe('stepQuality: frame-capped devices', () => {
   it('a desktop stuck at 30 fps drops once, sees no gain, goes back and stays', () => {
     const r = run(ready(), T0, T0 + 600000, () => 30);
     expect(r.changes.map((c) => c[1])).toEqual([1, 0]);
-    expect(r.state.floor).toBe(0);
+    expect(r.state.floor?.stage).toBe(0);
     expect(r.state.stage).toBe(0);
   });
   it('a mobile capped at 20 does the same', () => {
@@ -321,12 +321,37 @@ describe('stepQuality: frame-capped devices', () => {
   });
   it('the floor lifts once the FPS clears the up threshold', () => {
     let r = run(ready(), T0, T0 + 60000, () => 30);
-    expect(r.state.floor).toBe(0);
+    expect(r.state.floor?.stage).toBe(0);
     r = run(r.state, T0 + 60000, T0 + 70000, () => 60);
     expect(r.state.floor).toBeNull();
     // Now a load that dropping does help with is handled again.
     r = run(r.state, T0 + 70000, T0 + 90000, (stage) => (stage === 0 ? 40 : 60));
     expect(r.state.stage).toBe(1);
+  });
+  it('a capped device that later slows down (30 -> 20) tries one drop again, then floors anew', () => {
+    let r = run(ready(), T0, T0 + 60000, () => 30);
+    expect(r.state.floor).toEqual({ stage: 0, fps: 30 });
+    // Under 85 % of 30 but only briefly: the floor holds.
+    r = run(r.state, T0 + 60000, T0 + 61500, () => 20);
+    expect(r.state.floor).not.toBeNull();
+    r = run(r.state, T0 + 61500, T0 + 120000, () => 20);
+    expect(r.changes.map((c) => c[1])).toEqual([1, 0]);
+    expect(r.state.floor).toEqual({ stage: 0, fps: 20 });
+    expect(r.state.stage).toBe(0);
+  });
+  it('after the floor lifts, a drop that helps is kept', () => {
+    let r = run(ready(), T0, T0 + 60000, () => 30);
+    r = run(r.state, T0 + 60000, T0 + 120000, (stage) => (stage === 0 ? 20 : 30));
+    // 0 -> 1 helped (20 -> 30) and stays; 1 -> 2 did not (still 30 under a cap) and is undone.
+    expect(r.changes.map((c) => c[1])).toEqual([1, 2, 1]);
+    expect(r.state.stage).toBe(1);
+    expect(r.state.floor).toEqual({ stage: 1, fps: 30 });
+  });
+  it('a small dip under the floor FPS (over 85 %) keeps the floor', () => {
+    let r = run(ready(), T0, T0 + 60000, () => 30);
+    r = run(r.state, T0 + 60000, T0 + 600000, () => 26);
+    expect(r.changes).toEqual([]);
+    expect(r.state.floor?.stage).toBe(0);
   });
   it('override clears the floor', () => {
     const r = run(ready(), T0, T0 + 60000, () => 30);

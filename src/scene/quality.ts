@@ -146,9 +146,12 @@ export const BACKOFF_MAX_MS = 480000;
 /**
  * Frame-capped devices (a 30 Hz low-power Safari): dropping a stage cannot raise the FPS. If the
  * mean once the cooldown ends is not at least this much above the mean at the drop, the drop is
- * undone and no drop goes below that stage until the FPS clears `up` (the cap is gone).
+ * undone and no drop goes below that stage until the FPS clears `up` (the cap is gone) or falls
+ * to `FLOOR_LOSS` of the FPS at the undo for `DOWN_HOLD_MS` (something else got slower: dropping
+ * is tried again, and checked again).
  */
 export const DROP_GAIN = 1.1;
+export const FLOOR_LOSS = 0.85;
 
 export interface QualityState {
   stage: number;
@@ -165,8 +168,10 @@ export interface QualityState {
   backoffMs: number;
   /** The last drop, until its effect is checked: the stage it left and the FPS then. */
   dropCheck: { from: number; fps: number } | null;
-  /** No drop from this stage or below (null: none). Set by a drop that did nothing. */
-  floor: number | null;
+  /** No drop from this stage or below (null: none), and the FPS when it was set. */
+  floor: { stage: number; fps: number } | null;
+  /** Since when the FPS has been under `FLOOR_LOSS` of the floor's FPS. */
+  degradedSince: number | null;
 }
 
 export type QualityEvent =
@@ -192,10 +197,11 @@ export function initialQuality(t0: number): QualityState {
     backoffMs: BACKOFF_START_MS,
     dropCheck: null,
     floor: null,
+    degradedSince: null,
   };
 }
 
-const NO_TIMERS = { belowSince: null, aboveSince: null, calmSince: null } as const;
+const NO_TIMERS = { belowSince: null, aboveSince: null, calmSince: null, degradedSince: null } as const;
 
 function lower(stages: readonly number[], stage: number): number | null {
   for (const s of stages) if (s > stage) return s;
@@ -251,19 +257,21 @@ function sample(
   const belowSince = fps < th.down ? (s.belowSince ?? t) : null;
   const aboveSince = !upBlocked && fps > th.up ? (s.aboveSince ?? t) : null;
   const calmSince = !upBlocked && fps >= probeLevel ? (s.calmSince ?? t) : null;
-  const floor = fps > th.up ? null : s.floor;
-  const next = { ...s, belowSince, aboveSince, calmSince, floor };
+  const degradedSince = s.floor !== null && fps < s.floor.fps * FLOOR_LOSS ? (s.degradedSince ?? t) : null;
+  const lifted = fps > th.up || (degradedSince !== null && t - degradedSince >= DOWN_HOLD_MS);
+  const floor = lifted ? null : s.floor;
+  const next = { ...s, belowSince, aboveSince, calmSince, floor, degradedSince: floor ? degradedSince : null };
   if (t - s.lastChangeAt < COOLDOWN_MS) return next;
 
   if (s.dropCheck !== null) {
     const { from, fps: before } = s.dropCheck;
     if (forced || fps >= before * DROP_GAIN) return { ...next, dropCheck: null };
     // The drop bought nothing: undo it (not an up, so it is never a failed up) and stop dropping.
-    return { ...next, ...NO_TIMERS, stage: from, lastChangeAt: t, dropCheck: null, floor: from };
+    return { ...next, ...NO_TIMERS, stage: from, lastChangeAt: t, dropCheck: null, floor: { stage: from, fps } };
   }
 
   const down = lower(ladder.stages, s.stage);
-  const floored = floor !== null && s.stage >= floor;
+  const floored = floor !== null && s.stage >= floor.stage;
   if (belowSince !== null && t - belowSince >= DOWN_HOLD_MS && down !== null && !floored) {
     const failedUp = t - s.lastUpAt <= FAIL_WINDOW_MS;
     return {
