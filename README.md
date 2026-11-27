@@ -77,10 +77,10 @@ Worker와 Durable Object까지 포함해 한 번에 띄우려면:
 npm run preview
 ```
 
-HMR을 쓰며 개발할 때는 터미널 두 개를 쓴다. `npm run dev`는 클라이언트만 띄우고 `/ws`와 `/api`는 8787로 프록시하므로, wrangler를 따로 띄워야 실시간 통신이 붙는다.
+HMR을 쓰며 개발할 때는 터미널 두 개를 쓴다. `npm run dev`는 클라이언트만 띄우고 `/ws`와 `/api`는 8787로 프록시하므로, wrangler를 따로 띄워야 실시간 통신이 붙는다. `wrangler.jsonc`가 정적 에셋 폴더로 `./dist`를 가리키고 그 폴더는 커밋되지 않으니, wrangler를 처음 띄우기 전에 한 번 빌드한다.
 
 ```bash
-npx wrangler dev
+npm run build && npx wrangler dev
 ```
 
 ```bash
