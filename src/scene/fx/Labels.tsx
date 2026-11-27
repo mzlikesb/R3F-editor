@@ -2,30 +2,45 @@ import { Html } from '@react-three/drei';
 import type { MouseEvent } from 'react';
 import { moduleName, type BaseModuleId } from '../../modules';
 import { useStore } from '../../store';
+import { badgeText } from './labelRules';
 import './fx.css';
 
-/** Name tags and the fault badge sit this far above the module's top. */
-const LABEL_LIFT = 0.45;
+/** Name tags and the fault badge sit this far (world units) above the module's top. */
+const LABEL_LIFT = 0.9;
 
 /** Always-visible tag for the generator, shown for others only while selected. `pointer-events: none`. */
-export function NameTag({ id, height }: { id: BaseModuleId; height: number }) {
+export function NameTag({ id, height, unit }: { id: BaseModuleId; height: number; unit: number }) {
   return (
-    <Html position={[0, height + LABEL_LIFT, 0]} center pointerEvents="none" zIndexRange={[0, 0]}>
+    <Html position={[0, height + LABEL_LIFT * unit, 0]} center pointerEvents="none" zIndexRange={[0, 0]}>
       <div className="fx-tag">{moduleName(id)}</div>
     </Html>
   );
 }
 
-/** The only tappable label: tapping it selects the faulted module. */
-export function FaultBadge({ id, height }: { id: BaseModuleId; height: number }) {
+/**
+ * The only tappable label: tapping it selects the faulted module. While that module's panel is open
+ * it drops `· 눌러서 수리` (the panel's button says how).
+ */
+export function FaultBadge({
+  id,
+  height,
+  unit,
+  selected,
+}: {
+  id: BaseModuleId;
+  height: number;
+  /** Local units per world unit (1 / module scale), so the lift looks the same on every module. */
+  unit: number;
+  selected: BaseModuleId | null;
+}) {
   const onClick = (e: MouseEvent) => {
     e.stopPropagation();
     useStore.getState().select(id);
   };
   return (
-    <Html position={[0, height + LABEL_LIFT, 0]} center pointerEvents="none" zIndexRange={[0, 0]}>
+    <Html position={[0, height + LABEL_LIFT * unit, 0]} center pointerEvents="none" zIndexRange={[0, 0]}>
       <button type="button" className="fx-badge" onClick={onClick}>
-        ⚠ {moduleName(id)} 고장 · 눌러서 수리
+        {badgeText(id, selected)}
       </button>
     </Html>
   );

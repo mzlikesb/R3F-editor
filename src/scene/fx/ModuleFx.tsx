@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { GENERATOR } from '../../../shared/protocol';
 import { effectsFor } from '../../feedback';
 import { isRepairable } from '../../modules';
 import { selectModuleStatus, useStore } from '../../store';
 import type { ModuleFxProps } from '../moduleTypes';
 import { Glow } from './Glow';
 import { FaultBadge, NameTag } from './Labels';
+import { labelKind } from './labelRules';
 import { FloorRing, RingPing, SweepRing } from './Rings';
 import { Sparks } from './Sparks';
 import { StatusLight } from './StatusLight';
@@ -28,7 +28,8 @@ const NO_TOKENS: Tokens = { sweep: 0, burst: 0, ping: 0 };
  */
 export function ModuleFx({ id, handle }: ModuleFxProps) {
   const faulted = useStore((s) => selectModuleStatus(s, id)) === 'fault';
-  const selected = useStore((s) => s.selected) === id;
+  const selected = useStore((s) => s.selected);
+  const faultedModule = useStore((s) => s.sync.base?.fault?.moduleId ?? null);
   const effect = useStore((s) => s.feedback.effect);
 
   // A repair that was already there at mount does not play. Adjusting state while rendering
@@ -52,7 +53,9 @@ export function ModuleFx({ id, handle }: ModuleFxProps) {
 
   const height = handle?.height ?? 1;
   const radius = handle?.radius ?? 0.6;
-  const showTag = id === GENERATOR ? !faulted : selected;
+  const label = labelKind(id, { selected, faulted: faultedModule });
+  // The model's parent is the module group, the only scaled ancestor (`scene/Module.tsx`).
+  const unit = 1 / (handle?.model.parent?.scale.x || 1);
 
   return (
     <group>
@@ -60,7 +63,11 @@ export function ModuleFx({ id, handle }: ModuleFxProps) {
         <>
           <FloorRing radius={radius} fault={faulted} />
           {faulted ? null : <StatusLight height={height} />}
-          {faulted ? <FaultBadge id={id} height={height} /> : showTag ? <NameTag id={id} height={height} /> : null}
+          {label === 'badge' ? (
+            <FaultBadge id={id} height={height} unit={unit} selected={selected} />
+          ) : label === 'tag' ? (
+            <NameTag id={id} height={height} unit={unit} />
+          ) : null}
           {isRepairable(id) ? (
             <>
               <SweepRing radius={radius} height={height} token={tokens.sweep} />
