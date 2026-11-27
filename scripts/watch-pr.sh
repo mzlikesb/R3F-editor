@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Polls a PR and prints one line per new review comment, review, or conversation comment.
 # Meant to run under Claude Code's Monitor tool: each stdout line is an event.
+# Also reports once per head SHA when the codex-reviewed commit status turns success
+# (Codex edits its summary and reacts instead of commenting when it finds nothing).
 # Skips the agent account's own comments; neon reviews (fixed header) are reported.
 # Exits when the PR is merged or closed.
 # Usage: scripts/watch-pr.sh <pr-number> [interval-seconds]
@@ -52,6 +54,16 @@ while true; do
   if [ "$state" = MERGED ] || [ "$state" = CLOSED ]; then
     echo "PR#$pr $state — 감시 종료"
     exit 0
+  fi
+
+  head=$(gh pr view "$pr" --repo "$repo" --json headRefOid -q .headRefOid 2>/dev/null || true)
+  if [ -n "$head" ]; then
+    cstate=$(gh api "repos/$repo/commits/$head/status" \
+      --jq '[.statuses[] | select(.context == "codex-reviewed")][0].state // ""' 2>/dev/null || true)
+    if [ "$cstate" = success ] && ! grep -qx "k$head" "$seen"; then
+      echo "k$head" >>"$seen"
+      echo "PR#$pr status [codex] head ${head:0:7} 리뷰 완료(codex-reviewed success)"
+    fi
   fi
 
   while IFS=$'\t' read -r id login url body; do
