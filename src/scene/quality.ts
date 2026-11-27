@@ -35,9 +35,14 @@ export interface Ladder {
   readonly dpr: readonly number[];
 }
 
+/** The device's own pixel ratio from `window`, 1 when it is missing or not a positive number. */
+export function sanitizeDpr(dpr: number | undefined): number {
+  return dpr !== undefined && Number.isFinite(dpr) && dpr > 0 ? dpr : 1;
+}
+
 /** dpr never goes above the device's own ratio (no oversampling). */
 export function buildLadder(tier: Tier, deviceDpr: number): Ladder {
-  const cap = deviceDpr > 0 ? deviceDpr : 1;
+  const cap = sanitizeDpr(deviceDpr);
   const d0 = Math.min(TOP_DPR[tier], cap);
   const d1 = Math.min(STEP_DPR[0], cap);
   const d2 = Math.min(STEP_DPR[1], cap);
@@ -72,7 +77,7 @@ export function levelOf(ladder: Ladder, stage: number): QualityLevel {
 
 /** Room for 2 s at 240 Hz. */
 const METER_CAPACITY = 512;
-/** A gap longer than this is a stall (tab switch, debugger), not a frame. */
+/** A single gap longer than this is a stall (tab switch, debugger), not a frame. */
 const MAX_DELTA = 1;
 
 /** Frame deltas (seconds) in a preallocated ring buffer. `push` never allocates. */
@@ -80,9 +85,20 @@ export class FpsMeter {
   private readonly deltas = new Float64Array(METER_CAPACITY);
   private head = 0;
   private count = 0;
+  /** Over-long gaps in a row. */
+  private stalls = 0;
 
   push(delta: number): void {
-    if (!(delta > 0) || delta > MAX_DELTA) return;
+    if (!(delta > 0)) return;
+    if (delta > MAX_DELTA) {
+      // One long gap is a stall and is dropped. Gaps that keep coming are the real frame rate
+      // (under 1 fps): keep their true length so the average moves, the stage can drop, and a drop
+      // that helps (2.5 s -> 1.25 s frames) shows as a gain instead of a flat 1 fps.
+      this.stalls += 1;
+      if (this.stalls < 2) return;
+    } else {
+      this.stalls = 0;
+    }
     this.deltas[this.head] = delta;
     this.head = (this.head + 1) % METER_CAPACITY;
     if (this.count < METER_CAPACITY) this.count += 1;
@@ -105,6 +121,7 @@ export class FpsMeter {
   reset(): void {
     this.head = 0;
     this.count = 0;
+    this.stalls = 0;
   }
 }
 
