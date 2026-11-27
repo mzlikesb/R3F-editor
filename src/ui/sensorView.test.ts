@@ -56,7 +56,7 @@ describe('trendPoints', () => {
 describe('sensorLine', () => {
   it('is the reading with the healthy level (playtest #47)', () => {
     expect(sensorLine('oxygen', null, T)).toBe(sensorReading('oxygen', sensorValue('oxygen', null, T)));
-    expect(sensorLine('generator', null, T)).toMatch(/^출력 \d+kW · 정상 120kW$/);
+    expect(sensorLine('generator', null, T)).toMatch(/^출력 \d+kW · 기준 120kW$/);
   });
 });
 

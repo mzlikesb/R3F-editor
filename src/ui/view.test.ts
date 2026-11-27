@@ -83,7 +83,7 @@ describe('HUD people line (playtest #47: short enough for a phone)', () => {
   it('connection label and healthy line', () => {
     expect(connectionLabel('open')).toBeNull();
     expect(connectionLabel('reconnecting')).toBe('재연결 중…');
-    expect(healthyLine({ faulted: false })).toBe('기지 정상 · 고장 나면 알려 드려요');
+    expect(healthyLine({ faulted: false })).toBe('기지 정상 · 고장이 나면 이 화면에 떠요');
     expect(healthyLine({ faulted: true })).toBeNull();
   });
 });
@@ -96,9 +96,9 @@ describe('segments: wrap only between parts, never inside `0회` or `1분 전`',
 });
 
 describe('faultCountLine: how close the blackout is', () => {
-  it('shows the count out of three while something is broken and it is not dark yet', () => {
-    expect(faultCountLine(1, null)).toBe('고장 1/3 · 3개면 정전');
-    expect(faultCountLine(2, null)).toBe('고장 2/3 · 3개면 정전');
+  it('shows the count and the blackout threshold while something is broken and it is not dark yet', () => {
+    expect(faultCountLine(1, null)).toBe('고장 1개 · 3개가 되면 정전');
+    expect(faultCountLine(2, null)).toBe('고장 2개 · 3개가 되면 정전');
   });
 
   it('nothing when healthy or during a blackout (the blackout banner says it)', () => {

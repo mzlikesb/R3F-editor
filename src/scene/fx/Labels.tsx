@@ -1,9 +1,11 @@
 import { Html } from '@react-three/drei';
+import { useFrame } from '@react-three/fiber';
 import { useLayoutEffect, useRef, type MouseEvent, type ReactNode } from 'react';
 import { sensorReading, sensorValue } from '../../../shared/sensors';
 import type { Fault } from '../../../shared/protocol';
 import { moduleName, type BaseModuleId } from '../../modules';
 import { selectServerNow, useStore } from '../../store';
+import { isLabelOccluded } from './labelOcclusion';
 import { badgeText, dotText } from './labelRules';
 import { STATUS_LIGHT_TOP } from './StatusLight';
 import './fx.css';
@@ -24,21 +26,42 @@ function selectModule(e: MouseEvent, id: BaseModuleId) {
   useStore.getState().select(id);
 }
 
-/** An `Html` label whose bottom edge sits `lift` world units above the model's top. */
+/**
+ * An `Html` label whose bottom edge sits `lift` world units above the model's top, with a short
+ * leader line down to that point so it reads as this module's. While another module stands between
+ * the camera and this one (and this one is not selected) it is drawn faint (`isLabelOccluded`).
+ * The class is flipped only when the answer changes, straight on the DOM node.
+ */
 function Anchored({
+  id,
   height,
   unit,
   lift,
   children,
 }: {
+  id: BaseModuleId;
   height: number;
   unit: number;
   lift: number;
   children: ReactNode;
 }) {
+  const anchor = useRef<HTMLDivElement>(null);
+  const dim = useRef(false);
+  useFrame(({ camera }) => {
+    const el = anchor.current;
+    if (!el) return;
+    const next =
+      useStore.getState().selected !== id &&
+      isLabelOccluded(id, camera.position.x, camera.position.y, camera.position.z);
+    if (next === dim.current) return;
+    dim.current = next;
+    el.classList.toggle('fx-dim', next);
+  });
   return (
     <Html position={[0, height + lift * unit, 0]} pointerEvents="none" zIndexRange={[0, 0]}>
-      <div className="fx-anchor">{children}</div>
+      <div ref={anchor} className="fx-anchor">
+        {children}
+      </div>
     </Html>
   );
 }
@@ -46,7 +69,7 @@ function Anchored({
 /** Always-visible tag for the generator, shown for others only while selected. `pointer-events: none`. */
 export function NameTag({ id, height, unit }: { id: BaseModuleId; height: number; unit: number }) {
   return (
-    <Anchored height={height} unit={unit} lift={TAG_LIFT}>
+    <Anchored id={id} height={height} unit={unit} lift={TAG_LIFT}>
       <div className="fx-tag">{moduleName(id)}</div>
     </Anchored>
   );
@@ -105,7 +128,7 @@ export function FaultBadge({
 }) {
   const panelOpen = useStore((s) => s.selected === id);
   return (
-    <Anchored height={height} unit={unit} lift={BADGE_LIFT}>
+    <Anchored id={id} height={height} unit={unit} lift={BADGE_LIFT}>
       <BadgeButton id={id} fault={fault} othersHolding={othersHolding} panelOpen={panelOpen} />
     </Anchored>
   );
@@ -114,7 +137,7 @@ export function FaultBadge({
 /** Small tappable `⚠ 거주 돔` for every broken module that does not have the big badge. */
 export function FaultDot({ id, height, unit }: { id: BaseModuleId; height: number; unit: number }) {
   return (
-    <Anchored height={height} unit={unit} lift={BADGE_LIFT}>
+    <Anchored id={id} height={height} unit={unit} lift={BADGE_LIFT}>
       <button
         type="button"
         className="fx-dot"
