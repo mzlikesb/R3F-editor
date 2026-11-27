@@ -381,13 +381,22 @@ describe('FpsMeter: sub-1-fps frames', () => {
     expect(m.average(2)).toBeCloseTo(60, 5);
   });
 
-  it('counts gaps that keep coming at the cap, so the average falls under 1 fps', () => {
+  it('counts gaps that keep coming, so the average falls under 1 fps', () => {
     const m = new FpsMeter();
     for (let i = 0; i < 120; i++) m.push(1 / 60);
     m.push(3);
     m.push(3);
     m.push(3);
     expect(m.average(2)).toBeLessThanOrEqual(1);
+  });
+
+  it('keeps the true length of long gaps that keep coming, so a faster sub-1-fps rate shows as a gain', () => {
+    const slow = new FpsMeter();
+    const fast = new FpsMeter();
+    for (let i = 0; i < 4; i++) slow.push(2.5);
+    for (let i = 0; i < 4; i++) fast.push(1.25);
+    expect(slow.average(2)).toBeCloseTo(0.4, 5);
+    expect(fast.average(2)).toBeCloseTo(0.8, 5);
   });
 
   it('a tab return (reset then one long gap) is still a stall', () => {

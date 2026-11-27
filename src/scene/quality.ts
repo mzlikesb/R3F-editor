@@ -92,10 +92,10 @@ export class FpsMeter {
     if (!(delta > 0)) return;
     if (delta > MAX_DELTA) {
       // One long gap is a stall and is dropped. Gaps that keep coming are the real frame rate
-      // (under 1 fps): count them at the cap so the average keeps moving and the stage can drop.
+      // (under 1 fps): keep their true length so the average moves, the stage can drop, and a drop
+      // that helps (2.5 s -> 1.25 s frames) shows as a gain instead of a flat 1 fps.
       this.stalls += 1;
       if (this.stalls < 2) return;
-      delta = MAX_DELTA;
     } else {
       this.stalls = 0;
     }

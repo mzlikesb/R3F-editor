@@ -91,4 +91,22 @@ describe('createQualityLoop', () => {
     // The drop is checked later (a drop that buys nothing is undone), but it is tried.
     expect(deepest).toBeGreaterThan(0);
   });
+
+  it('a drop that speeds sub-1-fps frames up (2.5 s -> 1.25 s) is kept, not undone and floored', () => {
+    const { env, meter, loop } = setup();
+    env.t = 0;
+    loop.tick();
+    let next = 0;
+    for (let t = SAMPLE_MS; t < WARMUP_MS + DOWN_HOLD_MS + 30000; t += SAMPLE_MS) {
+      env.t = t;
+      // Codex's case (#93): any lower stage speeds the frames from 2.5 s to 1.25 s, both over 1 s.
+      const frame = useQuality.getState().stage === 0 ? 2.5 : 1.25;
+      if (t >= next) {
+        meter.push(frame);
+        next = t + frame * 1000;
+      }
+      loop.tick();
+    }
+    expect(useQuality.getState().stage).toBeGreaterThan(0);
+  });
 });
