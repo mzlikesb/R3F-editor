@@ -7,10 +7,10 @@
 | #      | 작업                                                       | 담당 | 파일               | 완료 조건                                          | 연결 테스트                                                                                                                                                         | 상태 |
 | ------ | ---------------------------------------------------------- | ---- | ------------------ | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- |
 | T1     | 프로토콜·센서 완성, 뼈대·인터페이스·선작성 테스트          | 리드 | "리드가 만든 것"   | format·lint·typecheck 통과, 테스트는 의도대로 실패 | 아래 각 트랙                                                                                                                                                        | 완료 |
-| server | 상태 규칙·저장 키 이전·alarm 단일화·홀드·옛 탭 경로·REST   | 개발 | "파일 소유" server | "server 수용 기준"                                 | `worker/state.test.ts`, `worker/holds.test.ts`, `worker/legacy.test.ts`, `worker/socketId.test.ts`, `worker/rateLimit.test.ts`, `worker/broadcast.test.ts`, `worker/test/base.test.ts` | 대기 |
-| client | store·동기화·홀드·토스트·HUD·기록 패널·패널 센서·배너·WS    | 개발 | "파일 소유" client | "client 수용 기준"                                 | `src/sync.test.ts`, `src/hold.test.ts`, `src/feedback.test.ts`, `src/store.test.ts`, `src/ui/view.test.ts`, `src/ui/sensorView.test.ts`, `src/net/url.test.ts`     | 대기 |
-| scene  | 모듈별 고장 표현·배지 우선순위·고치는 중 고리·정전 연출    | 개발 | "파일 소유" scene  | "scene 수용 기준"                                  | `src/scene/fx/labelRules.test.ts`, `src/scene/blackout.test.ts` (나머지는 렌더링·연출이라 TDD 대상 아님)                                                           | 대기 |
-| M      | 병합·의도 확인                                             | 리드 | —                  | "M 확인"                                           | 전체                                                                                                                                                                | 대기 |
+| server | 상태 규칙·저장 키 이전·alarm 단일화·홀드·옛 탭 경로·REST   | 개발 | "파일 소유" server | "server 수용 기준"                                 | `worker/state.test.ts`, `worker/holds.test.ts`, `worker/legacy.test.ts`, `worker/socketId.test.ts`, `worker/rateLimit.test.ts`, `worker/broadcast.test.ts`, `worker/test/base.test.ts` | 완료 |
+| client | store·동기화·홀드·토스트·HUD·기록 패널·패널 센서·배너·WS    | 개발 | "파일 소유" client | "client 수용 기준"                                 | `src/sync.test.ts`, `src/hold.test.ts`, `src/feedback.test.ts`, `src/store.test.ts`, `src/ui/view.test.ts`, `src/ui/sensorView.test.ts`, `src/net/url.test.ts`     | 완료 |
+| scene  | 모듈별 고장 표현·배지 우선순위·고치는 중 고리·정전 연출    | 개발 | "파일 소유" scene  | "scene 수용 기준"                                  | `src/scene/fx/labelRules.test.ts`, `src/scene/blackout.test.ts` (나머지는 렌더링·연출이라 TDD 대상 아님)                                                           | 완료 |
+| M      | 병합·의도 확인                                             | 리드 | —                  | "M 확인"                                           | 전체                                                                                                                                                                | 완료 |
 
 ## 리드가 만든 것 (T1)
 
@@ -26,9 +26,9 @@
 
 | 트랙   | 파일 |
 | ------ | ---- |
-| server | `worker/state.ts`, `worker/holds.ts`, `worker/legacy.ts`, `worker/socketId.ts`, `worker/rateLimit.ts`, `worker/broadcast.ts`, `worker/BaseRoom.ts`, `worker/index.ts` |
-| client | `src/store.ts`, `src/sync.ts`, `src/hold.ts`, `src/feedback.ts`, `src/net/*`, `src/ui/*`(새 파일 포함: 기록 패널·배너·센서 추이), `src/index.css`, `src/App.tsx`(새 UI 컴포넌트를 여기서 붙인다) |
-| scene  | `src/scene/**`(`fx/` 포함, `scene.css`·`fx.css`) |
+| server | 완료 |
+| client | 완료 |
+| scene  | 완료 |
 | 리드   | `shared/**`, `src/modules.ts`, 모든 `*.test.ts`(개발은 테스트를 고치지 않는다. 테스트가 틀렸다고 보면 사유를 리드에게 돌려준다) |
 
 `package.json`·의존성은 아무 트랙도 건드리지 않는다(플랜에 새 의존성 없음).
@@ -117,3 +117,33 @@ scene은 store를 아래로만 읽는다. 모두 상태가 같으면 같은 값(
 - `format:check`·`lint`·`typecheck`·`npm test`·`test:worker`·`test:hooks`·`build` 통과
 - 파일 소유 표 밖 변경이 없는지 `git diff --stat`
 - 의도 확인(로컬 `npm run build` → `wrangler dev`, 탭 2개): 여러 모듈 고장, 한쪽 홀드 중 다른 쪽 `누군가 고치는 중`(자기 화면엔 안 뜸), 고장 3개 → 정전(조명·비상등·HUD) → 발전기 수리 → 순차 점등, 두 탭 가동 시간 일치, 새로고침 반복으로 고장이 생기지 않음, 쿼리 없는 `/ws`(옛 빌드 정적 파일)로 연 탭의 발전기 수리, 탭을 모두 닫으면 `getAlarm()` null, `/api/history`, 390×844 배지·점·HUD 겹침, `?perf` 드로우콜
+
+## 결과 (M)
+
+커밋: server `d1298db`, client `c46b109`, scene `338ba03`, 리드 수정 `8fe702b`·`ab8df5b`. 세 트랙 모두 테스트를 고치지 않았고, 파일 소유 표 밖 변경은 없다(client의 `src/App.tsx`는 머리 주석만).
+
+검사: `format:check`·`lint`·`typecheck`·`npm test`(22 파일 267건)·`test:worker`(7 파일 120건)·`test:hooks`·`build` 통과.
+
+트랙 판단 중 받아들인 것:
+
+- server: `activityFor`는 받는 소켓의 홀드를 값으로 뺀다(attachment를 매번 다시 읽어 참조가 같지 않다). 새 프로토콜 2 소켓은 다른 홀드가 있으면 snapshot 바로 뒤에 `activity`를 한 번 받는다. 파싱 못 한 프레임은 rate limit 예산을 쓰지 않는다. `arrive` 고장은 소켓이 하나일 때만 생기므로 따로 브로드캐스트하지 않는다(첫 snapshot에 들어 있다). `base:v2`가 없을 때 REST는 저장하지 않으므로 첫 접속 전에는 `instanceId`가 요청마다 다를 수 있다
+- client: 기록 패널은 열려 있을 때만 1초마다 React로 다시 그린다. HUD 윗줄을 DOM ref로 바꾸면서 005의 수리 횟수 `bump`는 없어졌다(presence `bump`는 남음). `historyView`의 정전 시각은 시작 기준이다(주석 예시를 테스트에 맞춤)
+- scene: `labelPlan`은 `LabelPlanProvider` 한 곳에서 계산한다. 비상등은 항상 마운트해 광원 수가 +1이다
+
+리드가 고친 것:
+
+- 정전이 거의 어두워지지 않았다. 지면·바위는 HDRI 환경광이 대부분을 비추므로 `scene.environmentIntensity`도 직접광과 같은 비율로 낮춘다
+- 고치는 중 고리가 모듈 꼭대기 위에 있어 배지·`⚠` 점에 가려졌다(폰에서 거의 안 보임). 모듈 몸통 중간 높이에 몸통보다 넓게 두른다
+- 서버를 읽을 수 없는 빌드(업데이트 배너)에서는 패널의 `연결되면 수리할 수 있어요`를 띄우지 않는다
+
+로컬 확인(`wrangler dev`, 저장소 조작용 `/__dev` 경로는 레포 밖 래퍼에만 두었다. Playwright headless, swiftshader):
+
+- 두 모듈 고장: 큰 배지 1개 + `⚠` 점 1개. A가 누르는 동안 B 배지가 `⚠ 통신탑 고장 · 누군가 고치는 중`, A 화면에는 안 뜸. 정상 release 뒤 바로 사라짐, release 프레임을 버려도 2.7초 뒤 사라짐
+- 3번째 고장이 발전기로 들어가 정전, `nextFaultAt` null. alarm을 두 번 더 불러도 정전 이력 1개. HUD `정전 — 발전기를 고쳐야 불이 돌아와요`·`가동 기록 끊김 · 최장 26초`, 조명 소등·비상등. 정전 중 다른 사람이 고치는 모듈은 점+고리(큰 배지는 발전기)
+- 발전기 수리 뒤 연결 유지 탭 2개와 새 탭의 가동 시간이 같다. 기록 패널과 `/api/history`에 정전 1건(`endedAt` 채움), 최장 기록 유지. 탭을 모두 닫으면 `getAlarm()` null
+- 무인 15분: 고장 2개(`createdAt` 역산), 정전 아님, `uptimeStartedAt` 유지. 새로고침 6번에도 2개. 이미 2개면 더하지 않음
+- 옛 키만 있는 저장소: `repairs` 42·`instanceId` 유지, `base:v2` 생성, 옛 키 그대로
+- main 빌드(쿼리 없는 `/ws`): 발전기 배지 표시, 다른 모듈 수리 뒤에도 발전기 고장 유지(수리 횟수만 갱신), 옛 탭의 발전기 수리 성공(`내가 고쳤어요 +1`), 새 탭에 `누군가 발전기를 고쳤어요`
+- 390×844·1280×800에서 HUD·정전 배너·배지·점·패널·기록 패널·토스트 겹침 없음
+
+성능: `?perf` 드로우콜 고장 2개 35~36, 정전+고장 3개 35~36, 정전+고장 3개+고리 37~38(예산 100). 초기 JS gzip 379.8KB(예산 600KB). fps는 swiftshader라 의미 없음, 폰 30fps는 사용자 실기 확인 대상.
