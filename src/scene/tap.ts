@@ -9,7 +9,5 @@ export const TAP_MAX_MOVE_PX = 8;
 
 /** True when the pointer moved at most `TAP_MAX_MOVE_PX` between down and up. Distance is Euclidean. */
 export function isTap(down: { x: number; y: number }, up: { x: number; y: number }): boolean {
-  void down;
-  void up;
-  throw new Error('TODO(scene): isTap');
+  return Math.hypot(up.x - down.x, up.y - down.y) <= TAP_MAX_MOVE_PX;
 }
