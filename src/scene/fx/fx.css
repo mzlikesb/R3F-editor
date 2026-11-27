@@ -23,6 +23,29 @@
     fx-badge-pulse 1.6s ease-in-out infinite;
 }
 
+.fx-dot {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(255, 122, 122, 0.6);
+  border-radius: 50%;
+  background: rgba(16, 18, 22, 0.85);
+  color: #ff8a8a;
+  font: inherit;
+  font-size: 15px;
+  line-height: 1;
+  user-select: none;
+  pointer-events: auto;
+  cursor: pointer;
+  animation:
+    fx-fade-in 0.18s ease-out,
+    fx-badge-pulse 1.6s ease-in-out infinite;
+}
+
+.fx-dot:active {
+  background: rgba(40, 18, 18, 0.95);
+}
+
 .fx-badge:active {
   background: rgba(40, 18, 18, 0.95);
 }
@@ -61,7 +84,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .fx-badge {
+  .fx-badge,
+  .fx-dot {
     animation: none;
   }
   .fx-flash {

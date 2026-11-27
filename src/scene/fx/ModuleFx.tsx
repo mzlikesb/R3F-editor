@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { effectsFor } from '../../feedback';
-import { selectAnyFault, selectModuleStatus, selectOthersHolding, useStore } from '../../store';
+import { selectBlackout, selectModuleFault, selectOthersHolding, useStore } from '../../store';
 import type { ModuleFxProps } from '../moduleTypes';
 import { Glow } from './Glow';
-import { FaultBadge, NameTag } from './Labels';
-import { labelPlan } from './labelRules';
-import { FloorRing, RingPing, SweepRing } from './Rings';
+import { FaultBadge, FaultDot, NameTag } from './Labels';
+import { useLabelPlan } from './labelPlanContext';
+import { FloorRing, HoldingRing, RingPing, SweepRing } from './Rings';
 import { Sparks } from './Sparks';
 import { StatusLight } from './StatusLight';
 import { useEmissive } from './useEmissive';
@@ -26,9 +26,10 @@ const NO_TOKENS: Tokens = { sweep: 0, burst: 0, ping: 0 };
  * ring, sweep ring, punch, sparks, glow, ring ping (plan 005 B, C, D.11).
  */
 export function ModuleFx({ id, handle }: ModuleFxProps) {
-  const faulted = useStore((s) => selectModuleStatus(s, id)) === 'fault';
-  const selected = useStore((s) => s.selected);
-  const anyFault = useStore(selectAnyFault);
+  const fault = useStore((s) => selectModuleFault(s, id));
+  const faulted = fault !== null;
+  const blackout = useStore(selectBlackout);
+  const plan = useLabelPlan();
   const othersHolding = useStore((s) => selectOthersHolding(s, id)) > 0;
   const effect = useStore((s) => s.feedback.effect);
 
@@ -39,6 +40,7 @@ export function ModuleFx({ id, handle }: ModuleFxProps) {
   if (effect && effect.seq !== seen) {
     setSeen(effect.seq);
     if (effect.moduleId === id) {
+      // Repair effects play only on the module that was repaired.
       const fx = effectsFor(effect.outcome);
       setTokens({
         sweep: fx.sweep ? effect.seq : 0,
@@ -48,14 +50,12 @@ export function ModuleFx({ id, handle }: ModuleFxProps) {
     }
   }
 
-  useEmissive(handle, faulted, tokens.sweep);
+  useEmissive(handle, faulted, tokens.sweep, id, blackout);
   usePunch(handle, tokens.burst);
 
   const height = handle?.height ?? 1;
   const radius = handle?.radius ?? 0.6;
-  // TODO(scene): one shared plan for all modules (faults, blackout, holding from the store).
-  const plan = labelPlan({ faults: [], selected, blackout: false, holding: [] });
-  const label = faulted && anyFault ? 'badge' : plan.tag === id ? 'tag' : null;
+  const label = plan.badge === id ? 'badge' : plan.dots.includes(id) ? 'dot' : plan.tag === id ? 'tag' : null;
   // The model's parent is the module group, the only scaled ancestor (`scene/Module.tsx`).
   const unit = 1 / (handle?.model.parent?.scale.x || 1);
 
@@ -65,8 +65,11 @@ export function ModuleFx({ id, handle }: ModuleFxProps) {
         <>
           <FloorRing radius={radius} fault={faulted} />
           {faulted ? null : <StatusLight height={height} />}
-          {label === 'badge' ? (
-            <FaultBadge id={id} height={height} unit={unit} othersHolding={othersHolding} sensorText="" />
+          {othersHolding ? <HoldingRing height={height} unit={unit} /> : null}
+          {label === 'badge' && fault ? (
+            <FaultBadge id={id} fault={fault} height={height} unit={unit} othersHolding={othersHolding} />
+          ) : label === 'dot' ? (
+            <FaultDot id={id} height={height} unit={unit} />
           ) : label === 'tag' ? (
             <NameTag id={id} height={height} unit={unit} />
           ) : null}

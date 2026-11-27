@@ -1,7 +1,7 @@
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
 import type { Mesh } from 'three';
-import { Color } from 'three';
+import { Color, RingGeometry } from 'three';
 import {
   createRingMaterial,
   FAULT_COLOR,
@@ -115,5 +115,32 @@ export function RingPing({ radius, token }: { radius: number; token: number }) {
       position-y={0.03}
       visible={false}
     />
+  );
+}
+
+/** A three-quarter arc, so its spin reads as "in progress". Shared by every holding ring. */
+const HOLD_GEOMETRY = new RingGeometry(0.8, 1, 40, 1, 0, Math.PI * 1.5);
+const HOLD_MATERIAL = createRingMaterial(new Color('#ffd166'));
+HOLD_MATERIAL.opacity = 0.9;
+const HOLD_SPIN = 2.4;
+/** World-space radius and gap above the module's top. */
+const HOLD_RADIUS = 0.45;
+const HOLD_LIFT = 0.4;
+
+/**
+ * A small spinning arc above a module while someone else is repairing it. One mesh; geometry and
+ * material are shared by all modules. `unit` = local units per world unit (1 / module scale).
+ */
+export function HoldingRing({ height, unit }: { height: number; unit: number }) {
+  const mesh = useRef<Mesh>(null);
+  useFrame((_, delta) => {
+    const m = mesh.current;
+    if (m) m.rotation.z -= delta * HOLD_SPIN;
+  });
+  const s = HOLD_RADIUS * unit;
+  return (
+    <group position-y={height + HOLD_LIFT * unit} rotation-x={-Math.PI / 2} scale={[s, s, 1]}>
+      <mesh ref={mesh} geometry={HOLD_GEOMETRY} material={HOLD_MATERIAL} raycast={() => null} />
+    </group>
   );
 }
