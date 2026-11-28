@@ -9,7 +9,7 @@ import {
   OctahedronGeometry,
   PlaneGeometry,
 } from 'three';
-import { useStore } from '../store';
+import { selectReady, useStore } from '../store';
 import { haloTexture } from './haloTexture';
 import { darkness, daylight } from './blackout';
 import { fxColor } from './fx/fxGain';
@@ -96,7 +96,9 @@ export function PresenceLights() {
     const m = mesh.current;
     const h = halo.current;
     if (!m || !h) return;
-    const count = presenceLightCount(useStore.getState().sync.presence);
+    const state = useStore.getState();
+    // No drones before the modules are on screen (neon on #114).
+    const count = selectReady(state) ? presenceLightCount(state.sync.presence) : 0;
     const dim = 1 - BLACKOUT_DIM * darkness(daylight.level);
     const base = BASE.get();
     const s = scales.current;

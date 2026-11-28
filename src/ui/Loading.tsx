@@ -1,12 +1,14 @@
 import { useProgress } from '@react-three/drei';
 import { useEffect, useState } from 'react';
 import { selectReady, useStore } from '../store';
+import { sceneLoaded } from './view';
 import { postSettled } from '../scene/postMode';
 import { usePost } from '../scene/postStore';
 import '../scene/scene.css';
 
 /**
- * `기지를 불러오는 중…` over the canvas while models and the HDRI load (plan 005 A.4), then while the
+ * `기지를 불러오는 중…` over the canvas while models and the HDRI load and every module model is
+ * mounted (plan 005 A.4, `sceneLoaded`), then while the
  * post-processing chunk settles (composer or plain, at most 2 s more: plan 008 B.5), and until the
  * first snapshot is in (playtest #47: the HUD said `기지 정상` under it). Until then it is the only
  * thing that speaks: the HUD, name tags, status lights and the panel field wait for `selectReady`,
@@ -16,8 +18,9 @@ import '../scene/scene.css';
 export function Loading() {
   const { active, progress } = useProgress();
   const [done, setDone] = useState(false);
+  const modelsIn = useStore((s) => s.modelsIn.length);
   // Latch: later loads (e.g. a retry) must not bring the overlay back.
-  if (!done && !active && progress >= 100) setDone(true);
+  if (!done && sceneLoaded({ assetsDone: !active && progress >= 100, modelsIn })) setDone(true);
   // Post-processing gets at most `POST_WAIT_MS` after the scene is ready (plan 008 B.5).
   const settled = usePost((s) => postSettled(s.state.mode));
   useEffect(() => {

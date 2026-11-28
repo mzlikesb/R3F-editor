@@ -30,6 +30,8 @@ export interface Toast {
   until: number;
   /** The combo this repair made (`nextCombo`), shown as `x2` and up; 0 on toasts that are not my repair. */
   combo: number;
+  /** The repair took a part from the store (`repaired.parts` present). */
+  part: boolean;
 }
 
 /** Which repair effects to play on the repaired module. */
@@ -71,7 +73,7 @@ export const initialFeedback: FeedbackState = { toast: null, hintDismissed: fals
 
 export type FeedbackEvent =
   /** A `repaired` that changed the base (not a stale version), already classified. */
-  | { type: 'repaired'; outcome: RepairOutcome; moduleId: ModuleId; now: number }
+  | { type: 'repaired'; outcome: RepairOutcome; moduleId: ModuleId; now: number; part?: boolean }
   /** A `fault` that changed the base. */
   | { type: 'fault'; moduleId: ModuleId; now: number }
   /** Any module (or a badge) was tapped. */
@@ -83,10 +85,10 @@ export type FeedbackEvent =
  * - mine: `내가 고쳤어요 +1`
  * - helped: `함께 고쳤어요 +1`
  * - beaten: `같이 눌렀는데 다른 사람이 한발 먼저 고쳤어요`
- * - other: `누군가 산소 탱크를 고쳤어요` (module name + 을/를)
+ * - other: `누군가 산소 탱크를 고쳤어요` (module name + 을/를); with `part` `누군가 부품 1개로 산소 탱크를 고쳤어요`
  * - fault: `온실이 고장 났어요` (module name + 이/가)
  */
-export function toastText(toast: Pick<Toast, 'kind' | 'moduleId'>): string {
+export function toastText(toast: Pick<Toast, 'kind' | 'moduleId'> & { part?: boolean }): string {
   const name = moduleName(toast.moduleId);
   switch (toast.kind) {
     case 'mine':
@@ -96,7 +98,9 @@ export function toastText(toast: Pick<Toast, 'kind' | 'moduleId'>): string {
     case 'beaten':
       return '같이 눌렀는데 다른 사람이 한발 먼저 고쳤어요';
     case 'other':
-      return `누군가 ${withObjectParticle(name)} 고쳤어요`;
+      return toast.part
+        ? `누군가 부품 1개로 ${withObjectParticle(name)} 고쳤어요`
+        : `누군가 ${withObjectParticle(name)} 고쳤어요`;
     case 'fault':
       return `${withSubjectParticle(name)} 고장 났어요`;
   }
@@ -146,6 +150,7 @@ export function reduceFeedback(state: FeedbackState, event: FeedbackEvent): Feed
           moduleId: event.moduleId,
           until: event.now + TOAST_MS,
           combo: combo === state.combo ? 0 : combo.count,
+          part: event.part === true,
         },
         effect: {
           outcome: event.outcome,
@@ -156,7 +161,10 @@ export function reduceFeedback(state: FeedbackState, event: FeedbackEvent): Feed
       };
     }
     case 'fault':
-      return { ...state, toast: { kind: 'fault', moduleId: event.moduleId, until: event.now + TOAST_MS, combo: 0 } };
+      return {
+        ...state,
+        toast: { kind: 'fault', moduleId: event.moduleId, until: event.now + TOAST_MS, combo: 0, part: false },
+      };
     case 'moduleTapped':
       return state.hintDismissed ? state : { ...state, hintDismissed: true };
     case 'tick':

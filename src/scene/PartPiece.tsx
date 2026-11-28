@@ -1,97 +1,116 @@
+import { Html } from '@react-three/drei';
 import { useFrame, type ThreeEvent } from '@react-three/fiber';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, type MouseEvent } from 'react';
 import {
-  AdditiveBlending,
   BoxGeometry,
+  CanvasTexture,
   Color,
-  DodecahedronGeometry,
+  CylinderGeometry,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
-  SpriteMaterial,
-  type Sprite,
+  PlaneGeometry,
   type Group,
 } from 'three';
 import { PART_Y, partSlot, partSpot } from '../../shared/parts';
 import { blinkOn, pieceShown } from '../parts';
-import { useStore } from '../store';
+import { selectReady, useStore } from '../store';
 import { serverNow } from '../sync';
 import { RingPing } from './fx/Rings';
 import { registerFx } from './fx/fxGain';
+import { LABEL_WRAPPER_STYLE } from './fx/labelRules';
 import { PALETTE } from './palette';
-import { haloTexture } from './haloTexture';
+import type { PieceHit } from './tapPick';
 
 /**
- * A low-poly metal scrap: facets catch the light as it turns, unlike the round rocks. About 1.5x
- * the first cut (0.3), which read on a phone as one more pebble (009-2 QA).
+ * A hex nut lying on the ground: a squat, angular metal block, not the drones' floating octahedron
+ * (neon on #114: the two read as one thing). Flat-shaded, so the facets catch the light as it turns.
  */
-const GEOMETRY = new DodecahedronGeometry(0.45, 0);
+const NUT_RADIUS = 0.42;
+const NUT_HEIGHT = 0.26;
+const GEOMETRY = new CylinderGeometry(NUT_RADIUS, NUT_RADIUS, NUT_HEIGHT, 6);
+/** Resting height of the nut's centre: on the ground. */
+const REST_Y = NUT_HEIGHT / 2 + 0.02;
 /**
- * Half-size 0.6 (`partSpots.test.ts` `PART_TAP_HALF`, what the R1 spots keep clear of the modules):
- * still wider than the piece (0.9 across), so the finger gets a margin round it.
+ * The finger box, half-size 0.6 (`partSpots.test.ts` `PART_TAP_HALF`, what the R1 spots keep clear
+ * of the modules), centred at `PART_Y`: wider than the nut, so the finger gets a margin round it.
  */
 const TAP_GEOMETRY = new BoxGeometry(1.2, 1.2, 1.2);
-/** The soft glow round the piece, world units across, and how strong (additive, under the Bloom threshold). */
-const HALO_SIZE = 2.2;
-const HALO_OPACITY = 0.55;
 const TAP_MATERIAL = new MeshBasicMaterial({ colorWrite: false, depthWrite: false });
+/** The ground mark: a dark contact shadow with a thin violet ring round it, world units across. */
+const MARK_SIZE = 1.7;
+const MARK_GEOMETRY = new PlaneGeometry(1, 1);
 const PART_COLOR = new Color(PALETTE.part);
 /** The ping ring round a piece starts this wide (world units). */
 const PING_RADIUS = 0.6;
 
-const SPIN = 1.1;
-const BOB = 0.08;
+const SPIN = 0.6;
+/** Barely off the ground: a thing lying there, not hovering. */
+const BOB = 0.02;
 /** A new piece falls from this high, for this long (s). */
 const DROP_HEIGHT = 3;
 const DROP_S = 0.45;
 /** Picked up: it rises and shrinks away towards the HUD, for this long (s). */
 const SUCK_S = 0.35;
 const SUCK_RISE = 2.5;
+/** World units from the ground up to the bottom edge of the `부품` tag. */
+const TAG_LIFT = 0.75;
 
 const noRaycast = () => {};
+const HIDDEN = { visibility: 'hidden' } as const;
 const meshRaycast = Mesh.prototype.raycast;
+
+/** What the piece's finger box says to the module tap handler (`tapPick.ts`). */
+const PIECE_HIT: PieceHit = { piece: true };
 
 function onTap(e: ThreeEvent<MouseEvent>) {
   e.stopPropagation();
-  useStore.getState().collectPiece(performance.now(), Date.now());
+  useStore
+    .getState()
+    .collectPiece(performance.now(), Date.now(), { x: e.nativeEvent.clientX, y: e.nativeEvent.clientY });
+}
+
+/** The name tag `부품` over the piece takes taps like the piece. */
+function onTagTap(e: MouseEvent) {
+  e.stopPropagation();
+  useStore.getState().collectPiece(performance.now(), Date.now(), { x: e.clientX, y: e.clientY });
+}
+
+/** Dark soft centre (contact shadow) and a thin bright ring at the edge, white so the material colours it. */
+function markTexture(): CanvasTexture | null {
+  if (typeof document === 'undefined') return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  const shadow = ctx.createRadialGradient(64, 64, 0, 64, 64, 46);
+  shadow.addColorStop(0, 'rgba(0,0,0,0.55)');
+  shadow.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = shadow;
+  ctx.fillRect(0, 0, 128, 128);
+  ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.arc(64, 64, 58, 0, Math.PI * 2);
+  ctx.stroke();
+  return new CanvasTexture(canvas);
 }
 
 /**
- * The parts piece of the current slot (plan 009 B.1, B.2): one emissive metal mesh, so it is seen in
- * a blackout too, plus an invisible finger box that takes taps only while the piece is out. Where
- * and whether it shows comes from server time each frame (`pieceShown`); nothing is allocated per
- * frame. Its ring ping (B.4) is a `RingPing` in the part violet, drawn only while it plays.
+ * The parts piece of the current slot (plan 009 B.1, B.2): a glowing metal nut on the ground (seen in
+ * a blackout too) with a ground mark, a `부품` name tag, and an invisible finger box that takes taps
+ * only while the piece is out. Where and whether it shows comes from server time each frame
+ * (`pieceShown`), and nothing shows before the scene is in (`selectReady`). Nothing is allocated
+ * per frame. Its ring ping (B.4) is a `RingPing` in the part violet, drawn only while it plays.
  */
 export function PartPiece() {
   const group = useRef<Group>(null);
   const body = useRef<Mesh>(null);
+  const mark = useRef<Mesh>(null);
   const tap = useRef<Mesh>(null);
+  const tag = useRef<HTMLDivElement>(null);
+  const tagShown = useRef(false);
   const anim = useRef({ slot: -1, dropAt: -1, suckAt: -1, shown: false });
-  const halo = useRef<Sprite>(null);
-  const haloMaterial = useMemo(
-    () =>
-      new SpriteMaterial({
-        map: haloTexture(),
-        color: PART_COLOR,
-        transparent: true,
-        opacity: HALO_OPACITY,
-        depthWrite: false,
-        // The ground would cut the lower half of the glow off; spots are never behind a module (R1).
-        depthTest: false,
-        blending: AdditiveBlending,
-        toneMapped: false,
-        fog: false,
-      }),
-    [],
-  );
-  useEffect(() => {
-    const unregister = registerFx(haloMaterial, 'tone');
-    return () => {
-      unregister();
-      haloMaterial.map?.dispose();
-      haloMaterial.dispose();
-    };
-  }, [haloMaterial]);
   const material = useMemo(
     () =>
       new MeshStandardMaterial({
@@ -99,7 +118,7 @@ export function PartPiece() {
         metalness: 0.85,
         roughness: 0.3,
         emissive: PART_COLOR,
-        emissiveIntensity: 0.9,
+        emissiveIntensity: 0.7,
         flatShading: true,
       }),
     [],
@@ -112,6 +131,27 @@ export function PartPiece() {
       material.dispose();
     };
   }, [material]);
+  // Normal blending: the shadow darkens the ground, the ring shows the part violet unlit.
+  const markMaterial = useMemo(
+    () =>
+      new MeshBasicMaterial({
+        map: markTexture(),
+        color: PART_COLOR,
+        transparent: true,
+        depthWrite: false,
+        toneMapped: false,
+        fog: false,
+      }),
+    [],
+  );
+  useEffect(() => {
+    const unregister = registerFx(markMaterial, 'tone');
+    return () => {
+      unregister();
+      markMaterial.map?.dispose();
+      markMaterial.dispose();
+    };
+  }, [markMaterial]);
 
   const ping = useStore((s) => s.partPing);
   const [pingX, pingZ] = ping.seq > 0 ? partSpot(ping.slot) : [0, 0];
@@ -119,9 +159,11 @@ export function PartPiece() {
   useFrame(({ clock }, delta) => {
     const g = group.current;
     const b = body.current;
+    const m = mark.current;
     const t = tap.current;
-    if (!g || !b || !t) return;
-    const { sync, pickup } = useStore.getState();
+    if (!g || !b || !m || !t) return;
+    const state = useStore.getState();
+    const { sync, pickup } = state;
     const now = serverNow(sync, Date.now());
     const slot = partSlot(now);
     const time = clock.elapsedTime;
@@ -131,12 +173,18 @@ export function PartPiece() {
       a.dropAt = time;
       a.suckAt = -1;
     }
-    const shown = pieceShown(sync.base, slot, pickup);
+    // Nothing before the modules are on screen (neon on #114).
+    const shown = selectReady(state) && pieceShown(sync.base, slot, pickup);
     const mine = pickup.kind === 'pending' && pickup.slot === slot;
     if (a.shown && !shown && mine) a.suckAt = time;
     if (shown) a.suckAt = -1;
     a.shown = shown;
     t.raycast = shown ? meshRaycast : noRaycast;
+    // The tag goes with the piece; written to the DOM only when that changes.
+    if (tag.current && shown !== tagShown.current) {
+      tagShown.current = shown;
+      tag.current.style.visibility = shown ? 'visible' : 'hidden';
+    }
 
     const sucking = a.suckAt >= 0 && time - a.suckAt < SUCK_S;
     if (!shown && !sucking) {
@@ -145,7 +193,7 @@ export function PartPiece() {
     }
     const [x, z] = partSpot(slot);
     const drop = Math.min(1, (time - a.dropAt) / DROP_S);
-    let y = PART_Y + BOB * Math.sin(time * 2.2) + DROP_HEIGHT * (1 - drop) * (1 - drop);
+    let y = REST_Y + BOB * Math.sin(time * 2.2) + DROP_HEIGHT * (1 - drop) * (1 - drop);
     let scale = 1;
     if (sucking) {
       const p = (time - a.suckAt) / SUCK_S;
@@ -153,24 +201,44 @@ export function PartPiece() {
       scale = 1 - p;
     }
     g.visible = true;
-    g.position.set(x, y, z);
+    g.position.set(x, 0, z);
+    b.position.y = y;
     b.visible = sucking || blinkOn(now);
     b.scale.setScalar(scale);
-    const h = halo.current;
-    if (h) {
-      h.visible = b.visible;
-      h.scale.setScalar(HALO_SIZE * scale);
-    }
     b.rotation.y += delta * SPIN;
-    b.rotation.x = 0.5 + 0.2 * Math.sin(time * 0.7);
+    // The mark stays on the ground; it is there once the piece has landed.
+    m.visible = b.visible && !sucking && drop >= 1;
   });
 
   return (
     <>
       <group ref={group} visible={false}>
         <mesh ref={body} geometry={GEOMETRY} material={material} raycast={noRaycast} />
-        <sprite ref={halo} material={haloMaterial} scale={HALO_SIZE} raycast={noRaycast} />
-        <mesh ref={tap} geometry={TAP_GEOMETRY} material={TAP_MATERIAL} visible={false} onClick={onTap} />
+        <mesh
+          ref={mark}
+          geometry={MARK_GEOMETRY}
+          material={markMaterial}
+          rotation-x={-Math.PI / 2}
+          position-y={0.03}
+          scale={MARK_SIZE}
+          raycast={noRaycast}
+        />
+        <mesh
+          ref={tap}
+          geometry={TAP_GEOMETRY}
+          material={TAP_MATERIAL}
+          visible={false}
+          position-y={PART_Y}
+          userData={PIECE_HIT}
+          onClick={onTap}
+        />
+        <Html position={[0, TAG_LIFT, 0]} style={LABEL_WRAPPER_STYLE} zIndexRange={[0, 0]}>
+          <div ref={tag} className="fx-anchor fx-part-anchor" style={HIDDEN}>
+            <button type="button" className="fx-tag fx-part-tag" onClick={onTagTap}>
+              부품
+            </button>
+          </div>
+        </Html>
       </group>
       <group position={[pingX, 0, pingZ]}>
         <RingPing radius={PING_RADIUS} token={ping.seq} color={PART_COLOR} />

@@ -1,5 +1,5 @@
 import { useGLTF } from '@react-three/drei';
-import { Suspense, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import type { ThreeEvent } from '@react-three/fiber';
 import { Box3, Color, Matrix4, Mesh, MeshBasicMaterial, MeshStandardMaterial, Vector3, type Group } from 'three';
 import type { BaseModuleId } from '../modules';
@@ -9,7 +9,7 @@ import { ModuleFx } from './fx/ModuleFx';
 import { isHull, useHull } from './fx/hull';
 import { SelectRing } from './fx/SelectMarks';
 import { LAYOUT, MODEL_BOUNDS } from './layout';
-import { pickTap, type TapHit } from './tapPick';
+import { pickTap, type PieceHit, type TapHit } from './tapPick';
 import type { ModuleHandle } from './moduleTypes';
 import './scene.css';
 
@@ -41,6 +41,10 @@ export interface ModuleProps {
 export function Module({ id, position, scale, rotationY }: ModuleProps) {
   const layout = LAYOUT[id];
   const [handle, setHandle] = useState<ModuleHandle | null>(null);
+  // The loading pill waits for every module's model (or its fallback) to be on screen.
+  useEffect(() => {
+    if (handle) useStore.getState().markModelIn(id);
+  }, [handle, id]);
   return (
     <group
       position={position ?? [layout.x, 0, layout.z]}
@@ -168,10 +172,15 @@ const TAP_MATERIAL = new MeshBasicMaterial({ colorWrite: false, depthWrite: fals
 function onTap(e: ThreeEvent<MouseEvent>) {
   e.stopPropagation();
   const hits = e.intersections
-    .map((i) => i.object.userData as Partial<TapHit>)
-    .filter((d): d is TapHit => d.moduleId !== undefined && d.part !== undefined);
+    .map((i) => i.object.userData as Partial<TapHit & PieceHit>)
+    .filter((d): d is TapHit | PieceHit => d.piece === true || (d.moduleId !== undefined && d.part !== undefined));
   const id = pickTap(hits);
-  if (id) useStore.getState().select(id);
+  // The piece's box behind (or in front of) a module's box: the finger meant the piece (009-2 playtest).
+  if (id === 'piece') {
+    useStore
+      .getState()
+      .collectPiece(performance.now(), Date.now(), { x: e.nativeEvent.clientX, y: e.nativeEvent.clientY });
+  } else if (id) useStore.getState().select(id);
 }
 
 /**

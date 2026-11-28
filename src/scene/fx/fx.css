@@ -164,3 +164,22 @@
     background: rgba(255, 255, 255, 0.5);
   }
 }
+
+/* The parts piece's name tag (009-2 playtest): small, in the piece's violet, no leader line, takes taps. */
+.fx-part-anchor {
+  padding-bottom: 0;
+}
+
+.fx-part-anchor::before,
+.fx-part-anchor::after {
+  display: none;
+}
+
+.fx-part-tag {
+  padding: 2px 7px;
+  border-color: rgba(179, 157, 255, 0.75);
+  color: #e4dcff;
+  font-size: 12px;
+  pointer-events: auto;
+  cursor: pointer;
+}

@@ -20,6 +20,7 @@ import {
   repairButton,
   peopleLine,
   presenceMarkVisible,
+  sceneLoaded,
   segments,
   togetherLine,
   uptimeLine,
@@ -90,6 +91,11 @@ describe('HUD people line (playtest #47: short enough for a phone)', () => {
     expect(connectionLabel('open')).toBeNull();
     expect(connectionLabel('reconnecting')).toBe('재연결 중…');
     expect(healthyLine({ faulted: false })).toBe('기지 정상 · 고장이 나면 이 화면에 떠요');
+    // 009-2 playtest: with room in the store, the calm time says what to do.
+    expect(healthyLine({ faulted: false, parts: 0 })).toBe('기지 정상 · 조각을 주워 부품을 모아 두세요');
+    expect(healthyLine({ faulted: false, parts: 4 })).toBe('기지 정상 · 조각을 주워 부품을 모아 두세요');
+    expect(healthyLine({ faulted: false, parts: 5 })).toBe('기지 정상 · 고장이 나면 이 화면에 떠요');
+    expect(healthyLine({ faulted: true, parts: 0 })).toBeNull();
     expect(healthyLine({ faulted: true })).toBeNull();
   });
 });
@@ -315,5 +321,13 @@ describe('repairButton (plan 009 B.4)', () => {
 describe('NO_PARTS_NOTICE (plan 009 B.5)', () => {
   it('is one line for every way of running out', () => {
     expect(NO_PARTS_NOTICE).toBe('부품이 없어요 — 조각을 주워요');
+  });
+});
+
+describe('sceneLoaded (neon on #114: the pill left before the modules were drawn)', () => {
+  it('needs the downloads done and every module model mounted (GLB decoded, or its fallback)', () => {
+    expect(sceneLoaded({ assetsDone: true, modelsIn: 5 })).toBe(true);
+    expect(sceneLoaded({ assetsDone: true, modelsIn: 4 })).toBe(false);
+    expect(sceneLoaded({ assetsDone: false, modelsIn: 5 })).toBe(false);
   });
 });

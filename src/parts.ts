@@ -123,3 +123,21 @@ export function reducePing(ping: PartPing, event: PingEvent): PartPing {
       return ping.waitFor === null ? ping : { ...ping, waitFor: null };
   }
 }
+
+/** The HUD chip's reaction to a store change: `seq` up per change, `delta` +1 or -1, `mine` for my own pick-up. */
+export interface ChipFx {
+  seq: number;
+  delta: 1 | -1;
+  mine: boolean;
+}
+
+export const initialChipFx: ChipFx = { seq: 0, delta: 1, mine: false };
+
+/** A picked-up piece flying from where it was tapped (CSS px) to the HUD chip; `seq` up per tap. */
+export interface Flight {
+  seq: number;
+  x: number;
+  y: number;
+}
+
+export const initialFlight: Flight = { seq: 0, x: 0, y: 0 };

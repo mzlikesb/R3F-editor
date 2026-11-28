@@ -36,7 +36,10 @@ export function Hud() {
   const label = connectionLabel(connection);
   const banner = blackoutBanner(blackout);
   const update = updateBanner(incompatible);
-  const status = hasBase ? (faultCountLine(faultCount, blackout) ?? healthyLine({ faulted: faultCount > 0 })) : null;
+  const parts = useStore(selectPartsChip);
+  const status = hasBase
+    ? (faultCountLine(faultCount, blackout) ?? healthyLine({ faulted: faultCount > 0, parts: parts ?? undefined }))
+    : null;
   const shown = ready && hasBase;
   return (
     <div className="hud-wrap">
@@ -163,14 +166,22 @@ function LastRepair() {
 /** `부품 3/5` between the uptime and `기록` (plan 009 R4); `부품 가득`, accented, at the cap. */
 function PartsChip() {
   const parts = useStore(selectPartsChip);
+  const fx = useStore((s) => s.chipFx);
   if (parts === null) return null;
   const chip = partsChip(parts);
+  const pulse = fx.seq === 0 ? '' : fx.mine ? ' hud-parts-pop' : ' hud-parts-pulse';
   return (
-    <span key={parts} className={chip.full ? 'hud-parts hud-parts-full bump' : 'hud-parts bump'} aria-label={chip.text}>
+    // Keyed by the change: every +1 / -1 replays the pulse and the floating delta (009-2 playtest).
+    <span key={fx.seq} className={`hud-parts${chip.full ? ' hud-parts-full' : ''}${pulse}`} aria-label={chip.text}>
       <span className="hud-parts-long">{chip.text}</span>
       <span className="hud-parts-short" aria-hidden="true">
         {chip.short}
       </span>
+      {fx.seq > 0 && (
+        <span className={fx.delta > 0 ? 'hud-parts-delta' : 'hud-parts-delta hud-parts-delta-minus'} aria-hidden="true">
+          {fx.delta > 0 ? '+1' : '−1'}
+        </span>
+      )}
     </span>
   );
 }

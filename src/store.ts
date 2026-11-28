@@ -17,6 +17,10 @@ import {
   pieceShown,
   reducePickup,
   reducePing,
+  initialChipFx,
+  initialFlight,
+  type ChipFx,
+  type Flight,
   type PartPing,
   type Pickup,
   type PickupEvent,
@@ -43,6 +47,10 @@ export interface Store {
   feedback: FeedbackState;
   /** The scene finished its first load (models and HDRI, or their fallbacks). Latches. */
   loaded: boolean;
+  /** Modules whose model (GLB or fallback) is mounted; the loading pill waits for all of them. */
+  modelsIn: readonly BaseModuleId[];
+  /** A module's model mounted. */
+  markModelIn: (id: BaseModuleId) => void;
   /**
    * `now` of the last blackout this tab saw start live (`chromaPulse`), null before one. A snapshot
    * that is already dark (join, reconnect) leaves it alone (008 C.3).
@@ -54,6 +62,10 @@ export interface Store {
   partPing: PartPing;
   /** `부품이 없어요 — 조각을 주워요` under the repair button (B.5). Goes once the store has a part or the selection moves. */
   partsNotice: boolean;
+  /** The chip's `+1` / `-1` (009-2 playtest): a `parts` or a `repaired` that moved the store count. */
+  chipFx: ChipFx;
+  /** My last pick-up flying to the chip. */
+  flight: Flight;
   /**
    * Handles one parsed WS message. `now` is `performance.now()`, `dateNow` is `Date.now()`.
    * 1. `applyServerMessage(sync, msg, dateNow)`;
@@ -88,8 +100,11 @@ export interface Store {
   dispatchFeedback: (event: FeedbackEvent) => void;
   /** Feeds the pick-up reducer (its timer sends `tick`, the socket `disconnect`). */
   dispatchPickup: (event: PickupEvent) => void;
-  /** The piece was tapped: `collect` for the slot of server time, if it is out and the socket open (B.2, R5). */
-  collectPiece: (now: number, dateNow: number) => void;
+  /**
+   * The piece was tapped: `collect` for the slot of server time, if it is out and the socket open
+   * (B.2, R5). `at` (CSS px) starts the flight to the chip.
+   */
+  collectPiece: (now: number, dateNow: number, at?: { x: number; y: number }) => void;
   /** `부품을 먼저 주워요` / `다음 조각 N초`: back to the overview and ping the piece, now or when the next one falls. */
   fetchParts: (dateNow: number) => void;
   /** The timer of a waiting ping: pings the piece once its slot has come. */
@@ -120,14 +135,21 @@ export const useStore = create<Store>((set, get) => ({
   repair: initialRepairUi,
   feedback: initialFeedback,
   loaded: false,
+  modelsIn: [],
+  markModelIn: (id) => {
+    const { modelsIn } = get();
+    if (!modelsIn.includes(id)) set({ modelsIn: [...modelsIn, id] });
+  },
   blackoutLiveAt: null,
   pickup: idlePickup,
   partPing: initialPing,
   partsNotice: false,
+  chipFx: initialChipFx,
+  flight: initialFlight,
   receive: (msg, now, dateNow) => {
     const prev = get();
     const sync = applyServerMessage(prev.sync, msg, dateNow);
-    let { repair, feedback, pickup, partPing, partsNotice } = prev;
+    let { repair, feedback, pickup, partPing, partsNotice, chipFx } = prev;
     const outbox: ClientMessage[] = [];
     const feed = (event: HoldEvent) => {
       const r = reduceHold(repair, event);
@@ -137,7 +159,13 @@ export const useStore = create<Store>((set, get) => ({
     const changed = sync.base !== prev.sync.base;
     if (msg.type === 'repaired' && changed) {
       const outcome = classifyRepaired(repair.hold, msg);
-      feedback = reduceFeedback(feedback, { type: 'repaired', outcome, moduleId: msg.moduleId, now });
+      feedback = reduceFeedback(feedback, {
+        type: 'repaired',
+        outcome,
+        moduleId: msg.moduleId,
+        now,
+        part: msg.parts !== null,
+      });
       feed({ type: 'repaired', faultId: msg.faultId, now });
     } else if (msg.type === 'fault' && changed) {
       feedback = reduceFeedback(feedback, { type: 'fault', moduleId: msg.fault.moduleId, now });
@@ -150,6 +178,10 @@ export const useStore = create<Store>((set, get) => ({
     if (msg.type === 'snapshot') pickup = reducePickup(pickup, { type: 'snapshot' }).pickup;
     if (msg.type === 'parts') pickup = reducePickup(pickup, msg).pickup;
     const parts = sync.base?.parts ?? 0;
+    const before = prev.sync.base?.parts;
+    if ((msg.type === 'parts' || msg.type === 'repaired') && before !== undefined && parts !== before) {
+      chipFx = { seq: chipFx.seq + 1, delta: parts > before ? 1 : -1, mine: msg.type === 'parts' && msg.mine };
+    }
     const rejected =
       msg.type === 'repairRejected' && repair.hold.kind !== 'idle' && repair.hold.faultId === msg.faultId;
     if (rejected || (repair.hold.kind === 'holding' && parts === 0)) {
@@ -164,7 +196,7 @@ export const useStore = create<Store>((set, get) => ({
     const wasDark = (prev.sync.base?.blackout ?? null) !== null;
     const isDark = (sync.base?.blackout ?? null) !== null;
     const pulse = chromaPulse(wasDark, isDark, msg.type === 'snapshot' ? 'snapshot' : 'live');
-    const patch: Partial<Store> = { sync, repair, feedback, pickup, partPing, partsNotice };
+    const patch: Partial<Store> = { sync, repair, feedback, pickup, partPing, partsNotice, chipFx };
     set(pulse ? { ...patch, blackoutLiveAt: now } : patch);
     for (const m of outbox) sendToServer(m);
   },
@@ -210,13 +242,14 @@ export const useStore = create<Store>((set, get) => ({
     if (r.pickup !== get().pickup) set({ pickup: r.pickup });
     if (r.send) sendToServer(r.send);
   },
-  collectPiece: (now, dateNow) => {
+  collectPiece: (now, dateNow, at) => {
     const { sync, connection, pickup } = get();
     const slot = partSlot(serverNow(sync, dateNow));
     if (!pieceShown(sync.base, slot, pickup)) return;
     const allowed = connection === 'open' && sync.wsSynced && !sync.incompatible;
     get().dispatchPickup({ type: 'tap', slot, now, allowed });
     if (get().pickup === pickup) return;
+    if (at) set({ flight: { seq: get().flight.seq + 1, x: at.x, y: at.y } });
     clearTimeout(pickupTimer);
     // The timer and the frame clock can drift by a millisecond: never tick before the deadline.
     const deadline = now + PICKUP_TIMEOUT_MS;

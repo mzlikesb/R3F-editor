@@ -5,7 +5,7 @@
 import { PARTS_CAP } from '../../shared/parts';
 import { MAX_FAULTS, type Blackout, type Fault, type ModuleId } from '../../shared/protocol';
 import type { HoldState } from '../hold';
-import { moduleName } from '../modules';
+import { MODULES, moduleName } from '../modules';
 import type { BaseView, ConnectionStatus, LastRepairView } from '../sync';
 
 /**
@@ -91,6 +91,15 @@ export function faultCountLine(faultCount: number, blackout: Blackout | null): s
  * said `기지 정상` under `기지를 불러오는 중…`). A server this build cannot read counts as known, so
  * the update banner is not stuck behind the loading screen.
  */
+/**
+ * The scene is in: the loaders are idle at 100 % *and* every module's model is mounted (its GLB
+ * decoded and its Suspense resolved, or its fallback shape). Downloads alone finish before the Draco
+ * decode, which left the pill gone over bare ground (neon on #114).
+ */
+export function sceneLoaded(s: { assetsDone: boolean; modelsIn: number }): boolean {
+  return s.assetsDone && s.modelsIn >= MODULES.length;
+}
+
 export function hudReady(s: { loaded: boolean; hasBase: boolean; incompatible: boolean }): boolean {
   return s.loaded && (s.hasBase || s.incompatible);
 }
@@ -101,9 +110,14 @@ export function connectionLabel(status: ConnectionStatus): string | null {
   return status === 'connecting' ? '연결 중…' : '재연결 중…';
 }
 
-/** Under the HUD while nothing is broken (and a base is known). */
-export function healthyLine(base: { faulted: boolean } | null): string | null {
-  return base && !base.faulted ? '기지 정상 · 고장이 나면 이 화면에 떠요' : null;
+/**
+ * Under the HUD while nothing is broken (and a base is known). With room in the store (`parts`
+ * below the cap) the calm time says what to do: pick pieces up (009-2 playtest).
+ */
+export function healthyLine(base: { faulted: boolean; parts?: number } | null): string | null {
+  if (!base || base.faulted) return null;
+  if (base.parts !== undefined && base.parts < PARTS_CAP) return '기지 정상 · 조각을 주워 부품을 모아 두세요';
+  return '기지 정상 · 고장이 나면 이 화면에 떠요';
 }
 
 /** Top of the HUD during a blackout (plan 006 C.18), else null. */

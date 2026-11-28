@@ -4,6 +4,7 @@ import { startSocket } from './net/socket';
 import { BaseCanvas } from './scene/BaseCanvas';
 import { BottomStack } from './ui/BottomStack';
 import { Hud } from './ui/Hud';
+import { PartsFlight } from './ui/PartsFlight';
 import { Loading } from './ui/Loading';
 import { ScreenFlash } from './ui/ScreenFlash';
 
@@ -21,6 +22,7 @@ export function App() {
       <BaseCanvas />
       <Loading />
       <Hud />
+      <PartsFlight />
       <BottomStack />
       <ScreenFlash />
     </>

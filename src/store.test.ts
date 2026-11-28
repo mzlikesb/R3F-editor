@@ -25,7 +25,7 @@ import {
   useStore,
 } from './store';
 import { initialSync } from './sync';
-import { PICKUP_TIMEOUT_MS, idlePickup, initialPing } from './parts';
+import { PICKUP_TIMEOUT_MS, idlePickup, initialChipFx, initialFlight, initialPing } from './parts';
 import { PARTS_CAP, PART_SLOT_MS, partSlot } from '../shared/parts';
 import { shouldShake } from './scene/shake';
 
@@ -94,6 +94,8 @@ beforeEach(() => {
     pickup: idlePickup,
     partPing: initialPing,
     partsNotice: false,
+    chipFx: initialChipFx,
+    flight: initialFlight,
   });
   sent = [];
   setClientSender((msg) => sent.push(msg));
@@ -536,5 +538,50 @@ describe('selectPartsChip (QA: no 0/5 before the store is known)', () => {
     expect(selectPartsChip(s())).toBeNull();
     s().receive(snapshot({ parts: 3 }), 0, T);
     expect(selectPartsChip(s())).toBe(3);
+  });
+});
+
+describe('the parts chip reacts (009-2 playtest)', () => {
+  const partsAt = (count: number, mine: boolean, version: number): PartsMessage => ({
+    type: 'parts',
+    version,
+    count,
+    slot: partSlot(T) + version,
+    mine,
+    serverNow: T,
+  });
+
+  it("+1 on my pick-up (strong) and on someone else's; nothing on a snapshot", () => {
+    s().receive(snapshot({ parts: 1 }), 0, T);
+    expect(s().chipFx.seq).toBe(0);
+    s().receive(partsAt(2, true, 6), 10, T);
+    expect(s().chipFx).toEqual({ seq: 1, delta: 1, mine: true });
+    s().receive(partsAt(3, false, 7), 20, T);
+    expect(s().chipFx).toEqual({ seq: 2, delta: 1, mine: false });
+    s().receive(snapshot({ version: 9, parts: 4 }), 30, T);
+    expect(s().chipFx.seq).toBe(2);
+  });
+
+  it('-1 when a repair uses a part, whoever made it; the other toast says a part was used', () => {
+    s().receive(snapshot({ parts: 2 }), 0, T);
+    s().receive(repaired(false, { parts: 1 }), 10, T);
+    expect(s().chipFx).toEqual({ seq: 1, delta: -1, mine: false });
+    expect(s().feedback.toast).toMatchObject({ kind: 'other', part: true });
+  });
+
+  it('a pick-up tap with a screen point starts the flight to the chip', () => {
+    s().receive(snapshot({ parts: 0 }), 0, T);
+    s().collectPiece(10, T, { x: 120, y: 480 });
+    expect(s().flight).toEqual({ seq: 1, x: 120, y: 480 });
+  });
+});
+
+describe('store.markModelIn (the loading pill waits for the module models)', () => {
+  it('counts each module once', () => {
+    useStore.setState({ modelsIn: [] });
+    s().markModelIn('oxygen');
+    s().markModelIn('oxygen');
+    s().markModelIn('generator');
+    expect(s().modelsIn).toEqual(['oxygen', 'generator']);
   });
 });
