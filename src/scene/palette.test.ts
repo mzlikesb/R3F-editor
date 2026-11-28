@@ -7,8 +7,9 @@ import { PALETTE, contrastRatio, hueDistance, linearToHex, luminance, scaleHex }
  */
 const MIN_HUE_GAP = 60;
 const MIN_CONTRAST = 3;
-/** Bloom picks pixels above this linear luminance (008-2); the selection must never glow. */
-const BLOOM_THRESHOLD = 1.2;
+// No Bloom test here: an sRGB colour's linear luminance is at most 1, under the 1.2 threshold by
+// construction, and the ring and outline use plain colours (no emissive). 008-2, which adds Bloom,
+// checks the rendered values against its settings.
 
 describe('palette helpers', () => {
   it('measures hue distance the short way round', () => {
@@ -37,6 +38,8 @@ describe('selection colour', () => {
     statusLight: PALETTE.statusLight,
     emergency: PALETTE.emergency,
     panelOn: linearToHex(PALETTE.panelOn),
+    hold: PALETTE.hold,
+    ping: PALETTE.ping,
   };
 
   for (const [name, color] of Object.entries(others)) {
@@ -51,10 +54,6 @@ describe('selection colour', () => {
     expect(contrastRatio(PALETTE.select, scaleHex(PALETTE.fog, PALETTE.skyBlackout))).toBeGreaterThanOrEqual(
       MIN_CONTRAST,
     );
-  });
-
-  it('stays under the Bloom threshold', () => {
-    expect(luminance(PALETTE.select)).toBeLessThan(BLOOM_THRESHOLD);
   });
 });
 

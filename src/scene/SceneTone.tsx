@@ -32,11 +32,13 @@ const range = { near: 0, far: 0 };
 
 /**
  * Sky, fog and the blackout fade, together (plan 008 A.3, B.2). The sky is a screen-space gradient
- * texture as the scene background, so the sky, the fog and the ground go through the same render
- * (the canvas no longer needs to be transparent over a CSS sky). The fog takes the sky's bottom
- * colour. One blackout progress (`daylight`, stepped here first each frame and read by `Lighting`)
- * dims the lights, the sky (`backgroundIntensity`) and the fog colour by the same factor, so the far
- * ground keeps melting into the sky in a blackout. Nothing is allocated per frame.
+ * texture as the scene background (the canvas no longer needs to be transparent over a CSS sky).
+ * The fog takes the sky's bottom colour, and fully fogged ground comes out exactly that colour: three
+ * mixes fog in after tone mapping, and an sRGB background skips tone mapping, so on the renderer's
+ * tone mapping both are their plain hex; under a composer that tone maps at the end, both go through
+ * it (`skyTone.test.ts`). One blackout progress (`daylight`, stepped here first each frame and read
+ * by `Lighting`) dims the lights, the sky (`backgroundIntensity`, linear) and the fog colour (linear)
+ * by the same factor. Nothing is allocated per frame.
  */
 export function SceneTone() {
   const get = useThree((s) => s.get);

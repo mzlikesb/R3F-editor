@@ -83,16 +83,51 @@ export function project(spec: FrameSpec, distance: number, p: Vec3): { x: number
   return { x: dot(v, right) / (depth * t * aspect), y: dot(v, up) / (depth * t) };
 }
 
-function fits(spec: FrameSpec, distance: number, points: readonly Vec3[], floor: readonly Vec3[]): boolean {
-  const mx = 1 - (2 * spec.margin.side) / spec.width;
-  const top = 1 - (2 * spec.margin.top) / spec.height;
-  const bottom = -1 + (2 * spec.margin.bottom) / spec.height;
-  return (
-    points.every((p) => {
-      const n = project(spec, distance, p);
-      return Math.abs(n.x) <= mx && n.y <= top && n.y >= bottom;
-    }) && floor.every((p) => project(spec, distance, p).y >= bottom)
-  );
+/**
+ * Each point in the camera's frame, relative to the target: depth along `forward` (the camera adds
+ * its distance), and offsets along `right` and `up`. The lift moves the camera along `up` only, so
+ * it changes the up offset (`u - lift * distance`) and nothing else. Computed once per fit, so a fit
+ * is a few thousand multiplications (#104 QA: the nested projections cost 180 ms on a phone size).
+ */
+function inFrame(spec: FrameSpec, points: readonly Vec3[]): Float64Array {
+  const { forward, right, up } = basis(spec.dir);
+  const out = new Float64Array(points.length * 3);
+  points.forEach((p, i) => {
+    const q = { x: p.x - spec.target.x, y: p.y - spec.target.y, z: p.z - spec.target.z };
+    out[i * 3] = dot(q, forward);
+    out[i * 3 + 1] = dot(q, right);
+    out[i * 3 + 2] = dot(q, up);
+  });
+  return out;
+}
+
+/** Screen limits in NDC and the projection scale. */
+function limits(spec: FrameSpec) {
+  return {
+    t: Math.tan((spec.fovDeg * Math.PI) / 360),
+    aspect: spec.width / spec.height,
+    mx: 1 - (2 * spec.margin.side) / spec.width,
+    top: 1 - (2 * spec.margin.top) / spec.height,
+    bottom: -1 + (2 * spec.margin.bottom) / spec.height,
+  };
+}
+
+type Limits = ReturnType<typeof limits>;
+/** Rounding room: the resting lift puts a point exactly on the bottom line. */
+const EPS = 1e-9;
+
+function fits(lim: Limits, d: number, lift: number, pts: Float64Array, floor: Float64Array): boolean {
+  for (let i = 0; i < pts.length; i += 3) {
+    const depth = Math.max(1e-6, pts[i]! + d);
+    if (Math.abs(pts[i + 1]!) / (depth * lim.t * lim.aspect) > lim.mx) return false;
+    const y = (pts[i + 2]! - lift * d) / (depth * lim.t);
+    if (y > lim.top + EPS || y < lim.bottom - EPS) return false;
+  }
+  for (let i = 0; i < floor.length; i += 3) {
+    const depth = Math.max(1e-6, floor[i]! + d);
+    if ((floor[i + 2]! - lift * d) / (depth * lim.t) < lim.bottom - EPS) return false;
+  }
+  return true;
 }
 
 /**
@@ -100,41 +135,61 @@ function fits(spec: FrameSpec, distance: number, points: readonly Vec3[], floor:
  * points only have to stay above the bottom margin (a fault ring may run off the side).
  */
 export function fitDistance(spec: FrameSpec, points: readonly Vec3[], floor: readonly Vec3[] = []): number {
+  const lim = limits(spec);
+  const pts = inFrame(spec, points);
+  const fl = inFrame(spec, floor);
+  const lift = spec.lift ?? 0;
   let lo = 1;
   let hi = 400;
   for (let i = 0; i < 50; i++) {
     const mid = (lo + hi) / 2;
-    if (fits(spec, mid, points, floor)) hi = mid;
+    if (fits(lim, mid, lift, pts, fl)) hi = mid;
     else lo = mid;
   }
   return hi;
 }
 
-/** Pixels between the lowest of `points` and the bottom of the screen. */
-function bottomGap(spec: FrameSpec, distance: number, points: readonly Vec3[]): number {
-  let low = Infinity;
-  for (const p of points) low = Math.min(low, project(spec, distance, p).y);
-  return ((low + 1) / 2) * spec.height;
+/**
+ * The highest lift at distance `d` that keeps every point (`floor` included) above the bottom
+ * margin: the base rests on that line. -1 if no lift fits the top margin as well.
+ */
+function restingLift(lim: Limits, d: number, pts: Float64Array, floor: Float64Array): number {
+  let high = Infinity;
+  let low = 0;
+  for (const arr of [pts, floor]) {
+    for (let i = 0; i < arr.length; i += 3) {
+      const depth = Math.max(1e-6, arr[i]! + d);
+      high = Math.min(high, (arr[i + 2]! - lim.bottom * depth * lim.t) / d);
+      if (arr === pts) low = Math.max(low, (arr[i + 2]! - lim.top * depth * lim.t) / d);
+    }
+  }
+  return high >= low ? high : -1;
 }
 
 /**
  * The fit with the base pushed down until its lowest point (`floor` included) rests on the bottom
- * margin: the smallest `lift` at which the bottom margin binds, and the distance that goes with it.
- * On a portrait screen the width decides the distance, so this only moves the empty floor to the sky.
+ * margin: the smallest distance at which some lift fits, and the highest such lift (the bottom
+ * margin binds). On a portrait screen the width decides the distance, so this only moves the empty
+ * floor to the sky. The lift is solved in closed form at each distance step.
  */
 export function liftedFit(
   spec: FrameSpec,
   points: readonly Vec3[],
   floor: readonly Vec3[],
 ): { distance: number; lift: number } {
-  const all = [...points, ...floor];
-  const at = (lift: number) => fitDistance({ ...spec, lift }, points, floor);
-  let lo = 0;
-  let hi = 0.6;
-  for (let i = 0; i < 24; i++) {
+  const lim = limits(spec);
+  const pts = inFrame(spec, points);
+  const fl = inFrame(spec, floor);
+  const ok = (d: number) => {
+    const lift = restingLift(lim, d, pts, fl);
+    return lift >= 0 && fits(lim, d, lift, pts, fl);
+  };
+  let lo = 1;
+  let hi = 400;
+  for (let i = 0; i < 50; i++) {
     const mid = (lo + hi) / 2;
-    if (bottomGap({ ...spec, lift: mid }, at(mid), all) > spec.margin.bottom + 0.5) lo = mid;
-    else hi = mid;
+    if (ok(mid)) hi = mid;
+    else lo = mid;
   }
-  return { distance: at(hi), lift: hi };
+  return { distance: hi, lift: restingLift(lim, hi, pts, fl) };
 }
