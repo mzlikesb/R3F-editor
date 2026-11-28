@@ -12,14 +12,17 @@
 #   (a) the latest Codex receipt for head has no inline comments and says "Didn't find any
 #       major issues" (or, with no receipt, the head's state summary has no findings), and
 #       the head's state summary does not report findings;
-#   (b) the user's latest review on head is APPROVED (escape hatch after a finished review).
+#   (b) the user's latest decisive review on head is APPROVED and was submitted strictly
+#       after the latest Codex result for head (receipt or state summary). An Approve given
+#       before Codex's findings, or at the same instant, does not count (fails closed).
 def codex: . == "chatgpt-codex-connector[bot]";
 def short: .[0:7];
 def clean_words: contains("Didn't find any major issues");
 . as $in
 | ($in.head | ascii_downcase) as $head
-| [ ($in.comments[]? | {kind: "comment", id: .id, ts: (.created_at // ""), login: .user.login, body: (.body // "")}),
-    ($in.reviews[]?  | {kind: "review", id: .id, ts: (.submitted_at // ""), login: .user.login, body: (.body // "")}) ]
+# ts: when the result was posted; uts: last change (the state summary comment is edited in place).
+| [ ($in.comments[]? | {kind: "comment", id: .id, ts: (.created_at // ""), uts: (.updated_at // .created_at // ""), login: .user.login, body: (.body // "")}),
+    ($in.reviews[]?  | {kind: "review", id: .id, ts: (.submitted_at // ""), uts: (.submitted_at // ""), login: .user.login, body: (.body // "")}) ]
 | map(select(.login | codex)) as $mine
 # Receipts: marker plus "**Reviewed commit:** `<sha>`" where sha is 7+ hex chars and a head prefix.
 | [ $mine[]
@@ -35,6 +38,12 @@ def clean_words: contains("Didn't find any major issues");
     | select(. != null and .code_review.commit_sha != null)
     | select((.code_review.commit_sha | ascii_downcase) == $head and .code_review.status == "completed")
     | .code_review ] | first) as $state
+# Latest Codex activity time for head: receipts and any state summary naming head.
+| ([ ($receipts[] | .ts),
+     ($mine[] | . as $m
+      | (.body | capture("codex-review-state:v1 (?<j>\\{.*?\\}\\s*\\})"; "s")? | .j | (try fromjson catch null))
+      | select(. != null and .code_review.commit_sha != null and (.code_review.commit_sha | ascii_downcase) == $head)
+      | $m.uts) ] | max // "") as $codex_ts
 | (($receipts | first | .sha) // ($state | .commit_sha)) as $hit
 | (if ($in.base // "main") == "dev" then "codex-reviewed-dev" else "codex-reviewed" end) as $context
 | {context: $context} + if $hit == null then
@@ -56,7 +65,10 @@ def clean_words: contains("Didn't find any major issues");
     | ([ $in.reviews[]?
          | select(.user.login == "mzlikesb" and ((.commit_id // "") | ascii_downcase) == $head)
          | select(.state != "COMMENTED" and .state != "PENDING") ]
-       | sort_by(.submitted_at // "") | last | .state) as $user
+       | sort_by(.submitted_at // "") | last) as $user_review
+    | (if $user_review.state == "APPROVED" and $codex_ts != ""
+            and (($user_review.submitted_at // "") > $codex_ts)
+       then "APPROVED" else null end) as $user
     | if $clean then
         {state: "success", description: "Codex가 \($hit | short)를 리뷰함 — 지적 없음"}
       elif $user == "APPROVED" then

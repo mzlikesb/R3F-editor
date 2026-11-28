@@ -29,6 +29,7 @@
 - base `dev` PR의 `codex-reviewed` success 조건은 두 경로다.
   - (a) head SHA에 대한 **가장 최근** Codex 리뷰에 인라인 지적이 0건이고, 그 리뷰의 요약(또는 Codex 요약 코멘트)이 "지적 없음" 문구다(`Didn't find any major issues` 계열). 예전 리뷰의 지적은 보지 않는다.
   - (b) **탈출구**: head SHA에 대한 Codex 리뷰가 **끝나 있고**(결과 무관), 같은 head에 사용자(`mzlikesb`)의 APPROVED 리뷰가 있다. 오탐이나 경미한 지적을 코드 수정 없이 넘길 때 쓴다. Codex 리뷰가 아직 없는 head에서는 사용자 Approve만으로 통과하지 않는다(Codex P1 `6d4e815` — 사용자 Approve가 Codex 리뷰를 건너뛰는 길이 되지 않게).
+    - **Codex 결과보다 뒤의 Approve만 센다**: 사용자 APPROVED는 head에 대한 가장 최근 Codex 결과(리뷰 `submitted_at`·영수증 `created_at`·요약 코멘트 `updated_at` 중 최신)보다 엄격히 뒤여야 한다. 같은 시각은 pending(닫힌 쪽). 그 뒤 사용자 결정 리뷰가 CHANGES_REQUESTED·DISMISSED면 무효(Codex P1 `c3ea36b`).
 - 요약 본문에만 막는 문제를 적고 인라인이 없는 경우는 (a)의 요약 문구 조건이 걸러 낸다.
 - 기획이 지적을 "막지 않음"으로 판단하면 PR 코멘트에 근거를 남기고 사용자에게 (b)를 요청한다. 같은 head로 재리뷰를 요청해 통과시키려 하지 않는다.
 - 판정 스크립트는 계속 기본 브랜치(`main`)의 것을 쓴다.

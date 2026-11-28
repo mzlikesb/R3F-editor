@@ -94,6 +94,16 @@ echo '[]' >"$tmp/c.json"; echo "[$FIND_R]" >"$tmp/r.json"
 got=$(bash codex-gate.sh "$HEAD" "$tmp/c.json" "$tmp/r.json" dev "$tmp/rc.json" | jq -r .state)
 if [ "$got" = pending ]; then echo "ok   finding inside a big inline list"; else echo "FAIL finding inside a big inline list ($got)"; fail=1; fi
 
+# (b) needs the Approve strictly after the latest Codex result for head.
+T0=2026-11-28T08:00:00Z
+dcheck "dev: Approve first, Codex findings after -> pending" pending dev '[]' "[$(rev 31 mzlikesb APPROVED "$HEAD" "$T0" ""),$FIND_R]" "[$(inline 11 "$HEAD")]"
+dcheck "dev: Codex findings, Approve after -> success" success dev '[]' "[$FIND_R,$APPROVE]" "[$(inline 11 "$HEAD")]"
+dcheck "dev: clean Codex review, no Approve -> success via (a)" success dev "[$CLEAN_C]" '[]' '[]'
+dcheck "dev: Approve at the same instant as findings -> pending" pending dev '[]' "[$FIND_R,$(rev 32 mzlikesb APPROVED "$HEAD" "$T1" "")]" "[$(inline 11 "$HEAD")]"
+dcheck "dev: Approve, then findings, then a newer findings review -> pending" pending dev '[]' "[$FIND_R,$(rev 33 mzlikesb APPROVED "$HEAD" "$T2" ""),$(rev 14 "$BOT" COMMENTED "$HEAD" "$T3" "$(FIND_RECEIPT "${HEAD:0:10}")")]" "[$(inline 11 "$HEAD"),$(inline 14 "$HEAD")]"
+dcheck "dev: Approve after findings but before the state summary changed -> pending" pending dev "[$(jq -n --arg b "$(state "$HEAD" completed | sed 's/"has_any_findings":false/"has_any_findings":true/')" '{user:{login:"chatgpt-codex-connector[bot]"},body:$b,created_at:"2026-11-28T07:00:00Z",updated_at:"2026-11-28T09:30:00Z"}')]" "[$FIND_R,$APPROVE]" "[$(inline 11 "$HEAD")]"
+dcheck "dev: findings, Approve after, then changes requested -> pending" pending dev '[]' "[$FIND_R,$APPROVE,$(rev 34 mzlikesb CHANGES_REQUESTED "$HEAD" 2026-11-28T09:40:00Z "")]" "[$(inline 11 "$HEAD")]"
+
 # Status context per base (statuses are per SHA): the same head in a dev PR and a main PR.
 ctx() { # ctx <base or ""> -> "context state" for the findings-only head
   echo '[]' >"$tmp/c.json"; echo "[$FIND_R]" >"$tmp/r.json"; echo "[$(inline 11 "$HEAD")]" >"$tmp/rc.json"
