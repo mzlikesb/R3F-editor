@@ -61,6 +61,9 @@ user_approved_head() { # the user's latest decisive review on the head commit is
     | sort_by(.submitted_at // "") | last | .state == "APPROVED"' <<<"$reviews" >/dev/null
 }
 large() { has_label size:large; }
+same_repo() { # head branch lives in this repository (a fork's `main` is not our main)
+  jq -e '(.head.repo.full_name // "") != "" and .head.repo.full_name == .base.repo.full_name' <<<"$pr" >/dev/null
+}
 
 if [ "$flow" = on ] && [ "$base" = main ]; then
   # Only snapshots cut from dev go to main (plan 010 C).
@@ -76,7 +79,7 @@ if [ "$flow" = on ] && [ "$base" = main ]; then
   check_milestone
   check_issue_line
   no_auto "릴리스 PR에"
-elif [ "$flow" = on ] && [ "$base" = dev ] && [ "$ref" = main ] && has_label release; then
+elif [ "$flow" = on ] && [ "$base" = dev ] && [ "$ref" = main ] && has_label release && same_repo; then
   # Recovery after an accidental squash release: main merged back into dev (tasks R1c).
   check_release_labels
   check_milestone

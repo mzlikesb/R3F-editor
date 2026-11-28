@@ -26,7 +26,7 @@ covered() { # covered <root entry, dirs end in />: protected pattern or unprotec
   local e=$1 p g
   for g in $UNPROTECTED; do [ "$e" = "$g" ] && return 0; done
   while IFS= read -r p; do
-    g=${p#/}
+    g=${p#/}; g=${g#\*\*/}
     # shellcheck disable=SC2053 # glob match on purpose
     [[ $e == $g ]] && return 0
   done < <(owners_paths .github/CODEOWNERS)
@@ -52,6 +52,10 @@ for must in .github/ scripts/ AGENTS.md package.json tsconfig.json vite.config.t
   covered "$must" || bad "$must is not protected"
 done
 ok "harness and build config are protected"
+for p in '**/.oxlintrc*' '**/.prettierrc*' '**/.prettierignore'; do
+  owners_paths .github/CODEOWNERS | grep -qxF "$p" || bad "$p is not protected at any depth"
+done
+ok "lint/format config is protected in subfolders too"
 
 # The comparison itself catches drift.
 cp .github/CODEOWNERS "$tmp/CO"; cp AGENTS.md "$tmp/A.md"

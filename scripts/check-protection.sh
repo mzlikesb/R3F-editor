@@ -43,7 +43,12 @@ else
   main_prot=$(read_protection main) || { echo "$main_prot"; exit 2; }
   dev_prot=$(read_protection dev) || { echo "$dev_prot"; exit 2; }
   repo=$(gh api "repos/$REPO" --jq '{allow_squash_merge,allow_merge_commit,allow_rebase_merge}') || exit 2
-  dev_flow=$(gh api "repos/$REPO/actions/variables/DEV_FLOW" --jq .value 2>/dev/null || true)
+  # 404 means the variable is not set; any other failure is reported as unreadable.
+  verr=$(mktemp)
+  if ! dev_flow=$(gh api "repos/$REPO/actions/variables/DEV_FLOW" --jq .value 2>"$verr"); then
+    if grep -qE '404|Not Found' "$verr"; then dev_flow=""; else dev_flow="읽지 못함"; fi
+  fi
+  rm -f "$verr"
 fi
 
 # compare <label> <expected lines> <actual lines>

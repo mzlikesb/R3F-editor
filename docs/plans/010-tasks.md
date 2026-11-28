@@ -51,3 +51,13 @@
 | 5   | `check-protection.sh`: `dev` 보호·`main` merge commit 허용 대조, `DEV_FLOW` 표시                               | 개발 리드 | 픽스처·가짜 gh로 `dev` 없음/보호 없음/값 차이/읽기 금지를 구분                                                                                    | `scripts/check-protection.test.sh`              | 완료 |
 | 6   | `guard-bash.sh`: `main` 직접 push·`main`에서 commit/push 금지 규칙의 대상에 `dev` 추가(`--auto` 조건은 그대로) | 개발 리드 | `dev`·`HEAD:dev`·`refs/heads/dev`·`main:dev` 거절, `dev-xyz` 허용, `dev` worktree에서 commit/push 거절                                            | `scripts/hooks/guard-bash.test.sh`              | 완료 |
 | 7   | `release` 라벨                                                                                                | 개발 리드 | `gh label list`에 있다                                                                                                                            | —                                               | 완료 |
+
+### 010-1 QA 반려 반영 (#129 QA 코멘트)
+
+- codex-gate `pull_request`에 `edited`(base를 `dev`로 바꿔도 다시 판정), 인라인 목록은 인자 대신 파일로(255KB 입력 테스트)
+- R1c 복구 예외는 head가 같은 저장소일 때만(포크의 `main` 제외)
+- CODEOWNERS·`AGENTS.md`의 `.oxlintrc*`·`.prettierrc*`·`.prettierignore`는 `**/`로 하위 폴더까지
+- `workflows.test.sh`: `edited` 트리거, actionlint가 `ci.yml` job, 판정 스크립트를 기본 브랜치에서 checkout
+- `check-protection.sh`: `DEV_FLOW` 404는 "없음", 그 밖의 실패는 "읽지 못함"
+- `AGENTS.md`: PR은 squash, `dev → main` 릴리스·`main → dev` 복구는 merge commit
+- 남김: `pr-check`의 부트스트랩 fallback 제거는 010-2

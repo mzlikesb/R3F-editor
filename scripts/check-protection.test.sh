@@ -64,7 +64,7 @@ check "DEV_FLOW unset shown" 0 "DEV_FLOW=없음" "$OK_P" "$OK_R" "$OK_D" ""
 
 # Real (non-fixture) mode with a fake gh on PATH. The stub answers by URL.
 mkdir "$tmp/bin"
-fake_gh() { # fake_gh <main-mode> <dev-mode> : ok | notprot | notfound | 403 | 404
+fake_gh() { # fake_gh <main-mode> <dev-mode> [var-mode] : ok | notprot | notfound | 403 | 404
   cat >"$tmp/bin/gh" <<STUB
 #!/usr/bin/env bash
 mode() { case "\$1" in
@@ -77,21 +77,23 @@ esac; }
 case "\$*" in
   *branches/main/protection*) mode $1 "$tmp/p.json" ;;
   *branches/dev/protection*) mode $2 "$tmp/d.json" ;;
-  *actions/variables/DEV_FLOW*) echo on ;;
+  *actions/variables/DEV_FLOW*) case "${3:-on}" in on) echo on ;; 404) echo 'gh: Not Found (HTTP 404)' >&2; exit 1 ;; *) echo 'gh: Resource not accessible (HTTP 403)' >&2; exit 1 ;; esac ;;
   *) echo '$OK_R' ;;
 esac
 STUB
   chmod +x "$tmp/bin/gh"
 }
-gh_case() { # gh_case <name> <want-exit> <want-substring> <main-mode> <dev-mode>
+gh_case() { # gh_case <name> <want-exit> <want-substring> <main-mode> <dev-mode> [var-mode]
   echo "$OK_P" >"$tmp/p.json"; echo "$OK_D" >"$tmp/d.json"
-  fake_gh "$4" "$5"
+  fake_gh "$4" "$5" "${6:-on}"
   local out code
   out=$(PATH="$tmp/bin:$PATH" bash check-protection.sh 2>&1); code=$?
   if [ "$code" = "$2" ] && grep -q -- "$3" <<<"$out"; then echo "ok   $1"; else echo "FAIL $1 (exit $code: $out)"; fail=1; fi
 }
 gh_case "gh: both match" 0 "일치" ok ok
 gh_case "gh: DEV_FLOW shown" 0 "DEV_FLOW=on" ok ok
+gh_case "DEV_FLOW not set" 0 "DEV_FLOW=없음" ok ok 404
+gh_case "DEV_FLOW unreadable" 0 "DEV_FLOW=읽지 못함" ok ok 403
 gh_case "403 exits 2" 2 "읽기 권한 없음" 403 ok
 gh_case "404 Not Found (no permission) exits 2" 2 "읽기 권한 없음" 404 ok
 gh_case "404 Branch not protected exits 1" 1 "main branch_protection" notprot ok

@@ -20,6 +20,15 @@ for wf in pr-check.yml codex-gate.yml; do
   if pr_block "$wf" pull_request_review | grep -q dismissed && pr_block "$wf" pull_request_review | grep -q submitted
   then ok "$wf re-runs on review submitted and dismissed"; else bad "$wf misses pull_request_review submitted/dismissed"; fi
 done
+if pr_block codex-gate.yml pull_request | grep -qE 'types:.*\bedited\b'; then ok "codex-gate re-judges when the PR is edited (base change)"
+else bad "codex-gate pull_request types miss edited"; fi
+if pr_block pr-check.yml pull_request | grep -qE '^\s+- edited$'; then ok "pr-check re-runs when the PR is edited"; else bad "pr-check misses edited"; fi
+if awk '/^jobs:/{f=1} f' ci.yml | grep -qE '^  actionlint:'; then ok "actionlint is a ci.yml job (same PR triggers)"; else bad "actionlint is not a ci.yml job"; fi
+# The judges come from the default branch, not the PR.
+for wf in codex-gate.yml pr-check.yml; do
+  if awk '/uses: actions\/checkout/{n=NR} n && NR<=n+2' "$wf" | grep -qF 'ref: ${{ github.event.repository.default_branch }}'
+  then ok "$wf checks out its judge from the default branch"; else bad "$wf does not check out the default branch"; fi
+done
 if pr_block ci.yml push | grep -qE 'branches: \[main, dev\]'; then ok "ci runs on main and dev pushes"; else bad "ci push branches are not [main, dev]"; fi
 if pr_block deploy.yml push | grep -qE 'branches: \[main\]'; then ok "production deploys only on main pushes"; else bad "deploy push branches changed"; fi
 cleanup=$(awk '/^  cleanup:/{f=1; next} f && /^  [^ ]/{exit} f' deploy.yml)

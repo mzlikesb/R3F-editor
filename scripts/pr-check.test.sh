@@ -11,8 +11,8 @@ NONE_BODY=$'- 관련 이슈: 없음\n'
 
 pr() { # pr <base> <head-ref> <labels-csv> <milestone:yes|no> <auto:yes|no> [body]
   jq -n --arg base "$1" --arg ref "$2" --arg labels "$3" --arg m "$4" --arg a "$5" \
-    --arg body "${6:-$BODY}" --arg sha "$HEAD" '{
-    base:{ref:$base}, head:{ref:$ref, sha:$sha}, body:$body,
+    --arg body "${6:-$BODY}" --arg sha "$HEAD" --arg hr "${HEAD_REPO:-mzlikesb/outpost}" '{
+    base:{ref:$base, repo:{full_name:"mzlikesb/outpost"}}, head:{ref:$ref, sha:$sha, repo:{full_name:$hr}}, body:$body,
     labels:($labels | split(",") | map(select(. != "")) | map({name:.})),
     milestone:(if $m == "yes" then {title:"M5 출시"} else null end),
     auto_merge:(if $a == "yes" then {merge_method:"squash"} else null end)}'
@@ -61,6 +61,8 @@ check "on/dev: large with auto-merge (even approved)" 1 on "$(pr dev feat/x size
 check "on/dev: main -> dev recovery with release label" 0 on "$(pr dev main release yes no "$NONE_BODY")" '[]'
 check "on/dev: main -> dev recovery with size/stage too" 1 on "$(pr dev main release,size:small,stage:dev yes no "$NONE_BODY")" '[]' "" "release"
 check "on/dev: main -> dev recovery with auto-merge" 1 on "$(pr dev main release yes yes "$NONE_BODY")" '[]' "" "auto-merge"
+check "on/dev: main -> dev recovery from a fork's main is not the exception" 1 on "$(HEAD_REPO=someone/outpost pr dev main release yes no "$NONE_BODY")" '[]' "" "size:"
+check "on/dev: main -> dev recovery with no head repo is not the exception" 1 on "$(pr dev main release yes no "$NONE_BODY" | jq '.head.repo = null')" '[]' "" "size:"
 check "on/dev: main -> dev recovery without milestone" 1 on "$(pr dev main release no no "$NONE_BODY")" '[]' "" "마일스톤"
 
 # DEV_FLOW on, base main: only release snapshots.

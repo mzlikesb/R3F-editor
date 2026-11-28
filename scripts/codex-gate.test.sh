@@ -83,6 +83,17 @@ dcheck "dev: clean words from another author -> pending" pending dev "[$(cmt som
 dcheck "main: findings still count as reviewed" success main '[]' "[$FIND_R]" "[$(inline 11 "$HEAD")]"
 dcheck "main: Approve alone is not a review" pending main '[]' "[$APPROVE]" '[]'
 
+# Large inline lists go through files (an argv value over ~128KB would fail).
+big=$(jq -n --arg b "$(head -c 2000 /dev/zero | tr '\0' x)" '[range(0; 120) | {pull_request_review_id: 999, commit_id: "x", user: {login: "someone"}, body: $b}]')
+echo "[$CLEAN_C]" >"$tmp/c.json"; echo '[]' >"$tmp/r.json"; echo "$big" >"$tmp/rc.json"
+size=$(wc -c <"$tmp/rc.json" | tr -d ' ')
+got=$(bash codex-gate.sh "$HEAD" "$tmp/c.json" "$tmp/r.json" dev "$tmp/rc.json" 2>&1 | jq -r .state 2>&1)
+if [ "$size" -gt 200000 ] && [ "$got" = success ]; then echo "ok   dev with a ${size}-byte inline list"; else echo "FAIL big inline list (size $size, got $got)"; fail=1; fi
+echo "[$(inline 11 "$HEAD")]" | jq --argjson big "$big" '. + $big' >"$tmp/rc.json"
+echo '[]' >"$tmp/c.json"; echo "[$FIND_R]" >"$tmp/r.json"
+got=$(bash codex-gate.sh "$HEAD" "$tmp/c.json" "$tmp/r.json" dev "$tmp/rc.json" | jq -r .state)
+if [ "$got" = pending ]; then echo "ok   finding inside a big inline list"; else echo "FAIL finding inside a big inline list ($got)"; fail=1; fi
+
 # base dev without the inline list fails closed.
 echo "[$CLEAN_C]" >"$tmp/c.json"; echo '[]' >"$tmp/r.json"
 got=$(bash codex-gate.sh "$HEAD" "$tmp/c.json" "$tmp/r.json" dev | jq -r .state)
