@@ -11,7 +11,7 @@ import { reconnectDelayMs } from './backoff';
 import { socketUrl } from './url';
 
 /**
- * Connects to `/ws?protocol=2` and keeps it alive. `open` is reported only after the first snapshot of a
+ * Connects to `/ws?protocol=3` and keeps it alive. `open` is reported only after the first snapshot of a
  * connection is applied. Returns a stop function.
  */
 export function startSocket(): () => void {

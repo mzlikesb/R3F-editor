@@ -573,10 +573,10 @@ describe('toSnapshot / toHistory', () => {
     lastPartSlot: 179_999_999,
   });
 
-  it('snapshot carries protocol 2, the state, the five newest blackouts and the server time', () => {
+  it('snapshot carries protocol 3, the state, the five newest blackouts and the server time', () => {
     expect(toSnapshot(s, 3, T + 7)).toEqual({
       type: 'snapshot',
-      protocol: 2,
+      protocol: 3,
       version: 7,
       faults: [fault('oxygen')],
       repairs: 2,

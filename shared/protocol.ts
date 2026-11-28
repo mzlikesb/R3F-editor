@@ -4,16 +4,20 @@
  * Protocol 2 (plan 006 B). Owned by the dev lead; the server track and the client track of
  * `docs/plans/006-tasks.md` both build on it. Changing a type here needs the lead and both tracks.
  *
- * Protocol 1 (plans 003-005) is still spoken to sockets that connect without `?protocol=2` (tabs
- * opened before the deploy). Its message shapes are `Legacy*` below; the server only ever *sends*
- * them, so there is no legacy parser here (the deployed one lives in `shared/testdata/v1.ts`).
+ * Protocol 3 (plan 009-2) adds the parts store; the message shapes are those of protocol 2 plus the
+ * parts fields. A socket without `?protocol` (a build from before plan 006) is closed with
+ * `UPDATE_REQUIRED_CODE`. The `Legacy*` shapes below are what such sockets were sent until then;
+ * the deployed parser for them lives in `shared/testdata/v1.ts`.
  */
 
 import { clampParts } from './parts';
 
-/** The protocol this build speaks. Sent in every snapshot and in the WebSocket URL query. */
-export const PROTOCOL_VERSION = 2;
-/** Query parameter on `/ws` that carries the client's protocol (`/ws?protocol=2`). */
+/**
+ * The protocol this build speaks. Sent in every snapshot and in the WebSocket URL query. 3 from plan
+ * 009-2: a repair takes a part, so a protocol-2 tab must reload (its snapshot no longer parses).
+ */
+export const PROTOCOL_VERSION = 3;
+/** Query parameter on `/ws` that carries the client's protocol (`/ws?protocol=3`). */
 export const PROTOCOL_PARAM = 'protocol';
 
 /** Largest client message the server accepts, in UTF-8 bytes. */
@@ -84,7 +88,7 @@ export interface LastRepair {
 // ---- server -> client (protocol 2) ----
 
 /**
- * Full base state. Sent first on every protocol-2 connection, and returned by `GET /api/base`.
+ * Full base state. Sent first on every versioned connection, and returned by `GET /api/base`.
  * `version` rises on every change to anything here except `presence` and `serverNow`.
  */
 export interface SnapshotMessage {
@@ -232,7 +236,7 @@ export interface HistoryResponse {
   serverNow: number;
 }
 
-// ---- server -> client (protocol 1, sockets without `?protocol=2`) ----
+// ---- server -> client (protocol 1, sockets without `?protocol`; unused from plan 009-2) ----
 
 /** Snapshot shape the pre-006 client parses. `fault` is the generator fault only. */
 export interface LegacySnapshotMessage {
@@ -380,6 +384,7 @@ function parseJson(raw: string): unknown {
 }
 
 function parseSnapshot(m: Record<string, unknown>): SnapshotMessage | null {
+  // The protocol first (plan 009 R2): another one is incompatible whatever the other fields say.
   if (m.protocol !== PROTOCOL_VERSION) return null;
   const { version, repairs, presence, longestUptimeMs, instanceId, serverNow, uptimeStartedAt } = m;
   if (!isCount(version) || !isCount(repairs) || !isCount(presence) || !isCount(longestUptimeMs)) return null;
@@ -418,7 +423,7 @@ function isSlot(v: unknown): v is number {
 }
 
 /**
- * Parses a protocol-2 message from the server (WS frame or `/api/base` body).
+ * Parses a message of this build's protocol from the server (WS frame or `/api/base` body).
  * Returns null for invalid JSON, unknown `type`, missing or mistyped fields, or a snapshot whose
  * `protocol` is not `PROTOCOL_VERSION`. Unknown extra fields are dropped. A missing `blackoutStart`
  * or `blackoutEnd` reads as null; a present but malformed one rejects the message. The fields added
@@ -491,10 +496,19 @@ export function isIncompatibleSnapshot(raw: string): boolean {
   return parseServerMessage(raw) === null;
 }
 
-/** The protocol a socket asked for in its upgrade URL: 2 only for `?protocol=2`, otherwise 1. */
+/**
+ * What a socket asked for in its upgrade URL: 2 for a versioned socket (`?protocol=` 2 or higher;
+ * it gets the current snapshot, and a tab of another protocol shows the update banner), otherwise 1.
+ * From plan 009-2 the server closes protocol-1 sockets at once (`UPDATE_REQUIRED_CODE`, R2).
+ */
 export function socketProtocol(url: URL): 1 | 2 {
-  return url.searchParams.get(PROTOCOL_PARAM) === String(PROTOCOL_VERSION) ? 2 : 1;
+  const asked = Number(url.searchParams.get(PROTOCOL_PARAM));
+  return Number.isInteger(asked) && asked >= 2 ? 2 : 1;
 }
+
+/** Close code and reason for a socket without `?protocol` (a build from before plan 006). */
+export const UPDATE_REQUIRED_CODE = 4400;
+export const UPDATE_REQUIRED_REASON = 'update required';
 
 /**
  * Parses a message from a client. Returns null when the frame is binary, larger than
