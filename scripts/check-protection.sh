@@ -106,7 +106,7 @@ if ! unprotected dev "$dev_prot"; then
     "allow_deletions=" + ((.allow_deletions.enabled // false) | tostring)
   ' <<<"$dev_prot") || { echo "dev protection JSON을 읽지 못했다" >&2; exit 2; }
   compare dev 'pull_request_required=true
-required_checks=actionlint,ci,codex-reviewed,pr-check
+required_checks=actionlint,ci,codex-reviewed-dev,pr-check
 approvals=0
 code_owner_reviews=true
 dismiss_stale_reviews=true

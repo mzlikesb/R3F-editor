@@ -1,7 +1,10 @@
 # Decides the `codex-reviewed` commit status for one PR head.
 # Input: {"head": "<sha>", "base": "<branch>", "comments": [...issue comments],
 #         "reviews": [...PR reviews], "review_comments": [...inline review comments] | null}
-# Output: {"state": "success"|"pending", "description": "..."}
+# Output: {"context": "codex-reviewed"|"codex-reviewed-dev", "state": "success"|"pending", "description": "..."}
+# Commit statuses are per SHA, so the dev verdict goes to its own context
+# (`codex-reviewed-dev`, required on dev): a PR with another base and the same head
+# must not overwrite it with the looser verdict.
 #
 # Every base: Codex itself (exact bot login) left a receipt or a completed state summary
 # for a commit that is the current head ("reviewed").
@@ -33,7 +36,8 @@ def clean_words: contains("Didn't find any major issues");
     | select((.code_review.commit_sha | ascii_downcase) == $head and .code_review.status == "completed")
     | .code_review ] | first) as $state
 | (($receipts | first | .sha) // ($state | .commit_sha)) as $hit
-| if $hit == null then
+| (if ($in.base // "main") == "dev" then "codex-reviewed-dev" else "codex-reviewed" end) as $context
+| {context: $context} + if $hit == null then
     {state: "pending", description: "head \($head | short)에 Codex 리뷰 없음 — @codex review 요청"}
   elif ($in.base // "main") != "dev" then
     {state: "success", description: "Codex가 \($hit | short)를 리뷰함"}

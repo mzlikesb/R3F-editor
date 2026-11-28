@@ -29,7 +29,8 @@ check() { # check <name> <want-exit> <want-substring> <main-prot> <repo> [dev-pr
 C4='["ci","pr-check","codex-reviewed","actionlint"]'
 OK_P=$(prot "$C4" false 1 true true true)
 OK_R=$(repo true true false)
-OK_D=$(devprot "$C4" 0 true true true false false)
+D4='["ci","pr-check","codex-reviewed-dev","actionlint"]'
+OK_D=$(devprot "$D4" 0 true true true false false)
 
 check "matches" 0 "일치" "$OK_P" "$OK_R"
 check "context order does not matter" 0 "일치" "$(prot '["codex-reviewed","actionlint","ci","pr-check"]' false 1 true true true)" "$OK_R"
@@ -49,14 +50,15 @@ check "main not protected" 1 "main branch_protection" '{"message":"Branch not pr
 # dev (plan 010 A.2)
 check "dev not protected" 1 "dev branch_protection" "$OK_P" "$OK_R" '{"message":"Branch not protected"}'
 check "dev missing" 1 "Branch not found" "$OK_P" "$OK_R" '{"message":"Branch not found"}'
-check "dev requires an Approve" 1 "dev approvals" "$OK_P" "$OK_R" "$(devprot "$C4" 1 true true true false false)"
-check "dev without code owner reviews" 1 "dev code_owner_reviews" "$OK_P" "$OK_R" "$(devprot "$C4" 0 false true true false false)"
-check "dev keeps stale approvals" 1 "dev dismiss_stale_reviews" "$OK_P" "$OK_R" "$(devprot "$C4" 0 true false true false false)"
-check "dev missing codex-reviewed" 1 "dev required_checks" "$OK_P" "$OK_R" "$(devprot '["ci","pr-check","actionlint"]' 0 true true true false false)"
-check "dev admins not enforced" 1 "dev enforce_admins" "$OK_P" "$OK_R" "$(devprot "$C4" 0 true true false false false)"
-check "dev allows force push" 1 "dev allow_force_pushes" "$OK_P" "$OK_R" "$(devprot "$C4" 0 true true true true false)"
-check "dev allows deletion" 1 "dev allow_deletions" "$OK_P" "$OK_R" "$(devprot "$C4" 0 true true true false true)"
-check "dev without PR requirement" 1 "dev pull_request_required" "$OK_P" "$OK_R" '{"required_status_checks":{"contexts":["ci","pr-check","codex-reviewed","actionlint"]},"enforce_admins":{"enabled":true}}'
+check "dev requires an Approve" 1 "dev approvals" "$OK_P" "$OK_R" "$(devprot "$D4" 1 true true true false false)"
+check "dev without code owner reviews" 1 "dev code_owner_reviews" "$OK_P" "$OK_R" "$(devprot "$D4" 0 false true true false false)"
+check "dev keeps stale approvals" 1 "dev dismiss_stale_reviews" "$OK_P" "$OK_R" "$(devprot "$D4" 0 true false true false false)"
+check "dev missing codex-reviewed-dev" 1 "dev required_checks" "$OK_P" "$OK_R" "$(devprot '["ci","pr-check","actionlint"]' 0 true true true false false)"
+check "dev requires main's codex-reviewed instead" 1 "dev required_checks" "$OK_P" "$OK_R" "$(devprot "$C4" 0 true true true false false)"
+check "dev admins not enforced" 1 "dev enforce_admins" "$OK_P" "$OK_R" "$(devprot "$D4" 0 true true false false false)"
+check "dev allows force push" 1 "dev allow_force_pushes" "$OK_P" "$OK_R" "$(devprot "$D4" 0 true true true true false)"
+check "dev allows deletion" 1 "dev allow_deletions" "$OK_P" "$OK_R" "$(devprot "$D4" 0 true true true false true)"
+check "dev without PR requirement" 1 "dev pull_request_required" "$OK_P" "$OK_R" '{"required_status_checks":{"contexts":["ci","pr-check","codex-reviewed-dev","actionlint"]},"enforce_admins":{"enabled":true}}'
 
 # DEV_FLOW is shown, not compared.
 check "DEV_FLOW on shown" 0 "DEV_FLOW=on" "$OK_P" "$OK_R" "$OK_D" on

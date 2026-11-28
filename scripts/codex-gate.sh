@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Prints the codex-reviewed verdict JSON:
 #   codex-gate.sh <head-sha> <comments.json> <reviews.json> [<base> <review-comments.json>]
+# The verdict names its status context: `codex-reviewed-dev` for base `dev`, else `codex-reviewed`.
 # base `dev` also requires a clean latest Codex review or a user Approve (plan 010 B2, tasks R2);
 # without the inline review comments it fails closed. Any other base (or none) is the main rule.
 # Pure function of its inputs (no network); the workflow fetches and posts.

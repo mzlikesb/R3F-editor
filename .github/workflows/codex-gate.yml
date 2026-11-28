@@ -3,7 +3,8 @@ name: codex-gate
 # Sets the `codex-reviewed` commit status on a PR's current head: success only when
 # Codex reviewed exactly that commit, pending otherwise. Branch protection requires it,
 # so an Approve that lands before Codex cannot merge the PR. PRs into `dev` (no required
-# Approve) also need a clean latest Codex review or the user's Approve (plan 010 B2).
+# Approve) get `codex-reviewed-dev` instead: a clean latest Codex review or the user's Approve
+# (plan 010 B2). A base change (edited) posts the new base's context.
 
 on:
   pull_request:
@@ -60,8 +61,10 @@ jobs:
             verdict=$(bash scripts/codex-gate.sh "$head" comments.json reviews.json "$base" review-comments.json)
           fi
           echo "$verdict"
+          # Base dev posts its own context (codex-reviewed-dev) so a same-SHA PR with another
+          # base cannot overwrite it. An older judge without .context means codex-reviewed.
           gh api -X POST "repos/$REPO/statuses/$head" \
-            -f context=codex-reviewed \
+            -f context="$(jq -r '.context // "codex-reviewed"' <<<"$verdict")" \
             -f state="$(jq -r .state <<<"$verdict")" \
             -f description="$(jq -r .description <<<"$verdict")" \
             -f target_url="${GITHUB_SERVER_URL}/${REPO}/pull/${PR}"

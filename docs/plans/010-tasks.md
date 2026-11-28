@@ -61,3 +61,7 @@
 - `check-protection.sh`: `DEV_FLOW` 404는 "없음", 그 밖의 실패는 "읽지 못함"
 - `AGENTS.md`: PR은 squash, `dev → main` 릴리스·`main → dev` 복구는 merge commit
 - 남김: `pr-check`의 부트스트랩 fallback 제거는 010-2
+
+### 010-1 Codex P1 반영 (#129 `e146b2a`, `codex-gate.jq:39`)
+
+- commit status는 SHA 단위라, base `dev` 판정은 **`codex-reviewed-dev`** 컨텍스트로 따로 올린다(base `main`·그 밖은 `codex-reviewed`). `dev` 보호의 필수 체크는 `ci`·`pr-check`·`actionlint`·`codex-reviewed-dev`(플랜 A.2의 `codex-reviewed`를 대신한다). `check-protection.sh`·`AGENTS.md`·`watch-pr.sh`도 같이 맞췄다

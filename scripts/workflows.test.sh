@@ -29,6 +29,8 @@ for wf in codex-gate.yml pr-check.yml; do
   if awk '/uses: actions\/checkout/{n=NR} n && NR<=n+2' "$wf" | grep -qF 'ref: ${{ github.event.repository.default_branch }}'
   then ok "$wf checks out its judge from the default branch"; else bad "$wf does not check out the default branch"; fi
 done
+if grep -qF "context=\"\$(jq -r '.context // \"codex-reviewed\"' <<<\"\$verdict\")\"" codex-gate.yml && ! grep -qE 'context=codex-reviewed( |$)' codex-gate.yml
+then ok "codex-gate posts the verdict's context (codex-reviewed-dev for base dev)"; else bad "codex-gate does not post the verdict's context"; fi
 if pr_block ci.yml push | grep -qE 'branches: \[main, dev\]'; then ok "ci runs on main and dev pushes"; else bad "ci push branches are not [main, dev]"; fi
 if pr_block deploy.yml push | grep -qE 'branches: \[main\]'; then ok "production deploys only on main pushes"; else bad "deploy push branches changed"; fi
 cleanup=$(awk '/^  cleanup:/{f=1; next} f && /^  [^ ]/{exit} f' deploy.yml)

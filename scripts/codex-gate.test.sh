@@ -94,6 +94,26 @@ echo '[]' >"$tmp/c.json"; echo "[$FIND_R]" >"$tmp/r.json"
 got=$(bash codex-gate.sh "$HEAD" "$tmp/c.json" "$tmp/r.json" dev "$tmp/rc.json" | jq -r .state)
 if [ "$got" = pending ]; then echo "ok   finding inside a big inline list"; else echo "FAIL finding inside a big inline list ($got)"; fail=1; fi
 
+# Status context per base (statuses are per SHA): the same head in a dev PR and a main PR.
+ctx() { # ctx <base or ""> -> "context state" for the findings-only head
+  echo '[]' >"$tmp/c.json"; echo "[$FIND_R]" >"$tmp/r.json"; echo "[$(inline 11 "$HEAD")]" >"$tmp/rc.json"
+  if [ -n "$1" ]; then bash codex-gate.sh "$HEAD" "$tmp/c.json" "$tmp/r.json" "$1" "$tmp/rc.json"
+  else bash codex-gate.sh "$HEAD" "$tmp/c.json" "$tmp/r.json"; fi | jq -r '"\(.context) \(.state)"'
+}
+for want in "dev|codex-reviewed-dev pending" "main|codex-reviewed success" "feat/base|codex-reviewed success" "|codex-reviewed success"; do
+  b=${want%%|*}; w=${want#*|}; got=$(ctx "$b")
+  if [ "$got" = "$w" ]; then echo "ok   context for base '${b:-none}': $got"; else echo "FAIL context for base '${b:-none}': $got (want $w)"; fail=1; fi
+done
+# Only the dev verdict ever names codex-reviewed-dev, so the looser main verdict on the
+# same SHA cannot turn the dev PR's required status green.
+n=0; for b in main feat/base release/x ""; do [ "$(ctx "$b" | cut -d' ' -f1)" = codex-reviewed-dev ] && n=$((n + 1)); done
+if [ "$n" = 0 ]; then echo "ok   no other base writes codex-reviewed-dev"; else echo "FAIL $n other bases write codex-reviewed-dev"; fail=1; fi
+echo '[]' >"$tmp/c.json"; echo '[]' >"$tmp/r.json"
+got=$(bash codex-gate.sh "$HEAD" "$tmp/c.json" "$tmp/r.json" dev "$tmp/rc.json" | jq -r .context)
+if [ "$got" = codex-reviewed-dev ]; then echo "ok   dev pending without review still uses codex-reviewed-dev"; else echo "FAIL dev no-review context $got"; fail=1; fi
+got=$(bash codex-gate.sh "$HEAD" "$tmp/c.json" "$tmp/r.json" dev | jq -r .context)
+if [ "$got" = codex-reviewed-dev ]; then echo "ok   dev fail-closed uses codex-reviewed-dev"; else echo "FAIL dev fail-closed context $got"; fail=1; fi
+
 # base dev without the inline list fails closed.
 echo "[$CLEAN_C]" >"$tmp/c.json"; echo '[]' >"$tmp/r.json"
 got=$(bash codex-gate.sh "$HEAD" "$tmp/c.json" "$tmp/r.json" dev | jq -r .state)
