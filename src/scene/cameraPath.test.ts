@@ -5,6 +5,7 @@ import {
   overviewDirAt,
   overviewDistanceAt,
   overviewDistanceMax,
+  overviewPose,
   polarPose,
   wrapAngle,
 } from './cameraPath';
@@ -86,13 +87,16 @@ describe('overview return poses', () => {
       for (let i = 0; i < 16; i++) {
         const az = (i / 16) * Math.PI * 2 - Math.PI;
         const d = overviewDistanceAt(az, fov, w, h);
+        const pose = overviewPose(az, fov, w, h);
+        expect(pose.distance).toBe(d);
         const spec = {
           target: OVERVIEW_TARGET,
-          dir: overviewDirAt(az),
+          dir: pose.dir,
           fovDeg: fov,
           width: w,
           height: h,
           margin: OVERVIEW_MARGIN,
+          lift: pose.lift,
         };
         for (const p of OVERVIEW_POINTS) {
           const n = project(spec, d, p);
@@ -103,7 +107,9 @@ describe('overview return poses', () => {
           expect(y).toBeGreaterThanOrEqual(OVERVIEW_MARGIN.top - 0.5);
           expect(y).toBeLessThanOrEqual(h - OVERVIEW_MARGIN.bottom + 0.5);
         }
-        expect(d).toBeLessThanOrEqual(overviewDistanceMax(fov, w, h) + 1e-6);
+        // The max samples 24 azimuths; between samples the fit can be a hair farther (the zoom limit
+        // adds 25% on top, `maxCameraDistance`).
+        expect(d).toBeLessThanOrEqual(overviewDistanceMax(fov, w, h) * 1.01);
       }
     }
   });

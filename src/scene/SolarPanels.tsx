@@ -16,6 +16,7 @@ import {
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { selectBlackout, selectReady, useStore } from '../store';
 import { LAYOUT } from './layout';
+import { PALETTE } from './palette';
 import { PANELS, createPanelLights, relightDelays, stepPanelLights, type PanelLights } from './panels';
 
 /**
@@ -24,9 +25,10 @@ import { PANELS, createPanelLights, relightDelays, stepPanelLights, type PanelLi
  */
 const BOARD = { w: 2.2, d: 1.3, t: 0.06, tilt: Math.PI / 6, y: 0.45, rim: 0.09 } as const;
 const POST = 0.1;
-const FRAME_COLOR = new Color('#c9d2de');
-const FACE_COLOR = new Color('#16264a');
-const POST_COLOR = new Color('#7d838d');
+// Quiet next to the modules: low saturation and brightness, soft frame contrast (008 A.4).
+const FRAME_COLOR = new Color(PALETTE.panel.frame);
+const FACE_COLOR = new Color(PALETTE.panel.face);
+const POST_COLOR = new Color(PALETTE.panel.post);
 
 /** One solid colour per vertex, so frame, face and post share one material. */
 function paint<T extends BufferGeometry>(g: T, c: Color): T {
@@ -93,7 +95,7 @@ export function SolarPanels() {
       panelGeometry: panelGeometry(),
       lightGeometry: lightGeometry(),
       panelMaterial: new MeshStandardMaterial({ vertexColors: true, metalness: 0.3, roughness: 0.5 }),
-      lightMaterial: new MeshBasicMaterial({ toneMapped: false }),
+      lightMaterial: new MeshBasicMaterial({ toneMapped: false, fog: false }),
     };
   }, []);
 

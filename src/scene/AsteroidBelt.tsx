@@ -24,7 +24,14 @@ export function AsteroidBelt() {
   const res = useMemo(
     () => ({
       geometry: new IcosahedronGeometry(1, 0),
-      material: new MeshStandardMaterial({ color: '#8d857c', flatShading: true, metalness: 0, roughness: 1 }),
+      // Far scenery stays as it was: no fog (008 A.3).
+      material: new MeshStandardMaterial({
+        color: '#8d857c',
+        flatShading: true,
+        metalness: 0,
+        roughness: 1,
+        fog: false,
+      }),
     }),
     [],
   );

@@ -101,6 +101,13 @@ export const PROPS: readonly Prop[] = [
 /** Pixels the overview keeps free: HUD on top, hint/toast at the bottom. */
 export const OVERVIEW_MARGIN = { side: 12, top: 130, bottom: 70 } as const;
 
+/**
+ * Bottom UI of the overview on a phone: the hint bar (about 36 px) over the 12 px gutter and the
+ * home-indicator safe area (34 px on an iPhone), with a little air. The portrait overview rests the
+ * base on this line (plan 008 A.2).
+ */
+export const OVERVIEW_BOTTOM_UI = 96;
+
 /** The overview looks at this point from this direction; the distance comes from `framing.fitDistance`. */
 export const OVERVIEW_TARGET = { x: 0, y: 0.5, z: 0 } as const;
 export const OVERVIEW_DIR = { x: 0, y: 12.5, z: 19 } as const;
@@ -120,6 +127,14 @@ export const OVERVIEW_POINTS = Object.values(LAYOUT).flatMap((l) => {
     { x: l.x, y: top, z: l.z },
   ];
 });
+
+/** Room above each module's top for its name tag or fault badge (world units). */
+const LABEL_ROOM = 2;
+export const LABEL_POINTS = Object.values(LAYOUT).map((l) => ({
+  x: l.x,
+  y: l.tapHeight * l.scale + LABEL_ROOM,
+  z: l.z,
+}));
 
 export const BOUNDS = 14;
 
@@ -148,5 +163,23 @@ export function floorRingRange(id: BaseModuleId): { from: number; to: number } {
     const d = Math.hypot(l.x - LAYOUT[other].x, l.z - LAYOUT[other].z);
     free = Math.min(free, (d - own - footprint(other) - RING_GAP) / 2);
   }
-  return { from: (own * 1.1) / l.scale, to: (own + free) / l.scale };
+  return { from: Math.max((own * 1.1) / l.scale, selectRingRadius(id) * 1.15), to: (own + free) / l.scale };
 }
+
+/**
+ * The selection ring's radius in the module's local units: just outside the tap box (plan 008 B.1).
+ * It does not move; the fault ring pulses outside it, so a selected broken module shows both apart.
+ */
+export function selectRingRadius(id: BaseModuleId): number {
+  const { tapHalf } = LAYOUT[id];
+  return Math.max(tapHalf[0], tapHalf[2]) * 1.05;
+}
+
+/** Eight points round each fault ring at full size: the portrait overview keeps them above the bottom UI. */
+export const FLOOR_RING_POINTS = Object.entries(LAYOUT).flatMap(([id, l]) => {
+  const r = floorRingRange(id as BaseModuleId).to * l.scale;
+  return Array.from({ length: 8 }, (_, i) => {
+    const a = (i / 8) * Math.PI * 2;
+    return { x: l.x + Math.sin(a) * r, y: 0, z: l.z + Math.cos(a) * r };
+  });
+});

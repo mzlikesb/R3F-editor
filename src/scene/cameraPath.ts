@@ -3,8 +3,18 @@
  * angle, so aiming at a fixed direction can swing the camera almost a full turn; these helpers turn
  * "face this way" into the nearest equivalent angle. Pure math, so it is unit tested.
  */
-import { fitDistance, type Vec3 } from './framing';
-import { OVERVIEW_DIR, OVERVIEW_MARGIN, OVERVIEW_POINTS, OVERVIEW_TARGET } from './layout';
+import type { BaseModuleId } from '../modules';
+import { cameraPosition, fitDistance, liftedFit, portraitMix, type Vec3 } from './framing';
+import {
+  FLOOR_RING_POINTS,
+  LABEL_POINTS,
+  LAYOUT,
+  OVERVIEW_BOTTOM_UI,
+  OVERVIEW_DIR,
+  OVERVIEW_MARGIN,
+  OVERVIEW_POINTS,
+  OVERVIEW_TARGET,
+} from './layout';
 
 const TWO_PI = Math.PI * 2;
 
@@ -30,18 +40,55 @@ export function polarPose(horizontal: number, height: number): { polar: number; 
   return { polar: Math.atan2(horizontal, height), distance: Math.hypot(horizontal, height) };
 }
 
-/** The overview direction (camera offset from the target) turned to face `azimuth`, keeping its height angle. */
-export function overviewDirAt(azimuth: number): Vec3 {
+/**
+ * A portrait overview looks down a little steeper (about 38 degrees instead of 33): the ring of
+ * modules stands taller on a narrow screen (plan 008 A.2).
+ */
+const PORTRAIT_DIR_Y = 15;
+
+/**
+ * The overview direction (camera offset from the target) turned to face `azimuth`, keeping its height
+ * angle. `portrait` (`framing.portraitMix`) blends towards the steeper portrait angle.
+ */
+export function overviewDirAt(azimuth: number, portrait = 0): Vec3 {
   const h = Math.hypot(OVERVIEW_DIR.x, OVERVIEW_DIR.z);
-  return { x: Math.sin(azimuth) * h, y: OVERVIEW_DIR.y, z: Math.cos(azimuth) * h };
+  const y = OVERVIEW_DIR.y + (PORTRAIT_DIR_Y - OVERVIEW_DIR.y) * portrait;
+  return { x: Math.sin(azimuth) * h, y, z: Math.cos(azimuth) * h };
+}
+
+export interface OverviewPose {
+  fov: number;
+  /** Camera offset direction from `OVERVIEW_TARGET`. */
+  dir: Vec3;
+  distance: number;
+  /** `FrameSpec.lift`: the CameraControls focal offset is `y = -lift * distance`. */
+  lift: number;
+}
+
+/**
+ * The overview from `azimuth` on a `width` x `height` screen. Landscape fits the base into the free
+ * area as before. Portrait (aspect 0.8 and below) fits by width with 4.5% side margins, then pushes
+ * the base down onto the bottom UI line (fault rings included), so the empty floor under it shrinks
+ * and the spare height goes to the sky. Between 0.8 and 1.0 the two are blended.
+ */
+export function overviewPose(azimuth: number, fovDeg: number, width: number, height: number): OverviewPose {
+  const t = portraitMix(width / height);
+  const dir = overviewDirAt(azimuth, t);
+  const base = { target: OVERVIEW_TARGET, dir, fovDeg, width, height };
+  const land = fitDistance({ ...base, margin: OVERVIEW_MARGIN }, OVERVIEW_POINTS);
+  if (t === 0) return { fov: fovDeg, dir, distance: land, lift: 0 };
+  const margin = {
+    side: Math.max(OVERVIEW_MARGIN.side, Math.ceil(width * 0.045)),
+    top: OVERVIEW_MARGIN.top,
+    bottom: OVERVIEW_BOTTOM_UI,
+  };
+  const port = liftedFit({ ...base, margin }, [...OVERVIEW_POINTS, ...LABEL_POINTS], FLOOR_RING_POINTS);
+  return { fov: fovDeg, dir, distance: land + (port.distance - land) * t, lift: port.lift * t };
 }
 
 /** Distance that fits the whole base in the overview when viewed from `azimuth`. */
 export function overviewDistanceAt(azimuth: number, fovDeg: number, width: number, height: number): number {
-  return fitDistance(
-    { target: OVERVIEW_TARGET, dir: overviewDirAt(azimuth), fovDeg, width, height, margin: OVERVIEW_MARGIN },
-    OVERVIEW_POINTS,
-  );
+  return overviewPose(azimuth, fovDeg, width, height).distance;
 }
 
 /** Farthest overview distance over every azimuth: the zoom-out limit that always lets the base fit. */
@@ -49,6 +96,51 @@ export function overviewDistanceMax(fovDeg: number, width: number, height: numbe
   let m = 0;
   for (let i = 0; i < 24; i++) m = Math.max(m, overviewDistanceAt((i / 24) * Math.PI * 2, fovDeg, width, height));
   return m;
+}
+
+/** Focused module's look-at height (world). Kept above the boundary floor so panning never snaps it. */
+export const FOCUS_Y = 0.8;
+/** A portrait phone sees a much narrower slice horizontally, so focus from further away. */
+const PHONE_FOCUS_SCALE = 1.7;
+/**
+ * Screen-space shift of the focused module, as a fraction of the camera distance (CameraControls
+ * focal offset, camera-up axis; negative moves the module down the screen). Both push it a little
+ * down so its badge or name tag clears the HUD; on a phone the steeper, farther camera already keeps
+ * it above the bottom panel.
+ */
+const FOCUS_OFFSET = { desktop: -0.06, phone: -0.08 } as const;
+
+export interface FocusPose {
+  target: Vec3;
+  /** Horizontal camera distance and height when the selection jumps (no animation). */
+  horizontal: number;
+  height: number;
+  polar: number;
+  distance: number;
+  /** CameraControls focal offset y. */
+  offset: number;
+  /** Where the camera stands, focal offset included, facing outward from the base centre. */
+  camera: Vec3;
+}
+
+/** How the camera frames a selected module (`CameraRig`). */
+export function focusPose(id: BaseModuleId, phone: boolean): FocusPose {
+  const l = LAYOUT[id];
+  const fd = l.focusDistance * (phone ? PHONE_FOCUS_SCALE : 1);
+  const cy = phone ? fd * 1.15 : fd * 0.55;
+  const { polar, distance } = polarPose(fd, cy);
+  const offset = (phone ? FOCUS_OFFSET.phone : FOCUS_OFFSET.desktop) * distance;
+  const len = Math.hypot(l.x, l.z);
+  const dx = len > 0.01 ? l.x / len : 0;
+  const dz = len > 0.01 ? l.z / len : 1;
+  const target = { x: l.x, y: FOCUS_Y, z: l.z };
+  const camera = cameraPosition(
+    target,
+    { x: dx * fd, y: cy - FOCUS_Y, z: dz * fd },
+    Math.hypot(fd, cy - FOCUS_Y),
+    -offset / distance,
+  );
+  return { target, horizontal: fd, height: cy, polar, distance, offset, camera };
 }
 
 /** Lowest the camera may orbit: polar angle from straight up (CameraControls `maxPolarAngle`). */

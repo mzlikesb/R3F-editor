@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ASTEROIDS, ASTEROID_COUNT, BELT, BELT_SEED, beltCount, buildBelt, cameraReach, evenOrder } from './asteroids';
-import { MAX_POLAR, maxCameraDistance, overviewDirAt, overviewDistanceAt } from './cameraPath';
-import { overviewFov } from './framing';
+import { MAX_POLAR, maxCameraDistance, overviewPose } from './cameraPath';
+import { cameraPosition, overviewFov } from './framing';
 import { BOUNDS, LAYOUT, OVERVIEW_POINTS, OVERVIEW_TARGET } from './layout';
 import { STAR_RADIUS, starPositions } from './stars';
 
@@ -110,11 +110,10 @@ describe('asteroid belt sight lines', () => {
       const dMax = maxCameraDistance(fov, w, h);
       for (let ai = 0; ai < 24; ai++) {
         const az = (ai / 24) * Math.PI * 2;
-        const dir = overviewDirAt(az);
-        const fit = overviewDistanceAt(az, fov, w, h);
-        const polar = Math.atan2(Math.hypot(dir.x, dir.z), dir.y);
+        // The portrait overview lifts the camera along its up axis (plan 008 A.2): the real camera.
+        const { dir, lift, distance: fit } = overviewPose(az, fov, w, h);
         for (const dist of [fit, (fit + dMax) / 2, dMax]) {
-          const c = camera(OVERVIEW_TARGET, az, polar, dist);
+          const c = cameraPosition(OVERVIEW_TARGET, dir, dist, lift);
           for (const p of BASE_POINTS) {
             // Ray c + t (p - c), t >= 1: height where its horizontal distance reaches each belt radius.
             const dx = p.x - c.x;

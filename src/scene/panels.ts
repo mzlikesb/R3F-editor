@@ -1,4 +1,5 @@
 import { GROUND_RADIUS } from './layout';
+import { PALETTE } from './palette';
 import { PROP_KEEP_OUT, baseKeepOut, gridScatter, type GridRule } from './scatter';
 
 /**
@@ -30,8 +31,8 @@ export const PANELS = gridScatter(PANEL_SEED, PANEL_RULE);
 export const RELIGHT_MS = 1500;
 
 /** Linear RGB of a panel light when powered and when dark. */
-export const LIGHT_ON: readonly [number, number, number] = [0.25, 0.85, 1];
-export const LIGHT_OFF: readonly [number, number, number] = [0.02, 0.03, 0.04];
+export const LIGHT_ON: readonly [number, number, number] = PALETTE.panelOn;
+export const LIGHT_OFF: readonly [number, number, number] = PALETTE.panelOff;
 
 /** Each point's relight delay: its distance from `origin`, mapped onto 0..`RELIGHT_MS`. */
 export function relightDelays(

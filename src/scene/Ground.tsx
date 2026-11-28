@@ -1,18 +1,20 @@
 import { useMemo } from 'react';
 import { CircleGeometry, Float32BufferAttribute, RingGeometry } from 'three';
 import { GROUND_FADE_RADIUS, GROUND_RADIUS } from './layout';
+import { PALETTE } from './palette';
 
 const SEGMENTS = 96;
 /** Rings across the fade, so the alpha follows a smooth curve instead of one straight ramp. */
 const FADE_RINGS = 6;
-const COLOR = '#5a4f47';
+const COLOR = PALETTE.ground;
 
 const noRaycast = () => null;
 
 /**
  * Edge of the disc fading into the page sky: vertex alpha from 1 at `GROUND_RADIUS` to 0 at
- * `GROUND_FADE_RADIUS` (smoothstep). No shader added; the sky behind is the CSS gradient, so it
- * matches in daylight and in a blackout, and lighting never tints the fade (plan 007 A.0).
+ * `GROUND_FADE_RADIUS` (smoothstep). No shader added; the fog has taken the ground to the sky's
+ * bottom colour by then and the scene background (the sky, `SceneTone`) shows through, in daylight
+ * and in a blackout (plan 007 A.0, 008 A.3).
  */
 function fadeGeometry(): RingGeometry {
   const g = new RingGeometry(GROUND_RADIUS, GROUND_FADE_RADIUS, SEGMENTS, FADE_RINGS);

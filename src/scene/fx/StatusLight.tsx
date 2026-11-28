@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef } from 'react';
 import { AdditiveBlending, CanvasTexture, MeshBasicMaterial, SphereGeometry, SpriteMaterial, Vector3 } from 'three';
 import type { Group } from 'three';
+import { PALETTE } from '../palette';
 
 /** World-space size of the dot, the same on every module whatever its model scale. */
 const LIGHT_RADIUS = 0.17;
@@ -12,7 +13,7 @@ const GLOW_SIZE = 0.75;
 export const STATUS_LIGHT_TOP = LIFT + GLOW_SIZE / 2;
 
 const LIGHT_GEOMETRY = new SphereGeometry(1, 12, 8);
-const LIGHT_MATERIAL = new MeshBasicMaterial({ color: '#4ade80', toneMapped: false });
+const LIGHT_MATERIAL = new MeshBasicMaterial({ color: PALETTE.statusLight, toneMapped: false, fog: false });
 
 let glowMaterial: SpriteMaterial | null = null;
 
@@ -41,6 +42,7 @@ function getGlowMaterial(): SpriteMaterial {
     depthWrite: false,
     blending: AdditiveBlending,
     toneMapped: false,
+    fog: false,
   });
   return glowMaterial;
 }

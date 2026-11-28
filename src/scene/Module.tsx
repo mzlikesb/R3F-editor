@@ -6,6 +6,8 @@ import type { BaseModuleId } from '../modules';
 import { useStore } from '../store';
 import { SceneErrorBoundary } from './ErrorBoundary';
 import { ModuleFx } from './fx/ModuleFx';
+import { isHull, useHull } from './fx/hull';
+import { SelectRing } from './fx/SelectMarks';
 import { LAYOUT, MODEL_BOUNDS } from './layout';
 import { pickTap, type TapHit } from './tapPick';
 import type { ModuleHandle } from './moduleTypes';
@@ -33,7 +35,7 @@ export interface ModuleProps {
 
 /**
  * One module: a positioned/scaled group holding the model (GLB, or a plain shape if it fails to
- * load), the `feel` track's `ModuleFx`, and an invisible tap box. Each module has its own Suspense
+ * load), the `feel` track's `ModuleFx`, the selection ring, and an invisible tap box. Each module has its own Suspense
  * and error boundary, so one slow or broken GLB does not touch the others.
  */
 export function Module({ id, position, scale, rotationY }: ModuleProps) {
@@ -51,6 +53,7 @@ export function Module({ id, position, scale, rotationY }: ModuleProps) {
         </Suspense>
       </SceneErrorBoundary>
       <ModuleFx id={id} handle={handle} />
+      <SelectRing id={id} />
       <TapBox id={id} />
     </group>
   );
@@ -82,6 +85,7 @@ function GltfModel({ id, onHandle }: ModelProps) {
   }, [scene, id]);
   const group = useRef<Group>(null);
   useHandle(group, materials, onHandle);
+  useHull(object, id);
   return (
     <group ref={group}>
       <primitive object={object} />
@@ -132,7 +136,7 @@ function localBounds(model: Group): Box3 {
   toModel.copy(model.matrixWorld).invert();
   box.makeEmpty();
   model.traverse((o) => {
-    if (!(o instanceof Mesh)) return;
+    if (!(o instanceof Mesh) || isHull(o)) return;
     if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
     part.copy(o.geometry.boundingBox).applyMatrix4(rel.multiplyMatrices(toModel, o.matrixWorld));
     box.union(part);

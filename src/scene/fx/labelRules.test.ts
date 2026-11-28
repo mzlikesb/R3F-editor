@@ -42,8 +42,19 @@ describe('labelPlan: one or more faults', () => {
     expect(p.dots).toEqual(['comms']);
   });
 
-  it('selected broken module beats the generator and the oldest', () => {
-    expect(plan({ faults: [oxy, gen, comms], selected: 'comms' }).badge).toBe('comms');
+  it('a selected broken module shows only its name tag: the panel says what is wrong (008 A.5)', () => {
+    expect(plan({ faults: [oxy], selected: 'oxygen' })).toEqual({ badge: null, dots: [], tag: 'oxygen' });
+    // The others stay as they were with that module selected: small dots.
+    expect(plan({ faults: [oxy, gen, comms], selected: 'comms' })).toEqual({
+      badge: null,
+      dots: ['oxygen', 'generator'],
+      tag: 'comms',
+    });
+  });
+
+  it('an unselected broken module keeps its badge while another module is selected', () => {
+    expect(plan({ faults: [oxy], selected: 'habitat' })).toEqual({ badge: 'oxygen', dots: [], tag: null });
+    expect(plan({ faults: [oxy, gen], selected: 'habitat' }).badge).toBe('generator');
   });
 
   it('generator beats the oldest when nothing broken is selected', () => {
@@ -58,18 +69,28 @@ describe('labelPlan: one or more faults', () => {
     expect(plan({ faults: [oxy, comms], selected: 'oxygen', holding: ['comms'] }).badge).toBe('comms');
   });
 
-  it('two being repaired: the selected one, else MODULE_IDS order', () => {
+  it('two being repaired: MODULE_IDS order; a selected one keeps its name tag instead', () => {
     expect(plan({ faults: [comms, oxy], holding: ['comms', 'oxygen'] }).badge).toBe('oxygen');
-    expect(plan({ faults: [comms, oxy], holding: ['comms', 'oxygen'], selected: 'comms' }).badge).toBe('comms');
+    expect(plan({ faults: [comms, oxy], holding: ['comms', 'oxygen'], selected: 'oxygen' })).toEqual({
+      badge: 'comms',
+      dots: [],
+      tag: 'oxygen',
+    });
   });
 
-  it('(d) during a blackout the generator is always the badge', () => {
+  it('(d) during a blackout the generator is always the badge, unless it is the one selected', () => {
     const p = plan({ faults: [oxy, comms, gen], blackout: true, holding: ['oxygen'], selected: 'comms' });
     expect(p.badge).toBe('generator');
-    expect(p.dots).toEqual(['oxygen', 'comms']);
+    expect(p.dots).toEqual(['oxygen']);
+    expect(p.tag).toBe('comms');
+    expect(plan({ faults: [oxy, gen], blackout: true, selected: 'generator' })).toEqual({
+      badge: null,
+      dots: ['oxygen'],
+      tag: 'generator',
+    });
   });
 
-  it('never shows more than one badge or tag, and every broken module is either the badge or a dot', () => {
+  it('one label per broken module: the selected one a tag, every other the badge or a dot', () => {
     const faultSets = [[oxy], [oxy, comms], [oxy, comms, gen], [gen, f('habitat', 1)]];
     for (const faults of faultSets) {
       for (const selected of [null, ...MODULE_IDS]) {
@@ -81,8 +102,11 @@ describe('labelPlan: one or more faults', () => {
               blackout,
               holding: holding.filter((m) => faults.some((x) => x.moduleId === m)),
             });
-            expect(p.tag).toBeNull();
-            expect([p.badge, ...p.dots].sort()).toEqual(faults.map((x) => x.moduleId).sort());
+            const broken = faults.map((x) => x.moduleId);
+            const selectedBroken = selected !== null && broken.includes(selected);
+            expect(p.tag).toBe(selectedBroken ? selected : null);
+            const labelled = [p.badge, ...p.dots, p.tag].filter((id) => id !== null);
+            expect(labelled.sort()).toEqual([...broken].sort());
           }
         }
       }
