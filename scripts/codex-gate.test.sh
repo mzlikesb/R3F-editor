@@ -115,6 +115,8 @@ if jq -n '[range(0; 120) | {pull_request_review_id: (1000 + .), commit_id: "x",
       pending$'\t'*"Codex 지적"*) echo "ok   dev: finding inside a big inline list -> pending (read the finding)" ;;
       *) echo "FAIL dev: finding inside a big inline list ($out)"; fail=1 ;;
     esac
+  else
+    echo "FAIL could not build the big inline fixture with a finding"; fail=1
   fi
 else
   echo "FAIL could not build the big inline fixture"; fail=1
