@@ -85,6 +85,14 @@ describe('parseServerMessage: snapshot', () => {
     const v1 = { type: 'snapshot', version: 3, fault: gen, repairs: 2, presence: 1, instanceId: 'abc' };
     expect(parseServerMessage(json(v1))).toBeNull();
   });
+
+  it('(R2) a rolled-back server that reads ?protocol=3 as protocol 1 sends a legacy snapshot: banner', () => {
+    // A protocol-1 snapshot as servers before 009-2 sent it (no `protocol` field; `toLegacySnapshot`).
+    const legacy =
+      '{"type":"snapshot","version":7,"fault":{"id":"00000000-0000-4000-8000-000000000001","moduleId":"generator","createdAt":1795000030000},"repairs":4,"presence":2,"instanceId":"6f1c2a9e-4b7d-4e21-9a3c-5d8e7f60b112"}';
+    expect(parseServerMessage(legacy)).toBeNull();
+    expect(isIncompatibleSnapshot(legacy)).toBe(true);
+  });
 });
 
 describe('parseServerMessage: events', () => {

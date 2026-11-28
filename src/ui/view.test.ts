@@ -279,12 +279,12 @@ describe('presenceMarkVisible (#108)', () => {
 
 describe('partsChip (plan 009 B.3, R4)', () => {
   it('shows the count out of the cap, 0 included', () => {
-    expect(partsChip(0)).toEqual({ text: '부품 0/5', full: false });
-    expect(partsChip(3)).toEqual({ text: '부품 3/5', full: false });
+    expect(partsChip(0)).toEqual({ text: '부품 0/5', short: '⬢ 0/5', full: false });
+    expect(partsChip(3)).toEqual({ text: '부품 3/5', short: '⬢ 3/5', full: false });
   });
 
   it('says full at the cap', () => {
-    expect(partsChip(5)).toEqual({ text: '부품 가득', full: true });
+    expect(partsChip(5)).toEqual({ text: '부품 가득', short: '⬢ 5/5', full: true });
   });
 });
 

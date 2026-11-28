@@ -134,9 +134,15 @@ export function togetherLine(othersHolding: number): string | null {
   return othersHolding >= 1 ? `지금 ${othersHolding}명이 같이 누르는 중` : null;
 }
 
-/** The HUD's store chip (plan 009 B.3, R4): `부품 3/5`, `부품 0/5`; at the cap `부품 가득`, accented. */
-export function partsChip(parts: number): { text: string; full: boolean } {
-  return parts >= PARTS_CAP ? { text: '부품 가득', full: true } : { text: `부품 ${parts}/${PARTS_CAP}`, full: false };
+/**
+ * The HUD's store chip (plan 009 B.3, R4): `부품 3/5`, `부품 0/5`; at the cap `부품 가득`, accented.
+ * `short` (`⬢ 3/5`) is what a narrow phone shows, so the top line never wraps.
+ */
+export function partsChip(parts: number): { text: string; short: string; full: boolean } {
+  const short = `⬢ ${Math.min(parts, PARTS_CAP)}/${PARTS_CAP}`;
+  return parts >= PARTS_CAP
+    ? { text: '부품 가득', short, full: true }
+    : { text: `부품 ${parts}/${PARTS_CAP}`, short, full: false };
 }
 
 /** Every way of running out of parts at the repair says this (plan 009 B.5). */

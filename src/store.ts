@@ -218,7 +218,12 @@ export const useStore = create<Store>((set, get) => ({
     get().dispatchPickup({ type: 'tap', slot, now, allowed });
     if (get().pickup === pickup) return;
     clearTimeout(pickupTimer);
-    pickupTimer = setTimeout(() => get().dispatchPickup({ type: 'tick', now: performance.now() }), PICKUP_TIMEOUT_MS);
+    // The timer and the frame clock can drift by a millisecond: never tick before the deadline.
+    const deadline = now + PICKUP_TIMEOUT_MS;
+    pickupTimer = setTimeout(
+      () => get().dispatchPickup({ type: 'tick', now: Math.max(performance.now(), deadline) }),
+      PICKUP_TIMEOUT_MS,
+    );
   },
   fetchParts: (dateNow) => {
     get().select(null);
@@ -269,7 +274,11 @@ export function selectAnyFault(s: Store): boolean {
   return (s.sync.base?.faults.length ?? 0) > 0;
 }
 
-/** True during a blackout. */
+/** The store count for the HUD chip, or null until a WS snapshot told it (no `0/5` that is not known). */
+export function selectPartsChip(s: Store): number | null {
+  return s.sync.wsSynced && s.sync.base ? s.sync.base.parts : null;
+}
+
 /** Scene and base are in (`hudReady`): before that, no state is shown (playtest #47). */
 export function selectReady(s: Store): boolean {
   return hudReady({ loaded: s.loaded, hasBase: s.sync.base !== null, incompatible: s.sync.incompatible });
@@ -284,6 +293,7 @@ export function selectBaseIn(s: Store): boolean {
   return s.sync.base !== null && !s.sync.incompatible;
 }
 
+/** True during a blackout. */
 export function selectBlackout(s: Store): boolean {
   return (s.sync.base?.blackout ?? null) !== null;
 }

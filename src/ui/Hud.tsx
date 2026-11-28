@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from 'react';
-import { selectFaults, selectReady, selectServerNow, useStore } from '../store';
+import { selectFaults, selectPartsChip, selectReady, selectServerNow, useStore } from '../store';
 import { subscribeClock } from './clock';
 import {
   blackoutBanner,
@@ -54,7 +54,9 @@ export function Hud() {
           onClick={() => useStore.getState().openHistory(!historyOpen)}
         >
           <span className="hud-line hud-top">
-            <UptimeLine />
+            <span className="hud-uptime">
+              <UptimeLine />
+            </span>
             <PartsChip />
             <span className="hud-cue" aria-hidden="true">
               <RecordIcon />
@@ -160,11 +162,15 @@ function LastRepair() {
 
 /** `부품 3/5` between the uptime and `기록` (plan 009 R4); `부품 가득`, accented, at the cap. */
 function PartsChip() {
-  const parts = useStore((s) => s.sync.base?.parts ?? 0);
+  const parts = useStore(selectPartsChip);
+  if (parts === null) return null;
   const chip = partsChip(parts);
   return (
-    <span key={parts} className={chip.full ? 'hud-parts hud-parts-full bump' : 'hud-parts bump'}>
-      {chip.text}
+    <span key={parts} className={chip.full ? 'hud-parts hud-parts-full bump' : 'hud-parts bump'} aria-label={chip.text}>
+      <span className="hud-parts-long">{chip.text}</span>
+      <span className="hud-parts-short" aria-hidden="true">
+        {chip.short}
+      </span>
     </span>
   );
 }

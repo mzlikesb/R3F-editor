@@ -1,12 +1,15 @@
 import { useFrame, type ThreeEvent } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
 import {
+  AdditiveBlending,
   BoxGeometry,
   Color,
   DodecahedronGeometry,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
+  SpriteMaterial,
+  type Sprite,
   type Group,
 } from 'three';
 import { PART_Y, partSlot, partSpot } from '../../shared/parts';
@@ -16,11 +19,21 @@ import { serverNow } from '../sync';
 import { RingPing } from './fx/Rings';
 import { registerFx } from './fx/fxGain';
 import { PALETTE } from './palette';
+import { haloTexture } from './haloTexture';
 
-/** A small low-poly metal scrap: facets catch the light as it turns, unlike the round rocks. */
-const GEOMETRY = new DodecahedronGeometry(0.38, 0);
-/** Half-size 0.6: the finger box the R1 test (`partSpots.test.ts`) keeps clear of the modules. */
+/**
+ * A low-poly metal scrap: facets catch the light as it turns, unlike the round rocks. About 1.5x
+ * the first cut (0.3), which read on a phone as one more pebble (009-2 QA).
+ */
+const GEOMETRY = new DodecahedronGeometry(0.45, 0);
+/**
+ * Half-size 0.6 (`partSpots.test.ts` `PART_TAP_HALF`, what the R1 spots keep clear of the modules):
+ * still wider than the piece (0.9 across), so the finger gets a margin round it.
+ */
 const TAP_GEOMETRY = new BoxGeometry(1.2, 1.2, 1.2);
+/** The soft glow round the piece, world units across, and how strong (additive, under the Bloom threshold). */
+const HALO_SIZE = 2.2;
+const HALO_OPACITY = 0.55;
 const TAP_MATERIAL = new MeshBasicMaterial({ colorWrite: false, depthWrite: false });
 const PART_COLOR = new Color(PALETTE.part);
 /** The ping ring round a piece starts this wide (world units). */
@@ -54,6 +67,31 @@ export function PartPiece() {
   const body = useRef<Mesh>(null);
   const tap = useRef<Mesh>(null);
   const anim = useRef({ slot: -1, dropAt: -1, suckAt: -1, shown: false });
+  const halo = useRef<Sprite>(null);
+  const haloMaterial = useMemo(
+    () =>
+      new SpriteMaterial({
+        map: haloTexture(),
+        color: PART_COLOR,
+        transparent: true,
+        opacity: HALO_OPACITY,
+        depthWrite: false,
+        // The ground would cut the lower half of the glow off; spots are never behind a module (R1).
+        depthTest: false,
+        blending: AdditiveBlending,
+        toneMapped: false,
+        fog: false,
+      }),
+    [],
+  );
+  useEffect(() => {
+    const unregister = registerFx(haloMaterial, 'tone');
+    return () => {
+      unregister();
+      haloMaterial.map?.dispose();
+      haloMaterial.dispose();
+    };
+  }, [haloMaterial]);
   const material = useMemo(
     () =>
       new MeshStandardMaterial({
@@ -118,6 +156,11 @@ export function PartPiece() {
     g.position.set(x, y, z);
     b.visible = sucking || blinkOn(now);
     b.scale.setScalar(scale);
+    const h = halo.current;
+    if (h) {
+      h.visible = b.visible;
+      h.scale.setScalar(HALO_SIZE * scale);
+    }
     b.rotation.y += delta * SPIN;
     b.rotation.x = 0.5 + 0.2 * Math.sin(time * 0.7);
   });
@@ -126,6 +169,7 @@ export function PartPiece() {
     <>
       <group ref={group} visible={false}>
         <mesh ref={body} geometry={GEOMETRY} material={material} raycast={noRaycast} />
+        <sprite ref={halo} material={haloMaterial} scale={HALO_SIZE} raycast={noRaycast} />
         <mesh ref={tap} geometry={TAP_GEOMETRY} material={TAP_MATERIAL} visible={false} onClick={onTap} />
       </group>
       <group position={[pingX, 0, pingZ]}>

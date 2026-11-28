@@ -56,9 +56,30 @@ body {
   display: block;
 }
 
+/*
+ * One line, never wrapped (plan 009 R4): the uptime text gives way with an ellipsis, the parts chip
+ * and `기록` keep their size.
+ */
 .hud-top {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
   font-size: 15px;
   font-weight: 600;
+}
+
+.hud-uptime {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hud-parts,
+.hud-cue {
+  flex: none;
 }
 
 /* `기록` with a list mark: the HUD opens the record panel. */
@@ -92,13 +113,28 @@ body {
   vertical-align: 1px;
 }
 
+.hud-parts-short {
+  display: none;
+}
+
 .hud-parts-full {
   border-color: #b39dff;
   background: #b39dff;
   color: #14102a;
 }
 
-/* 320 px phones: the top line (blackout uptime, parts chip, `기록`) stays one line (plan 009 R4). */
+/* Narrow phones: the chip folds to `⬢ 3/5` so the uptime keeps more room (plan 009 R4). */
+@media (max-width: 374px) {
+  .hud-parts-long {
+    display: none;
+  }
+
+  .hud-parts-short {
+    display: inline;
+  }
+}
+
+/* 320 px phones: a little less padding round the top line. */
 @media (max-width: 359px) {
   .hud {
     padding: 6px 10px;

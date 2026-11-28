@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   BlackoutStart,
   ClientMessage,
@@ -18,6 +18,7 @@ import {
   selectModuleStatus,
   selectOthersHolding,
   selectBaseIn,
+  selectPartsChip,
   selectReady,
   selectServerNow,
   setClientSender,
@@ -423,6 +424,24 @@ describe('parts: picking up a piece (plan 009 B.2, R5)', () => {
     expect(s().pickup).toEqual(idlePickup);
   });
 
+  describe('the give-back timer', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+      vi.restoreAllMocks();
+    });
+
+    it('gives the piece back even when the timer fires a little early on the frame clock (QA)', () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      // Timers and performance.now() drift apart: the timer fires 1 ms before the deadline on that clock.
+      vi.spyOn(performance, 'now').mockReturnValue(10 + PICKUP_TIMEOUT_MS - 1);
+      join();
+      s().collectPiece(10, T);
+      expect(s().pickup.kind).toBe('pending');
+      vi.advanceTimersByTime(PICKUP_TIMEOUT_MS);
+      expect(s().pickup).toEqual(idlePickup);
+    });
+  });
+
   it('takes no taps while disconnected, nor on a piece already collected or at the cap', () => {
     join();
     s().setConnection('reconnecting');
@@ -507,5 +526,15 @@ describe('parts: "pick one up first" and the ring ping (plan 009 B.4, R5)', () =
     s().receive({ type: 'parts', version: 6, count: 1, slot, mine: false, serverNow: START + 10 }, 10, START + 10);
     s().checkPartPing(START + PART_SLOT_MS);
     expect(s().partPing).toEqual(initialPing);
+  });
+});
+
+describe('selectPartsChip (QA: no 0/5 before the store is known)', () => {
+  it('is null until a WS snapshot is in, then the store count', () => {
+    expect(selectPartsChip(s())).toBeNull();
+    s().applyRest(snapshot({ parts: 3 }), T);
+    expect(selectPartsChip(s())).toBeNull();
+    s().receive(snapshot({ parts: 3 }), 0, T);
+    expect(selectPartsChip(s())).toBe(3);
   });
 });
