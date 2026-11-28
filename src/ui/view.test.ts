@@ -13,10 +13,15 @@ import {
   healthyLine,
   historyView,
   hudReady,
+  NO_PARTS_NOTICE,
+  PARTS_NEEDED_LINE,
   lastRepairLine,
   panelView,
+  partsChip,
+  repairButton,
   peopleLine,
   presenceMarkVisible,
+  sceneLoaded,
   segments,
   togetherLine,
   uptimeLine,
@@ -87,6 +92,11 @@ describe('HUD people line (playtest #47: short enough for a phone)', () => {
     expect(connectionLabel('open')).toBeNull();
     expect(connectionLabel('reconnecting')).toBe('재연결 중…');
     expect(healthyLine({ faulted: false })).toBe('기지 정상 · 고장이 나면 이 화면에 떠요');
+    // 009-2 playtest: with room in the store, the calm time says what to do.
+    expect(healthyLine({ faulted: false, parts: 0 })).toBe('기지 정상 · 조각을 주워 부품을 모아 두세요');
+    expect(healthyLine({ faulted: false, parts: 4 })).toBe('기지 정상 · 조각을 주워 부품을 모아 두세요');
+    expect(healthyLine({ faulted: false, parts: 5 })).toBe('기지 정상 · 고장이 나면 이 화면에 떠요');
+    expect(healthyLine({ faulted: true, parts: 0 })).toBeNull();
     expect(healthyLine({ faulted: true })).toBeNull();
   });
 });
@@ -137,11 +147,12 @@ describe('banners', () => {
 });
 
 describe('lastRepairLine', () => {
-  const last = (mine: boolean | null, helpers = 0, moduleId: 'oxygen' | 'comms' = 'oxygen') => ({
+  const last = (mine: boolean | null, helpers = 0, moduleId: 'oxygen' | 'comms' = 'oxygen', helped = false) => ({
     moduleId,
     at: T,
     mine,
     helpers,
+    helped,
   });
 
   it('says who and which module', () => {
@@ -153,6 +164,12 @@ describe('lastRepairLine', () => {
     expect(lastRepairLine(last(true, 1), T + 1000)).toBe('마지막: 나 외 1명 · 산소 탱크 · 방금');
     expect(lastRepairLine(last(true, 2), T + 1000)).toBe('마지막: 나 외 2명 · 산소 탱크 · 방금');
     expect(lastRepairLine(last(false, 2), T + 1000)).toBe('마지막: 다른 사람 외 2명 · 산소 탱크 · 방금');
+  });
+
+  it('a repair I helped with counts me in: 나 외 N명 (009-2 playtest)', () => {
+    // helpers counts me; the others are whoever made it count plus the other helpers.
+    expect(lastRepairLine(last(false, 2, 'oxygen', true), T + 1000)).toBe('마지막: 나 외 2명 · 산소 탱크 · 방금');
+    expect(lastRepairLine(last(false, 1, 'oxygen', true), T + 1000)).toBe('마지막: 나 외 1명 · 산소 탱크 · 방금');
   });
 
   it('leaves out who when it came from a snapshot', () => {
@@ -231,6 +248,8 @@ describe('historyView', () => {
       { id: 'b1', startedAt: T - 3 * HOUR, endedAt: T - 3 * HOUR + 90_000 },
     ],
     lastRepair: null,
+    parts: 0,
+    lastPartSlot: -1,
   };
 
   it('shows the current and longest uptime and the recent blackouts', () => {
@@ -269,5 +288,60 @@ describe('presenceMarkVisible (#108)', () => {
     const css = readFileSync(new URL('../index.css', import.meta.url), 'utf8');
     const rule = /\.presence-mark\s*\{([^}]*)\}/.exec(css)?.[1] ?? '';
     expect(rule).toMatch(new RegExp(`background:\\s*${PALETTE.presenceLight}`, 'i'));
+  });
+});
+
+describe('partsChip (plan 009 B.3, R4)', () => {
+  it('shows the count out of the cap, 0 included', () => {
+    // 009-2 playtest 3: the store is the base's, not mine.
+    expect(partsChip(0)).toEqual({ text: '기지 창고 0/5', short: '⬢ 0/5', full: false });
+    expect(partsChip(3)).toEqual({ text: '기지 창고 3/5', short: '⬢ 3/5', full: false });
+  });
+
+  it('says full at the cap', () => {
+    expect(partsChip(5)).toEqual({ text: '기지 창고 가득', short: '⬢ 5/5', full: true });
+  });
+});
+
+describe('repairButton (plan 009 B.4)', () => {
+  const ctx = { hold: 'idle' as const, parts: 1, out: true, msToNext: 4200 };
+
+  it('with a part in the store: hold to repair, one part', () => {
+    expect(repairButton(ctx)).toEqual({ mode: 'repair', label: '꾹 눌러 수리 (1초 · 부품 1)' });
+    expect(repairButton({ ...ctx, out: false })).toEqual({ mode: 'repair', label: '꾹 눌러 수리 (1초 · 부품 1)' });
+  });
+
+  it('keeps the hold labels while holding or waiting', () => {
+    expect(repairButton({ ...ctx, hold: 'holding' }).label).toBe('계속 누르세요…');
+    expect(repairButton({ ...ctx, hold: 'pending' }).label).toBe('수리 중…');
+  });
+
+  it('with an empty store and a piece out: go and pick it up', () => {
+    // 009-2 playtests: the label says what the button does (shows where the part is), not what to do.
+    expect(repairButton({ ...ctx, parts: 0 })).toEqual({ mode: 'fetch', label: '부품 있는 곳 보기' });
+  });
+
+  it('with an empty store and this slot taken: seconds to the next piece, rounded up', () => {
+    expect(repairButton({ ...ctx, parts: 0, out: false })).toEqual({ mode: 'fetch', label: '다음 부품 5초' });
+    expect(repairButton({ ...ctx, parts: 0, out: false, msToNext: 10_000 }).label).toBe('다음 부품 10초');
+    expect(repairButton({ ...ctx, parts: 0, out: false, msToNext: 1 }).label).toBe('다음 부품 1초');
+  });
+
+  it('says why above the button when the store is empty', () => {
+    expect(PARTS_NEEDED_LINE).toBe('수리에 부품 1개가 필요해요');
+  });
+});
+
+describe('NO_PARTS_NOTICE (plan 009 B.5)', () => {
+  it('is one line for every way of running out', () => {
+    expect(NO_PARTS_NOTICE).toBe('부품이 없어요 — 조각을 주워요');
+  });
+});
+
+describe('sceneLoaded (neon on #114: the pill left before the modules were drawn)', () => {
+  it('needs the downloads done and every module model mounted (GLB decoded, or its fallback)', () => {
+    expect(sceneLoaded({ assetsDone: true, modelsIn: 5 })).toBe(true);
+    expect(sceneLoaded({ assetsDone: true, modelsIn: 4 })).toBe(false);
+    expect(sceneLoaded({ assetsDone: false, modelsIn: 5 })).toBe(false);
   });
 });

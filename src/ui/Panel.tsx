@@ -1,10 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { partSlot } from '../../shared/parts';
 import { holdProgress, type HoldEvent } from '../hold';
+import { msToNextSlot, pieceOut } from '../parts';
 import { selectFaults, selectModuleFault, selectOthersHolding, selectServerNow, useStore } from '../store';
 import { canRepair } from '../sync';
+import { subscribeClock } from './clock';
 import { GOTO_LOCK_MS, NO_LOCK, goToLocked, stepGoToLock, type GoToLock } from './goToLock';
 import { PANEL_TICK_MS, sensorLine, trendBaselineY, trendOutsidePath, trendPoints, trendSamples } from './sensorView';
-import { panelView } from './view';
+import { NO_PARTS_NOTICE, PARTS_NEEDED_LINE, panelView, repairButton as repairAction } from './view';
 
 /** The trend's drawing box; the SVG scales it to the panel width. */
 const TREND_W = 100;
@@ -20,6 +23,10 @@ export function Panel() {
   const holdKind = useStore((s) => s.repair.hold.kind);
   // An incompatible server also disables the button; the update banner already says why.
   const incompatible = useStore((s) => s.sync.incompatible);
+  const parts = useStore((s) => s.sync.base?.parts ?? 0);
+  const lastPartSlot = useStore((s) => s.sync.base?.lastPartSlot ?? -1);
+  const partsNotice = useStore((s) => s.partsNotice);
+  const clockOffsetMs = useStore((s) => s.sync.clockOffsetMs);
   const button = useRef<HTMLButtonElement>(null);
   const fill = useRef<HTMLSpanElement>(null);
   const sensorText = useRef<HTMLParagraphElement>(null);
@@ -46,6 +53,11 @@ export function Panel() {
       setGoToBusy(false);
     };
   }, [selected, goToId]);
+
+  // With an empty store the button counts down to the next piece: re-render on the shared clock.
+  const [clock, setClock] = useState(() => Date.now());
+  const counting = fault !== null && parts === 0;
+  useEffect(() => (counting ? subscribeClock(setClock) : undefined), [counting]);
 
   // While the hold is time-driven (holding, pending), tick every frame and paint the fill
   // directly on the element so no React state changes per frame.
@@ -119,7 +131,14 @@ export function Panel() {
   const calm = !view.goTo && !repairButton;
 
   const dispatch = (event: HoldEvent) => useStore.getState().dispatchHold(event);
-  const label = holdKind === 'holding' ? '계속 누르세요…' : holdKind === 'pending' ? '수리 중…' : '꾹 눌러 수리 (1초)';
+  const now = clock + clockOffsetMs;
+  const action = repairAction({
+    hold: holdKind,
+    parts,
+    out: pieceOut({ parts, lastPartSlot }, partSlot(now)),
+    msToNext: msToNextSlot(now),
+  });
+  const fetch = repairButton && action.mode === 'fetch';
 
   return (
     <aside className={calm ? 'panel panel-calm' : 'panel'} onContextMenu={(e) => e.preventDefault()}>
@@ -149,6 +168,7 @@ export function Panel() {
         <polyline ref={trendLine} className="trend-line" />
         <path ref={trendOutside} className="trend-outside" />
       </svg>
+      {fetch && <p className="parts-needed">{PARTS_NEEDED_LINE}</p>}
       {/* One fixed-height slot for the action, so the card never changes size (the ✕ stays put). */}
       <div className="panel-action">
         {view.goTo && (
@@ -166,7 +186,16 @@ export function Panel() {
             {view.goTo.label}
           </button>
         )}
-        {repairButton && (
+        {fetch && (
+          <button
+            type="button"
+            className="repair repair-fetch"
+            onClick={() => useStore.getState().fetchParts(Date.now())}
+          >
+            <span className="label">{action.label}</span>
+          </button>
+        )}
+        {repairButton && !fetch && (
           <button
             ref={button}
             type="button"
@@ -188,13 +217,15 @@ export function Panel() {
             onContextMenu={(e) => e.preventDefault()}
           >
             <span ref={fill} className="fill" />
-            <span className="label">{label}</span>
+            <span className="label">{action.label}</span>
           </button>
         )}
         {!view.goTo && !repairButton && <p className="action-none">지금 고장 난 곳이 없어요</p>}
       </div>
       <p className="hint">
-        {view.together ?? (repairButton && !enabled && !incompatible ? '연결되면 수리할 수 있어요' : '')}
+        {partsNotice
+          ? NO_PARTS_NOTICE
+          : (view.together ?? (repairButton && !fetch && !enabled && !incompatible ? '연결되면 수리할 수 있어요' : ''))}
       </p>
     </aside>
   );

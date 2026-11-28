@@ -97,11 +97,11 @@ export function SweepRing({ radius, height, token }: RingProps & { token: number
 const PING_REACH = 5.5;
 const PING_PEAK_OPACITY = 1;
 
-/** Ripple spreading flat across the ground when someone else repaired. */
-export function RingPing({ radius, token }: { radius: number; token: number }) {
+/** Ripple spreading flat across the ground when someone else repaired (or, in `color`, round a parts piece). */
+export function RingPing({ radius, token, color = PING_COLOR }: { radius: number; token: number; color?: Color }) {
   const mesh = useRef<Mesh>(null);
   const timerRef = useOneShot(token);
-  const material = useMemo(() => createRingMaterial(PING_COLOR, true), []);
+  const material = useMemo(() => createRingMaterial(color, true), [color]);
   useEffect(() => () => material.dispose(), [material]);
 
   useFrame((_, delta) => {

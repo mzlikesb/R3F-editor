@@ -1,7 +1,7 @@
 # 009 — 작업 목록
 
 - 플랜: `docs/plans/009-parts.md`
-- 상태: 플랜 리뷰 이관 항목만 있다. 작업 분할은 개발 리드가 플랜 승인 뒤 채운다.
+- 상태: 009-1 머지(#113). 009-2 작업은 아래 표.
 
 ## 플랜 리뷰에서 넘어온 항목
 
@@ -48,3 +48,16 @@
   - 다음 조각이 떨어지기 전에 창고가 1 이상이 됐을 때
   - 사용자가 모듈을 선택했을 때
 - **시계 앞섬 허용**: 서버는 `collect`의 `slot`을 지금 칸 −1부터 +1까지 받는다. +1은 지금 칸이 끝나기 1초 안일 때만 받는다. 클라이언트는 재연결 때와 `parts`·`repaired` 메시지를 받을 때마다 서버 시각 오프셋을 갱신한다. 이 메시지들에는 `serverNow`를 싣는다.
+
+## 009-2 작업 (클라이언트 + 부품 필요 켜기)
+
+순차 작업이라 PR worktree 하나에서 개발 리드가 테스트를 먼저 쓰고 구현했다.
+
+| #   | 작업 | 담당 | 파일 | 완료 조건 | 연결 테스트 | 상태 |
+| --- | ---- | ---- | ---- | --------- | ----------- | ---- |
+| S1  | 프로토콜 3 + `PARTS_REQUIRED=true`(같은 커밋), 프로토콜 1 소켓 4400 종료, `?protocol=2` 탭에 프로토콜 3 스냅샷 (A.10, R2) | 개발 리드 | `shared/protocol.ts`, `worker/BaseRoom.ts`, `src/net/url.ts` | 파서가 `protocol`을 먼저 보고 3이 아니면 비호환 | `shared/protocol.test.ts`(R2), `worker/test/base.test.ts` tabs of other builds | 완료 |
+| S2  | `noParts` 거절 때 요청 소켓 hold 해제 + 부품 필요 통합 테스트 (009-1 QA 제안 1) | 개발 리드 | `worker/BaseRoom.ts` | 거절은 요청 소켓만, 상태 불변, 다른 접속자 activity에서 사라짐. 부품 1개에 다른 고장 동시 두 수리는 하나만 | `base.test.ts` the parts store | 완료 |
+| C1  | 동기화: 스냅샷·`parts`·`repaired`의 창고 수와 서버 시각 오프셋 (R5), `repairRejected` 처리 (QA 제안 4) | 개발 리드 | `src/sync.ts` | 오래된 `parts`는 무시 | `src/sync.test.ts` | 완료 |
+| C2  | 조각 표시 조건·줍기 대기(1.5초 복구, R5 즉시 해제)·링 핑 예약과 취소 | 개발 리드 | `src/parts.ts`, `src/store.ts`, `src/net/socket.ts` | 끊긴 동안 줍기 없음 | `src/parts.test.ts`, `src/store.test.ts` parts | 완료 |
+| C3  | 수리 버튼 문구·남은 초, 홀드 중 창고 0이면 멈춤, 안내 통일, HUD 칩, 토스트 `부품 1개 사용` (B.3~B.6, R4) | 개발 리드 | `src/hold.ts`, `src/feedback.ts`, `src/ui/*` | 360·320 폭 윗줄 한 줄 | `hold.test.ts`, `feedback.test.ts`, `ui/view.test.ts` | 완료 |
+| C4  | 조각 그리기(빛나는 금속 다면체, 회전·낙하·깜빡임·빨려 들어감), 탭 상자, 링 핑, 팔레트 `part` (B.1, B.2) | 개발 리드 | `src/scene/PartPiece.tsx`, `palette.ts`, `fx/Rings.tsx` | 드로우콜 +1(핑 재생 중 +2), `useFrame` 할당 없음 | `palette.test.ts` part colour (그리기는 테스트 강제 안 함) | 완료 |

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  HALO_NEAR_FULL,
+  HALO_NEAR_HIDE,
+  haloNearScale,
   BLINK,
   HOVER,
   LIGHT_HEIGHT,
@@ -135,5 +138,15 @@ describe('presenceHover (#108: a drone floats, a pebble does not)', () => {
     expect(hi).toBeCloseTo(HOVER.amplitude, 2);
     expect(lo).toBeCloseTo(-HOVER.amplitude, 2);
     expect(presenceHover(0, 0.7)).not.toBeCloseTo(presenceHover(1, 0.7), 2);
+  });
+});
+
+describe('haloNearScale (009-2 playtest: a big white square over the generator up close)', () => {
+  it('hides the glow next to the camera and brings it back with distance', () => {
+    expect(haloNearScale(0)).toBe(0);
+    expect(haloNearScale(HALO_NEAR_HIDE)).toBe(0);
+    expect(haloNearScale((HALO_NEAR_HIDE + HALO_NEAR_FULL) / 2)).toBeCloseTo(0.5);
+    expect(haloNearScale(HALO_NEAR_FULL)).toBe(1);
+    expect(haloNearScale(100)).toBe(1);
   });
 });

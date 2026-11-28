@@ -8,6 +8,7 @@ import {
   hintVisible,
   initialFeedback,
   reduceFeedback,
+  toastNote,
   toastText,
   type FeedbackEvent,
   type FeedbackState,
@@ -29,8 +30,20 @@ describe('toastText', () => {
     expect(toastText({ kind: 'beaten', moduleId: 'oxygen' })).toBe('같이 눌렀는데 다른 사람이 한발 먼저 고쳤어요');
     expect(toastText({ kind: 'other', moduleId: 'generator' })).toBe('누군가 발전기를 고쳤어요');
     expect(toastText({ kind: 'other', moduleId: 'greenhouse' })).toBe('누군가 온실을 고쳤어요');
+    expect(toastText({ kind: 'other', moduleId: 'greenhouse', part: true })).toBe(
+      '누군가 기지 창고의 부품 1개로 온실을 고쳤어요',
+    );
+    expect(toastText({ kind: 'taken', moduleId: null })).toBe('다른 사람이 먼저 주웠어요');
+    expect(toastText({ kind: 'mine', moduleId: 'greenhouse', part: true })).toBe('내가 고쳤어요 +1');
     expect(toastText({ kind: 'fault', moduleId: 'oxygen' })).toBe('산소 탱크가 고장 났어요');
     expect(toastText({ kind: 'fault', moduleId: 'comms' })).toBe('통신탑이 고장 났어요');
+  });
+});
+
+describe('toastNote (plan 009 B.6)', () => {
+  it('my repair says it took a part; nothing else does', () => {
+    expect(toastNote('mine')).toBe('부품 1개 사용');
+    for (const kind of ['helped', 'beaten', 'other', 'fault'] as const) expect(toastNote(kind)).toBeNull();
   });
 });
 
@@ -76,7 +89,7 @@ describe('effectsFor', () => {
 describe('reduceFeedback', () => {
   it('a repair toasts and records an effect on that module', () => {
     const s = run([{ type: 'repaired', outcome: 'mine', moduleId: 'comms', now: 100 }]);
-    expect(s.toast).toEqual({ kind: 'mine', moduleId: 'comms', until: 100 + TOAST_MS, combo: 1 });
+    expect(s.toast).toEqual({ kind: 'mine', moduleId: 'comms', until: 100 + TOAST_MS, combo: 1, part: false });
     expect(s.effect).toEqual({ outcome: 'mine', moduleId: 'comms', seq: 1, at: 100 });
   });
 
@@ -92,7 +105,7 @@ describe('reduceFeedback', () => {
   it('a new fault toasts with its module and leaves the effect alone', () => {
     const repairedOnce = run([{ type: 'repaired', outcome: 'other', moduleId: 'oxygen', now: 100 }]);
     const s = run([{ type: 'fault', moduleId: 'greenhouse', now: 500 }], repairedOnce);
-    expect(s.toast).toEqual({ kind: 'fault', moduleId: 'greenhouse', until: 500 + TOAST_MS, combo: 0 });
+    expect(s.toast).toEqual({ kind: 'fault', moduleId: 'greenhouse', until: 500 + TOAST_MS, combo: 0, part: false });
     expect(s.effect).toBe(repairedOnce.effect);
   });
 
@@ -124,5 +137,28 @@ describe('bottomStack', () => {
     expect(bottomStack({ panel: true, toast: true, hint: true })).toEqual(['panel', 'toast', 'hint']);
     expect(bottomStack({ panel: false, toast: true, hint: true })).toEqual(['toast', 'hint']);
     expect(bottomStack({ panel: false, toast: false, hint: false })).toEqual([]);
+  });
+});
+
+describe('a repair that used a part (009-2 playtest)', () => {
+  it('the toast carries it; one without says nothing', () => {
+    const used = reduceFeedback(initialFeedback, {
+      type: 'repaired',
+      outcome: 'other',
+      moduleId: 'greenhouse',
+      now: 0,
+      part: true,
+    });
+    expect(used.toast).toMatchObject({ kind: 'other', part: true });
+    const old = reduceFeedback(initialFeedback, { type: 'repaired', outcome: 'other', moduleId: 'greenhouse', now: 0 });
+    expect(old.toast?.part).toBe(false);
+  });
+});
+
+describe('taken (009-2 playtest 3: a tap where someone else just took the piece)', () => {
+  it('toasts that someone else got there first', () => {
+    const s = reduceFeedback(initialFeedback, { type: 'taken', now: 10 });
+    expect(s.toast).toEqual({ kind: 'taken', moduleId: null, until: 10 + TOAST_MS, combo: 0, part: false });
+    expect(toastNote('taken')).toBeNull();
   });
 });

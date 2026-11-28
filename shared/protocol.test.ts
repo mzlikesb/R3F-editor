@@ -20,7 +20,7 @@ const gen = { id: 'g1', moduleId: 'generator', createdAt: 900 } as const;
 
 const snapshot: SnapshotMessage = {
   type: 'snapshot',
-  protocol: 2,
+  protocol: 3,
   version: 3,
   faults: [gen, fault],
   repairs: 2,
@@ -40,7 +40,7 @@ const json = (v: unknown) => JSON.stringify(v);
 
 describe('constants', () => {
   it('matches the plan', () => {
-    expect(PROTOCOL_VERSION).toBe(2);
+    expect(PROTOCOL_VERSION).toBe(3);
     expect(MAX_FAULTS).toBe(3);
     expect(MODULE_IDS).toEqual(['generator', 'oxygen', 'greenhouse', 'comms', 'habitat']);
   });
@@ -70,7 +70,8 @@ describe('parseServerMessage: snapshot', () => {
 
   it('rejects a snapshot of another protocol or with broken fields', () => {
     expect(parseServerMessage(json({ ...snapshot, protocol: 1 }))).toBeNull();
-    expect(parseServerMessage(json({ ...snapshot, protocol: 3 }))).toBeNull();
+    expect(parseServerMessage(json({ ...snapshot, protocol: 2 }))).toBeNull();
+    expect(parseServerMessage(json({ ...snapshot, protocol: 4 }))).toBeNull();
     const { protocol: _p, ...noProtocol } = snapshot;
     expect(parseServerMessage(json(noProtocol))).toBeNull();
     expect(parseServerMessage(json({ ...snapshot, faults: [{ ...fault, moduleId: 'kitchen' }] }))).toBeNull();
@@ -83,6 +84,14 @@ describe('parseServerMessage: snapshot', () => {
   it('rejects the protocol-1 snapshot shape', () => {
     const v1 = { type: 'snapshot', version: 3, fault: gen, repairs: 2, presence: 1, instanceId: 'abc' };
     expect(parseServerMessage(json(v1))).toBeNull();
+  });
+
+  it('(R2) a rolled-back server that reads ?protocol=3 as protocol 1 sends a legacy snapshot: banner', () => {
+    // A protocol-1 snapshot as servers before 009-2 sent it (no `protocol` field; `toLegacySnapshot`).
+    const legacy =
+      '{"type":"snapshot","version":7,"fault":{"id":"00000000-0000-4000-8000-000000000001","moduleId":"generator","createdAt":1795000030000},"repairs":4,"presence":2,"instanceId":"6f1c2a9e-4b7d-4e21-9a3c-5d8e7f60b112"}';
+    expect(parseServerMessage(legacy)).toBeNull();
+    expect(isIncompatibleSnapshot(legacy)).toBe(true);
   });
 });
 
@@ -259,14 +268,30 @@ describe('fixed frames from before plan 009 (R3)', () => {
   const oldSnapshot = JSON.parse(PRE009_SNAPSHOT) as Record<string, unknown>;
   const oldRepaired = JSON.parse(PRE009_REPAIRED) as Record<string, unknown>;
 
-  it('an old snapshot still parses, every old field the same, with an empty store', () => {
-    expect(parseServerMessage(PRE009_SNAPSHOT)).toEqual({ ...oldSnapshot, parts: 0, lastPartSlot: -1 });
-    expect(isIncompatibleSnapshot(PRE009_SNAPSHOT)).toBe(false);
+  it('(R2) a snapshot from before 009 (protocol 2, no parts) is incompatible: banner, not a silent drop', () => {
+    expect(parseServerMessage(PRE009_SNAPSHOT)).toBeNull();
+    expect(isIncompatibleSnapshot(PRE009_SNAPSHOT)).toBe(true);
   });
 
-  it('a 009 snapshot (old frame plus the new fields) keeps every old field the same', () => {
-    const now = { ...oldSnapshot, parts: 4, lastPartSlot: 179_500_004 };
+  it('(R2) a 009-1 snapshot (protocol 2 with the parts fields, a rollback server) is incompatible too', () => {
+    const rolledBack = json({ ...oldSnapshot, parts: 4, lastPartSlot: 179_500_004 });
+    expect(isIncompatibleSnapshot(rolledBack)).toBe(true);
+  });
+
+  it('(R2) the protocol is checked first: a protocol-3 snapshot with the old fields only still parses', () => {
+    const now = { ...oldSnapshot, protocol: 3, parts: 4, lastPartSlot: 179_500_004 };
     expect(parseServerMessage(json(now))).toEqual(now);
+    expect(parseServerMessage(json({ ...oldSnapshot, protocol: 3 }))).toEqual({
+      ...oldSnapshot,
+      protocol: 3,
+      parts: 0,
+      lastPartSlot: -1,
+    });
+  });
+
+  it('a store count above the cap reads as full, not empty (009-1 QA suggestion 2)', () => {
+    const over = parseServerMessage(json({ ...snapshot, parts: 9 })) as SnapshotMessage;
+    expect(over.parts).toBe(5);
   });
 
   it('an old repaired still parses, every old field the same', () => {
@@ -281,7 +306,8 @@ describe('fixed frames from before plan 009 (R3)', () => {
 
 describe('isIncompatibleSnapshot', () => {
   it('is true for a snapshot this build cannot read', () => {
-    expect(isIncompatibleSnapshot(json({ ...snapshot, protocol: 3 }))).toBe(true);
+    expect(isIncompatibleSnapshot(json({ ...snapshot, protocol: 2 }))).toBe(true);
+    expect(isIncompatibleSnapshot(json({ ...snapshot, protocol: 4 }))).toBe(true);
     expect(isIncompatibleSnapshot(json({ type: 'snapshot', version: 1, fault: null, repairs: 0 }))).toBe(true);
     expect(isIncompatibleSnapshot(json({ ...snapshot, faults: 'x' }))).toBe(true);
   });
@@ -295,8 +321,10 @@ describe('isIncompatibleSnapshot', () => {
 });
 
 describe('socketProtocol', () => {
-  it('is 2 only for ?protocol=2', () => {
+  it('is 2 (a versioned socket) for ?protocol=2 and up, 1 without one (closed with 4400, R2)', () => {
+    expect(socketProtocol(new URL('https://x.dev/ws?protocol=3'))).toBe(2);
     expect(socketProtocol(new URL('https://x.dev/ws?protocol=2'))).toBe(2);
+    expect(socketProtocol(new URL('https://x.dev/ws?protocol=4'))).toBe(2);
     expect(socketProtocol(new URL('https://x.dev/ws'))).toBe(1);
     expect(socketProtocol(new URL('https://x.dev/ws?protocol=1'))).toBe(1);
     expect(socketProtocol(new URL('https://x.dev/ws?protocol=abc'))).toBe(1);

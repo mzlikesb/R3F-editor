@@ -2,6 +2,8 @@ import { DurableObject } from 'cloudflare:workers';
 import {
   PING,
   PONG,
+  UPDATE_REQUIRED_CODE,
+  UPDATE_REQUIRED_REASON,
   parseClientMessage,
   socketProtocol,
   type ActivityMessage,
@@ -44,10 +46,10 @@ export const LEGACY_STATE_KEY = 'base';
 export const INSTANCE_ID_KEY = 'instanceId';
 /**
  * Whether a repair takes a part from the store (plan 009 A.9). A code constant, not an env value:
- * 009-2 turns it on in the same commit as `PROTOCOL_VERSION = 3`, so a deploy or a rollback always
+ * on from 009-2, in the same commit as `PROTOCOL_VERSION = 3`, so a deploy or a rollback always
  * moves both together. Off, pieces are still collected and the store still fills.
  */
-export const PARTS_REQUIRED: boolean = false;
+export const PARTS_REQUIRED: boolean = true;
 
 /**
  * The single shared base (plan 006). Rules live in `./state`, `./holds`, `./legacy`; this class does
@@ -55,6 +57,8 @@ export const PARTS_REQUIRED: boolean = false;
  * below is the contract the integration tests (`worker/test/base.test.ts`) check.
  *
  * - Storage is read on every event (no in-memory copy of `BaseState`), so tests can seed it.
+ * - `fetch` `/ws` upgrade without `?protocol` (a build from before plan 006): closed at once with
+ *   `UPDATE_REQUIRED_CODE`, never attached, counted or sent anything (plan 009 R2).
  * - `fetch` `/ws` upgrade: attachment `newAttachment(uuid, socketProtocol(url))`; load (migrating
  *   from `LEGACY_STATE_KEY` if `STATE_KEY` is missing); if this socket made connections 0 → 1, run
  *   `arrive` and save; then send this socket its snapshot (protocol 2: `toSnapshot`, protocol 1:
@@ -67,7 +71,8 @@ export const PARTS_REQUIRED: boolean = false;
  *   `helped` on the other sockets whose hold on it had not expired, `helpers` = how many; #56),
  *   `legacyUpdate` to protocol-1 sockets, `releaseHold` of that fault on every socket and an
  *   `activity` to protocol-2 sockets if any hold was cleared.
- *   With `PARTS_REQUIRED` and an empty store: `repairRejected` to this socket only (protocol 2).
+ *   With `PARTS_REQUIRED` and an empty store: `repairRejected` to this socket only, and its hold on
+ *   that fault released (`activity` to the others), so nobody reads "someone is fixing it".
  *   `collect`: `collect()`; on success save and `parts` to protocol-2 sockets (`mine` per socket).
  *   `hold` / `release`: update this socket's attachment (`startHold` / `releaseHold`); if it changed,
  *   send each protocol-2 socket `activityFor(all holds, its own hold)`.
@@ -108,8 +113,15 @@ export class BaseRoom extends DurableObject<Env> {
     }
 
     const { 0: client, 1: server } = new WebSocketPair();
+    const protocol = socketProtocol(new URL(request.url));
+    if (protocol === 1) {
+      // Not hibernatable and never in `getWebSockets()`: the base does not see it at all.
+      server.accept();
+      server.close(UPDATE_REQUIRED_CODE, UPDATE_REQUIRED_REASON);
+      return new Response(null, { status: 101, webSocket: client });
+    }
     this.ctx.acceptWebSocket(server);
-    server.serializeAttachment(newAttachment(() => crypto.randomUUID(), socketProtocol(new URL(request.url))));
+    server.serializeAttachment(newAttachment(() => crypto.randomUUID(), protocol));
 
     const now = Date.now();
     let { state, stored } = await this.loadState();
@@ -175,6 +187,11 @@ export class BaseRoom extends DurableObject<Env> {
       if (result === 'noParts') {
         const rejected: RepairRejectedMessage = { type: 'repairRejected', faultId: msg.faultId, reason: 'noParts' };
         if (me.protocol === 2) broadcastEach([ws], () => JSON.stringify(rejected));
+        const next = releaseHold(me.hold, msg.faultId);
+        if (next !== me.hold) {
+          this.setHold(ws, me, next);
+          this.announceActivity(peers);
+        }
       } else if (result) {
         const before = state;
         state = result.state;

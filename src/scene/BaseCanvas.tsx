@@ -10,6 +10,7 @@ import { OVERVIEW_START } from './layout';
 import { LabelPlanProvider } from './fx/LabelPlanProvider';
 import { Lighting } from './Lighting';
 import { Module } from './Module';
+import { PartPiece } from './PartPiece';
 import { PresenceLights } from './PresenceLights';
 import { PERF_ENABLED } from './perf';
 import { PerfHud } from './PerfHud';
@@ -21,12 +22,14 @@ import { Rocks } from './Rocks';
 import { SolarPanels } from './SolarPanels';
 import { SceneTone } from './SceneTone';
 import { Stars } from './Sky';
+import { actOnTap, pieceOnScreen } from './sceneTap';
 import { isTap } from './tap';
+import { tapTarget } from './tapPick';
 import { useReducedMotion } from './useReducedMotion';
 
 /**
  * The canvas and everything in it: sky and fog, asteroid belt, lights, HDRI, ground, rocks, solar panels,
- * modules, camera, tap-vs-drag, `?perf` HUD (plan 005 A, E), adaptive quality (plan 007 C), and the
+ * modules, the parts piece, camera, tap-vs-drag, `?perf` HUD (plan 005 A, E), adaptive quality (plan 007 C), and the
  * post-processing composer when the session has one (plan 008 B.3, `PostLayer`).
  */
 export function BaseCanvas() {
@@ -47,7 +50,12 @@ export function BaseCanvas() {
         }}
         onPointerMissed={(e) => {
           // Letting go after an orbit drag is not a tap on empty space.
-          if (isTap(down.current, { x: e.clientX, y: e.clientY })) useStore.getState().select(null);
+          if (!isTap(down.current, { x: e.clientX, y: e.clientY })) return;
+          // Just off the piece, or where it just was, is still about the piece (009-2 playtest).
+          const el = e.target instanceof Element ? e.target : null;
+          const target = tapTarget([], el ? pieceOnScreen(e.clientX, e.clientY, el, performance.now()) : null);
+          if (target) actOnTap(target, e.clientX, e.clientY);
+          else useStore.getState().select(null);
         }}
       >
         {/* First: it steps the blackout fade the lights read this frame. */}
@@ -65,6 +73,7 @@ export function BaseCanvas() {
           ))}
         </LabelPlanProvider>
         <PresenceLights />
+        <PartPiece />
         <CameraRig />
         {!reducedMotion && <CameraShake />}
         <QualityController />

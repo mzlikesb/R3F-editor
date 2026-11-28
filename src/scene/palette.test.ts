@@ -120,3 +120,37 @@ describe('solar panel field (A.4)', () => {
     );
   });
 });
+
+describe('part colour (plan 009 B.1)', () => {
+  const MIN_PART_GAP = 30;
+  const states = {
+    fault: PALETTE.fault,
+    repaired: PALETTE.repaired,
+    statusLight: PALETTE.statusLight,
+    select: PALETTE.select,
+    hold: PALETTE.hold,
+    panelOn: linearToHex(PALETTE.panelOn),
+    ping: PALETTE.ping,
+    spark: PALETTE.spark,
+    afterglow: PALETTE.afterglow,
+  };
+
+  for (const [name, color] of Object.entries(states)) {
+    it(`is a different hue from ${name}`, () => {
+      expect(hueDistance(PALETTE.part, color)).toBeGreaterThanOrEqual(MIN_PART_GAP);
+    });
+  }
+
+  it('is saturated where the drones are white', () => {
+    const n = parseInt(PALETTE.part.slice(1), 16);
+    const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    expect((Math.max(...c) - Math.min(...c)) / Math.max(...c)).toBeGreaterThan(0.3);
+  });
+
+  it('stands out on the ground and in the blackout fog', () => {
+    expect(contrastRatio(PALETTE.part, PALETTE.ground)).toBeGreaterThanOrEqual(MIN_CONTRAST);
+    expect(contrastRatio(PALETTE.part, scaleHex(PALETTE.fog, PALETTE.skyBlackout))).toBeGreaterThanOrEqual(
+      MIN_CONTRAST,
+    );
+  });
+});

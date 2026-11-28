@@ -415,7 +415,7 @@ export function countPresence<T>(sockets: readonly T[], closing?: T): number {
   return closing === undefined ? sockets.length : sockets.filter((s) => s !== closing).length;
 }
 
-/** Protocol-2 snapshot: the `SNAPSHOT_BLACKOUTS` newest records, `protocol: 2`, `serverNow`, the parts store. */
+/** The snapshot: the `SNAPSHOT_BLACKOUTS` newest records, `protocol: PROTOCOL_VERSION`, `serverNow`, the parts store. */
 export function toSnapshot(state: BaseState, presence: number, serverNow: number): SnapshotMessage {
   return {
     type: 'snapshot',

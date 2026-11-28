@@ -2,8 +2,10 @@
  * Text and layout decisions for the HUD, panels and banners (plans 005, 006 C). Pure; the
  * components render what these return. Track `client` implements the TODO bodies.
  */
+import { PARTS_CAP } from '../../shared/parts';
 import { MAX_FAULTS, type Blackout, type Fault, type ModuleId } from '../../shared/protocol';
-import { moduleName } from '../modules';
+import type { HoldState } from '../hold';
+import { MODULES, moduleName } from '../modules';
 import type { BaseView, ConnectionStatus, LastRepairView } from '../sync';
 
 /**
@@ -89,6 +91,15 @@ export function faultCountLine(faultCount: number, blackout: Blackout | null): s
  * said `기지 정상` under `기지를 불러오는 중…`). A server this build cannot read counts as known, so
  * the update banner is not stuck behind the loading screen.
  */
+/**
+ * The scene is in: the loaders are idle at 100 % *and* every module's model is mounted (its GLB
+ * decoded and its Suspense resolved, or its fallback shape). Downloads alone finish before the Draco
+ * decode, which left the pill gone over bare ground (neon on #114).
+ */
+export function sceneLoaded(s: { assetsDone: boolean; modelsIn: number }): boolean {
+  return s.assetsDone && s.modelsIn >= MODULES.length;
+}
+
 export function hudReady(s: { loaded: boolean; hasBase: boolean; incompatible: boolean }): boolean {
   return s.loaded && (s.hasBase || s.incompatible);
 }
@@ -99,9 +110,14 @@ export function connectionLabel(status: ConnectionStatus): string | null {
   return status === 'connecting' ? '연결 중…' : '재연결 중…';
 }
 
-/** Under the HUD while nothing is broken (and a base is known). */
-export function healthyLine(base: { faulted: boolean } | null): string | null {
-  return base && !base.faulted ? '기지 정상 · 고장이 나면 이 화면에 떠요' : null;
+/**
+ * Under the HUD while nothing is broken (and a base is known). With room in the store (`parts`
+ * below the cap) the calm time says what to do: pick pieces up (009-2 playtest).
+ */
+export function healthyLine(base: { faulted: boolean; parts?: number } | null): string | null {
+  if (!base || base.faulted) return null;
+  if (base.parts !== undefined && base.parts < PARTS_CAP) return '기지 정상 · 조각을 주워 부품을 모아 두세요';
+  return '기지 정상 · 고장이 나면 이 화면에 떠요';
 }
 
 /** Top of the HUD during a blackout (plan 006 C.18), else null. */
@@ -117,19 +133,54 @@ export function updateBanner(incompatible: boolean): string | null {
 /**
  * HUD last-repair line (plan 006 C.19), times in server ms:
  * `마지막: 나 · 산소 탱크 · 방금`, `마지막: 다른 사람 · 온실 · 12초 전`; with helpers (#56)
- * `마지막: 나 외 2명 · …` / `마지막: 다른 사람 외 2명 · …` (whoever made it count, then the rest); when it is not known who
+ * `마지막: 나 외 2명 · …` / `마지막: 다른 사람 외 2명 · …` (whoever made it count, then the rest; `나` also when I helped); when it is not known who
  * (from a snapshot, `mine` null) `마지막: 통신탑 · 3분 전`. Null without a repair.
  */
 export function lastRepairLine(last: LastRepairView | null, serverNow: number): string | null {
   if (!last) return null;
   const others = last.helpers > 0 ? ` 외 ${last.helpers}명` : '';
-  const who = last.mine === null ? '' : `${last.mine ? '나' : '다른 사람'}${others} · `;
+  // I made it count or helped: either way I am in it (009-2 playtest).
+  const me = last.mine === true || last.helped;
+  const who = last.mine === null ? '' : `${me ? '나' : '다른 사람'}${others} · `;
   return `마지막: ${who}${moduleName(last.moduleId)} · ${agoText(serverNow - last.at)}`;
 }
 
 /** In the panel of a fault someone else is holding: `지금 1명이 같이 누르는 중`; null for 0. */
 export function togetherLine(othersHolding: number): string | null {
   return othersHolding >= 1 ? `지금 ${othersHolding}명이 같이 누르는 중` : null;
+}
+
+/**
+ * The HUD's store chip (plan 009 B.3, R4): `부품 3/5`, `부품 0/5`; at the cap `부품 가득`, accented.
+ * `short` (`⬢ 3/5`) is what a narrow phone shows, so the top line never wraps.
+ */
+export function partsChip(parts: number): { text: string; short: string; full: boolean } {
+  const short = `⬢ ${Math.min(parts, PARTS_CAP)}/${PARTS_CAP}`;
+  return parts >= PARTS_CAP
+    ? { text: '기지 창고 가득', short, full: true }
+    : { text: `기지 창고 ${parts}/${PARTS_CAP}`, short, full: false };
+}
+
+/** Above the `fetch` button: why it is not a repair button (009-2 playtest 3). */
+export const PARTS_NEEDED_LINE = '수리에 부품 1개가 필요해요';
+
+/** Every way of running out of parts at the repair says this (plan 009 B.5). */
+export const NO_PARTS_NOTICE = '부품이 없어요 — 조각을 주워요';
+
+/**
+ * The repair button (plan 009 B.4). `repair`: hold to repair, `꾹 눌러 수리 (1초 · 부품 1)` (and the
+ * hold labels). `fetch` with an empty store: `부품 있는 곳 보기` while a piece is out, else
+ * `다음 부품 7초` (whole seconds, rounded up); pressing it goes back to the overview and pings the piece.
+ */
+export function repairButton(ctx: { hold: HoldState['kind']; parts: number; out: boolean; msToNext: number }): {
+  mode: 'repair' | 'fetch';
+  label: string;
+} {
+  if (ctx.hold === 'holding') return { mode: 'repair', label: '계속 누르세요…' };
+  if (ctx.hold === 'pending') return { mode: 'repair', label: '수리 중…' };
+  if (ctx.parts >= 1) return { mode: 'repair', label: '꾹 눌러 수리 (1초 · 부품 1)' };
+  if (ctx.out) return { mode: 'fetch', label: '부품 있는 곳 보기' };
+  return { mode: 'fetch', label: `다음 부품 ${Math.max(1, Math.ceil(ctx.msToNext / 1000))}초` };
 }
 
 export interface PanelView {

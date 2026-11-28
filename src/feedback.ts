@@ -21,15 +21,18 @@ export const TOAST_MS = 3000;
 export type RepairOutcome = 'mine' | 'helped' | 'beaten' | 'other';
 
 /** `fault`: a module broke while this tab was open (every `fault` message is live; arrival faults come in the snapshot). */
-export type ToastKind = RepairOutcome | 'fault';
+export type ToastKind = RepairOutcome | 'fault' | 'taken';
 
 export interface Toast {
   kind: ToastKind;
-  moduleId: ModuleId;
+  /** null on `taken` (no module). */
+  moduleId: ModuleId | null;
   /** Hidden from this time (ms, `performance.now()`). */
   until: number;
   /** The combo this repair made (`nextCombo`), shown as `x2` and up; 0 on toasts that are not my repair. */
   combo: number;
+  /** The repair took a part from the store (`repaired.parts` present). */
+  part: boolean;
 }
 
 /** Which repair effects to play on the repaired module. */
@@ -71,11 +74,13 @@ export const initialFeedback: FeedbackState = { toast: null, hintDismissed: fals
 
 export type FeedbackEvent =
   /** A `repaired` that changed the base (not a stale version), already classified. */
-  | { type: 'repaired'; outcome: RepairOutcome; moduleId: ModuleId; now: number }
+  | { type: 'repaired'; outcome: RepairOutcome; moduleId: ModuleId; now: number; part?: boolean }
   /** A `fault` that changed the base. */
   | { type: 'fault'; moduleId: ModuleId; now: number }
   /** Any module (or a badge) was tapped. */
   | { type: 'moduleTapped' }
+  /** A tap where someone else had just taken the piece (009-2 playtest 3). */
+  | { type: 'taken'; now: number }
   /** Timer tick; hides an expired toast. */
   | { type: 'tick'; now: number };
 
@@ -83,10 +88,12 @@ export type FeedbackEvent =
  * - mine: `내가 고쳤어요 +1`
  * - helped: `함께 고쳤어요 +1`
  * - beaten: `같이 눌렀는데 다른 사람이 한발 먼저 고쳤어요`
- * - other: `누군가 산소 탱크를 고쳤어요` (module name + 을/를)
+ * - other: `누군가 산소 탱크를 고쳤어요` (module name + 을/를); with `part` `누군가 기지 창고의 부품 1개로 산소 탱크를 고쳤어요`
+ * - taken: `다른 사람이 먼저 주웠어요`
  * - fault: `온실이 고장 났어요` (module name + 이/가)
  */
-export function toastText(toast: Pick<Toast, 'kind' | 'moduleId'>): string {
+export function toastText(toast: Pick<Toast, 'kind' | 'moduleId'> & { part?: boolean }): string {
+  if (toast.kind === 'taken' || toast.moduleId === null) return '다른 사람이 먼저 주웠어요';
   const name = moduleName(toast.moduleId);
   switch (toast.kind) {
     case 'mine':
@@ -96,10 +103,17 @@ export function toastText(toast: Pick<Toast, 'kind' | 'moduleId'>): string {
     case 'beaten':
       return '같이 눌렀는데 다른 사람이 한발 먼저 고쳤어요';
     case 'other':
-      return `누군가 ${withObjectParticle(name)} 고쳤어요`;
+      return toast.part
+        ? `누군가 기지 창고의 부품 1개로 ${withObjectParticle(name)} 고쳤어요`
+        : `누군가 ${withObjectParticle(name)} 고쳤어요`;
     case 'fault':
       return `${withSubjectParticle(name)} 고장 났어요`;
   }
+}
+
+/** The small second part of a toast: my repair took a part from the store (plan 009 B.6). */
+export function toastNote(kind: ToastKind): string | null {
+  return kind === 'mine' ? '부품 1개 사용' : null;
 }
 
 /** Classifies a `repaired` from the hold state *before* `reduceHold` handles it. */
@@ -141,6 +155,7 @@ export function reduceFeedback(state: FeedbackState, event: FeedbackEvent): Feed
           moduleId: event.moduleId,
           until: event.now + TOAST_MS,
           combo: combo === state.combo ? 0 : combo.count,
+          part: event.part === true,
         },
         effect: {
           outcome: event.outcome,
@@ -151,9 +166,14 @@ export function reduceFeedback(state: FeedbackState, event: FeedbackEvent): Feed
       };
     }
     case 'fault':
-      return { ...state, toast: { kind: 'fault', moduleId: event.moduleId, until: event.now + TOAST_MS, combo: 0 } };
+      return {
+        ...state,
+        toast: { kind: 'fault', moduleId: event.moduleId, until: event.now + TOAST_MS, combo: 0, part: false },
+      };
     case 'moduleTapped':
       return state.hintDismissed ? state : { ...state, hintDismissed: true };
+    case 'taken':
+      return { ...state, toast: { kind: 'taken', moduleId: null, until: event.now + TOAST_MS, combo: 0, part: false } };
     case 'tick':
       return state.toast && event.now >= state.toast.until ? { ...state, toast: null } : state;
   }

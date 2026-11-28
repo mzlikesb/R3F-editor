@@ -3,6 +3,8 @@ import { reset, runDurableObjectAlarm, runInDurableObject } from 'cloudflare:tes
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   GENERATOR,
+  UPDATE_REQUIRED_CODE,
+  UPDATE_REQUIRED_REASON,
   parseServerMessage,
   type ActivityMessage,
   type Fault,
@@ -16,7 +18,6 @@ import {
 } from '../../shared/protocol';
 import { PARTS_CAP, partSlot } from '../../shared/parts';
 import { PRE009_STORED } from '../../shared/testdata/pre009';
-import { v1ParseServerMessage, v1Replay, type V1ServerMessage } from '../../shared/testdata/v1';
 import { LEGACY_STATE_KEY, PARTS_REQUIRED, STATE_KEY } from '../BaseRoom';
 import { FIRST_FAULT_WAIT_MS, MIN_UNATTENDED_MS, type BaseState, type LegacyState } from '../state';
 
@@ -24,12 +25,12 @@ const TIMEOUT_MS = 2000;
 /** How long to wait before concluding that a message is not coming. */
 const QUIET_MS = 200;
 
-const open = new Set<Client | LegacyClient>();
+const open = new Set<Client | RawClient>();
 
-/** A protocol-2 test client (`/ws?protocol=2`) that keeps every server message it receives. */
+/** A test client of this build (`/ws?protocol=3`) that keeps every server message it receives. */
 class Client {
   readonly messages: ServerMessage[] = [];
-  /** Frames the protocol-2 parser rejected. A correct server sends none. */
+  /** Frames this build's parser rejected. A correct server sends none. */
   readonly rejected: string[] = [];
   closed = false;
   private readonly listeners = new Set<() => void>();
@@ -50,7 +51,7 @@ class Client {
     });
   }
 
-  static async connect(path = '/ws?protocol=2'): Promise<Client> {
+  static async connect(path = '/ws?protocol=3'): Promise<Client> {
     const client = new Client(await upgrade(path));
     open.add(client);
     return client;
@@ -98,10 +99,10 @@ class Client {
   }
 }
 
-/** A tab opened before the deploy: connects to `/ws` without a query and parses with the deployed parser. */
-class LegacyClient {
+/** A tab of another build: keeps raw frames and how the socket closed. */
+class RawClient {
   readonly frames: string[] = [];
-  closed = false;
+  closed: { code: number; reason: string } | null = null;
   private readonly listeners = new Set<() => void>();
 
   readonly ws: WebSocket;
@@ -112,23 +113,16 @@ class LegacyClient {
       this.frames.push(String(event.data));
       for (const l of this.listeners) l();
     });
-    ws.addEventListener('close', () => {
-      this.closed = true;
+    ws.addEventListener('close', (event) => {
+      this.closed = { code: event.code, reason: event.reason };
+      for (const l of this.listeners) l();
     });
   }
 
-  static async connect(): Promise<LegacyClient> {
-    const client = new LegacyClient(await upgrade('/ws'));
+  static async connect(path: string): Promise<RawClient> {
+    const client = new RawClient(await upgrade(path));
     open.add(client);
     return client;
-  }
-
-  messages(): (V1ServerMessage | null)[] {
-    return this.frames.map(v1ParseServerMessage);
-  }
-
-  view() {
-    return v1Replay(this.frames);
   }
 
   waitFor(cond: () => boolean): Promise<unknown> {
@@ -144,8 +138,13 @@ class LegacyClient {
   }
 
   close(): void {
-    if (!this.closed) this.ws.close(1000, 'bye');
-    this.closed = true;
+    if (!this.closed) {
+      try {
+        this.ws.close(1000, 'bye');
+      } catch {
+        // already closed by the server
+      }
+    }
     open.delete(this);
   }
 }
@@ -198,12 +197,15 @@ function readState(): Promise<BaseState | undefined> {
   return runInDurableObject(stub(), (_i, state) => state.storage.get<BaseState>(STATE_KEY));
 }
 
-/** Merges `patch` into the stored `base:v2` (the room reads storage on every event). */
+/**
+ * Merges `patch` into the stored `base:v2` (the room reads storage on every event). A repair takes a
+ * part (`PARTS_REQUIRED`), so the store is filled to the cap unless `patch` says how many.
+ */
 async function seed(patch: Partial<BaseState>): Promise<BaseState> {
   return runInDurableObject(stub(), async (_i, state) => {
     const current = await state.storage.get<BaseState>(STATE_KEY);
     if (!current) throw new Error('seed: no base:v2 yet (connect first)');
-    const next = { ...current, ...patch, version: current.version + 1 };
+    const next = { ...current, parts: PARTS_CAP, ...patch, version: current.version + 1 };
     await state.storage.put(STATE_KEY, next);
     return next;
   });
@@ -229,7 +231,7 @@ async function fetchJson<T>(path: string): Promise<T> {
 async function fetchBase(): Promise<SnapshotMessage> {
   const res = await exports.default.fetch('http://example.com/api/base');
   const msg = parseServerMessage(await res.text());
-  if (!msg || msg.type !== 'snapshot') throw new Error('expected a protocol-2 snapshot');
+  if (!msg || msg.type !== 'snapshot') throw new Error('expected a snapshot of this build');
   return msg;
 }
 
@@ -257,13 +259,13 @@ afterEach(async () => {
   await reset();
 });
 
-describe('connecting (protocol 2)', () => {
-  it('sends a protocol-2 snapshot first, with the server time', async () => {
+describe('connecting (protocol 3)', () => {
+  it('sends a protocol-3 snapshot first, with the server time', async () => {
     const before = Date.now();
     const a = await Client.connect();
     const snap = await a.waitFor(isSnapshot);
     expect(a.messages[0]).toBe(snap);
-    expect(snap.protocol).toBe(2);
+    expect(snap.protocol).toBe(3);
     expect(snap.presence).toBe(1);
     expect(snap.repairs).toBe(0);
     expect(snap.instanceId).toMatch(/^[0-9a-f-]{36}$/);
@@ -636,23 +638,6 @@ describe('helped: who was holding when it was repaired (#56)', () => {
     expect(rb).toMatchObject({ helped: false, helpers: 0 });
   });
 
-  it('a protocol-1 tab holding the fault is not sent helped and is not counted', async () => {
-    await withFaults(fault(GENERATOR));
-    const old = await LegacyClient.connect();
-    await old.waitFor(() => old.view().base?.fault?.id === `seed-${GENERATOR}`);
-    const a = await fresh();
-    old.send({ type: 'hold', faultId: `seed-${GENERATOR}` });
-    await quiet();
-    a.send({ type: 'repair', faultId: `seed-${GENERATOR}` });
-    const ra = await a.waitFor(isRepaired);
-    expect(ra.helpers).toBe(0);
-    await old.waitFor(() => old.messages().some((m) => m?.type === 'repaired'));
-    const frame = old.frames.find((f) => f.includes('"repaired"'))!;
-    expect(frame).not.toContain('helped');
-    expect(frame).not.toContain('helpers');
-    expect(old.messages().find((m) => m?.type === 'repaired')).toMatchObject({ mine: false });
-  });
-
   it('helped comes before the holds are cleared, and a late repair of the same fault helps nobody again', async () => {
     await withFaults(fault('oxygen'));
     const a = await fresh();
@@ -809,51 +794,26 @@ describe('storage migration', () => {
   });
 });
 
-describe('protocol 1 sockets (tabs from before the deploy)', () => {
-  it('get an old-shape snapshot first and never an event they cannot parse', async () => {
-    const old = await LegacyClient.connect();
-    await old.waitFor(() => old.view().wsSynced);
-    const first = old.messages()[0];
-    expect(first?.type).toBe('snapshot');
-    expect(JSON.parse(old.frames[0]!)).not.toHaveProperty('protocol');
-
-    const a = await Client.connect();
-    await a.waitFor(isSnapshot);
-    await fireFault();
-    await a.waitFor(isFault);
-    a.send({ type: 'hold', faultId: a.faults()[0]!.id });
+describe('tabs of other builds (plan 009 A.10, R2)', () => {
+  it('a socket without ?protocol is closed at once with 4400 update required, and never counted', async () => {
+    const a = await fresh();
+    const mark = a.messages.length;
+    const old = await RawClient.connect('/ws');
+    await old.waitFor(() => old.closed !== null);
+    expect(old.closed).toEqual({ code: UPDATE_REQUIRED_CODE, reason: UPDATE_REQUIRED_REASON });
+    expect(old.frames).toEqual([]);
     await quiet();
-    for (const m of old.messages()) {
-      expect(m).not.toBeNull();
-      expect(['snapshot', 'repaired', 'presence']).toContain(m!.type);
-    }
+    expect(a.messages.slice(mark).filter((m) => m.type === 'presence')).toEqual([]);
+    expect((await fetchBase()).presence).toBe(1);
   });
 
-  it("a repair on another module does not clear the old tab's generator fault", async () => {
-    await withFaults(fault(GENERATOR), fault('oxygen'));
-    const old = await LegacyClient.connect();
-    await old.waitFor(() => old.view().base?.fault?.id === `seed-${GENERATOR}`);
-    const a = await fresh();
-    a.send({ type: 'repair', faultId: 'seed-oxygen' });
-    await a.waitFor(isRepaired);
-    await old.waitFor(() => old.view().base?.repairs === (a.messages.find(isRepaired)?.repairs ?? -1));
-    expect(old.view().base?.fault?.id).toBe(`seed-${GENERATOR}`);
-  });
-
-  it('an old tab repairs the generator: it gets an old repaired with mine, the new tabs a protocol-2 one', async () => {
-    await withFaults(fault(GENERATOR), fault('oxygen'));
-    const old = await LegacyClient.connect();
-    await old.waitFor(() => old.view().base?.fault?.id === `seed-${GENERATOR}`);
-    const a = await fresh();
-    old.send({ type: 'repair', faultId: `seed-${GENERATOR}` });
-
-    const ra = await a.waitFor(isRepaired);
-    expect(ra).toMatchObject({ moduleId: GENERATOR, mine: false });
-    await old.waitFor(() => old.messages().some((m) => m?.type === 'repaired'));
-    const repaired = old.messages().find((m) => m?.type === 'repaired');
-    expect(repaired).toMatchObject({ faultId: `seed-${GENERATOR}`, mine: true });
-    expect(old.view().base?.fault).toBeNull();
-    expect(a.faults().map((f) => f.moduleId)).toEqual(['oxygen']);
+  it('a protocol-2 tab gets a protocol-3 snapshot, which its parser reads as incompatible (banner)', async () => {
+    const old = await RawClient.connect('/ws?protocol=2');
+    await old.waitFor(() => old.frames.length > 0);
+    const first = JSON.parse(old.frames[0]!) as Record<string, unknown>;
+    expect(first).toMatchObject({ type: 'snapshot', protocol: 3 });
+    // The 009-1 parser accepts only `protocol: 2` (`shared/protocol.ts` at e438b2a).
+    expect(first.protocol).not.toBe(2);
   });
 });
 
@@ -920,7 +880,12 @@ describe('the parts store (plan 009 A)', () => {
 
   it('collects during a blackout', async () => {
     const a = await withFaults(fault('oxygen'), fault('comms'), fault(GENERATOR));
-    await seed({ blackout: { id: 'b1', startedAt: Date.now() - 1000 }, uptimeStartedAt: null, nextFaultAt: null });
+    await seed({
+      blackout: { id: 'b1', startedAt: Date.now() - 1000 },
+      uptimeStartedAt: null,
+      nextFaultAt: null,
+      parts: 0,
+    });
     a.send({ type: 'collect', slot: slotNow() });
     expect(await a.waitFor(isParts)).toMatchObject({ count: 1, mine: true });
   });
@@ -934,35 +899,76 @@ describe('the parts store (plan 009 A)', () => {
     expect(a.messages.filter(isParts)).toEqual([]);
   });
 
-  it('PARTS_REQUIRED is off in 009-1: an empty store still repairs, and repaired carries the store and the time', async () => {
-    expect(PARTS_REQUIRED).toBe(false);
+  it('PARTS_REQUIRED is on from 009-2: a repair takes a part, and repaired carries the store and the time', async () => {
+    expect(PARTS_REQUIRED).toBe(true);
+    await withFaults(fault('oxygen'));
+    await seed({ parts: 2 });
+    const a = await fresh();
+    const b = await fresh();
+    const before = Date.now();
+    a.send({ type: 'repair', faultId: 'seed-oxygen' });
+    const [ra, rb] = await Promise.all([a.waitFor(isRepaired), b.waitFor(isRepaired)]);
+    expect(ra).toMatchObject({ mine: true, parts: 1 });
+    expect(rb).toMatchObject({ mine: false, parts: 1 });
+    expect(ra.serverNow).toBeGreaterThanOrEqual(before - 1000);
+    expect((await readState())!.parts).toBe(1);
+  });
+
+  it('an empty store turns the repair away: repairRejected to the requester only, base unchanged, its hold released', async () => {
     await withFaults(fault('oxygen'));
     await seed({ parts: 0 });
     const a = await fresh();
-    const before = Date.now();
+    const b = await fresh();
+    a.send({ type: 'hold', faultId: 'seed-oxygen' });
+    await b.waitFor((m) => isActivity(m) && m.holds['seed-oxygen'] === 1);
+    const before = await readState();
+    const markA = a.messages.length;
+    const markB = b.messages.length;
     a.send({ type: 'repair', faultId: 'seed-oxygen' });
-    const r = await a.waitFor(isRepaired);
-    expect(r).toMatchObject({ mine: true, parts: 0 });
-    expect(r.serverNow).toBeGreaterThanOrEqual(before - 1000);
-    expect(a.messages.filter(isRejected)).toEqual([]);
-    expect((await readState())!.parts).toBe(0);
+    expect(await a.waitFor(isRejected, markA)).toEqual({
+      type: 'repairRejected',
+      faultId: 'seed-oxygen',
+      reason: 'noParts',
+    });
+    // Nobody else is left reading "someone is fixing it" (009-1 QA suggestion 1).
+    await b.waitFor((m) => isActivity(m) && m.holds['seed-oxygen'] === undefined, markB);
+    await quiet();
+    expect(b.messages.slice(markB).filter(isRejected)).toEqual([]);
+    expect(b.messages.slice(markB).filter(isRepaired)).toEqual([]);
+    expect(a.messages.slice(markA).filter(isRepaired)).toEqual([]);
+    expect(await readState()).toEqual(before);
   });
 
-  it('a protocol-1 tab gets no parts fields and no parts messages', async () => {
-    const old = await LegacyClient.connect();
-    await old.waitFor(() => old.view().wsSynced);
+  it('one part, two people on two faults at once: one repair counts, the other is turned away', async () => {
+    await withFaults(fault('oxygen'), fault('comms'));
+    await seed({ parts: 1 });
     const a = await fresh();
-    a.send({ type: 'collect', slot: slotNow() });
-    await a.waitFor(isParts);
-    old.send({ type: 'collect', slot: slotNow() });
+    const b = await fresh();
+    a.send({ type: 'repair', faultId: 'seed-oxygen' });
+    b.send({ type: 'repair', faultId: 'seed-comms' });
+    await a.waitFor(isRepaired);
     await quiet();
-    for (const raw of old.frames) {
-      const m = JSON.parse(raw) as Record<string, unknown>;
-      expect(m.type).not.toBe('parts');
-      expect(m).not.toHaveProperty('parts');
-      expect(m).not.toHaveProperty('lastPartSlot');
-    }
-    for (const m of old.messages()) expect(m).not.toBeNull();
+    const all = [...a.messages, ...b.messages];
+    const repairedIds = new Set(all.filter(isRepaired).map((m) => m.faultId));
+    expect(repairedIds.size).toBe(1);
+    expect(all.filter(isRejected)).toHaveLength(1);
+    const state = (await readState())!;
+    expect(state.parts).toBe(0);
+    expect(state.faults).toHaveLength(1);
+  });
+
+  it('(R5) one part, two people on the same fault: one repair, and the late one is not told noParts', async () => {
+    await withFaults(fault('oxygen'));
+    await seed({ parts: 1 });
+    const a = await fresh();
+    const b = await fresh();
+    a.send({ type: 'repair', faultId: 'seed-oxygen' });
+    b.send({ type: 'repair', faultId: 'seed-oxygen' });
+    await Promise.all([a.waitFor(isRepaired), b.waitFor(isRepaired)]);
+    await quiet();
+    expect([...a.messages, ...b.messages].filter(isRejected)).toEqual([]);
+    expect(a.messages.filter(isRepaired)).toHaveLength(1);
+    expect((await readState())!.parts).toBe(0);
   });
 
   it('(R3) a stored base from before 009 reads with an empty store; a pure read writes nothing', async () => {
@@ -987,7 +993,7 @@ describe('the parts store (plan 009 A)', () => {
 describe('REST: pure reads', () => {
   it('GET /api/base works before anyone connected and creates nothing', async () => {
     const snap = await fetchBase();
-    expect(snap.protocol).toBe(2);
+    expect(snap.protocol).toBe(3);
     expect(snap.presence).toBe(0);
     expect(snap.faults).toEqual([]);
     expect(await getAlarm()).toBeNull();

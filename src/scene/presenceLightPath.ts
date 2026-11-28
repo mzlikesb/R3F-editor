@@ -84,3 +84,15 @@ export function presenceHover(i: number, t: number): number {
 export const HALO_PEAK = 0.4;
 /** Halo size (m, the quad's side) at full scale. */
 export const HALO_SIZE = 1.6;
+
+/** Closer to the camera than this (world units), a drone shows no glow; from `HALO_NEAR_FULL` on, all of it. */
+export const HALO_NEAR_HIDE = 4;
+export const HALO_NEAR_FULL = 10;
+
+/**
+ * How much of a drone's glow to draw at `distance` from the camera: zoomed in on a module, a drone
+ * passing close filled the view with its glow plane (009-2 playtest, pc-dev).
+ */
+export function haloNearScale(distance: number): number {
+  return Math.min(1, Math.max(0, (distance - HALO_NEAR_HIDE) / (HALO_NEAR_FULL - HALO_NEAR_HIDE)));
+}

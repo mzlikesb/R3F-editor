@@ -1,6 +1,5 @@
 import { useGLTF } from '@react-three/drei';
-import { Suspense, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
-import type { ThreeEvent } from '@react-three/fiber';
+import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { Box3, Color, Matrix4, Mesh, MeshBasicMaterial, MeshStandardMaterial, Vector3, type Group } from 'three';
 import type { BaseModuleId } from '../modules';
 import { useStore } from '../store';
@@ -9,7 +8,8 @@ import { ModuleFx } from './fx/ModuleFx';
 import { isHull, useHull } from './fx/hull';
 import { SelectRing } from './fx/SelectMarks';
 import { LAYOUT, MODEL_BOUNDS } from './layout';
-import { pickTap, type TapHit } from './tapPick';
+import { onSceneTap } from './sceneTap';
+import type { TapHit } from './tapPick';
 import type { ModuleHandle } from './moduleTypes';
 import './scene.css';
 
@@ -41,6 +41,10 @@ export interface ModuleProps {
 export function Module({ id, position, scale, rotationY }: ModuleProps) {
   const layout = LAYOUT[id];
   const [handle, setHandle] = useState<ModuleHandle | null>(null);
+  // The loading pill waits for every module's model (or its fallback) to be on screen.
+  useEffect(() => {
+    if (handle) useStore.getState().markModelIn(id);
+  }, [handle, id]);
   return (
     <group
       position={position ?? [layout.x, 0, layout.z]}
@@ -162,19 +166,6 @@ function useHandle(
 const TAP_MATERIAL = new MeshBasicMaterial({ colorWrite: false, depthWrite: false });
 
 /**
- * Picks from everything under the pointer (`e.intersections`, nearest first), not just the box that
- * was hit first: a margin box can stand in front of another module's model (`scene/tapPick.ts`).
- */
-function onTap(e: ThreeEvent<MouseEvent>) {
-  e.stopPropagation();
-  const hits = e.intersections
-    .map((i) => i.object.userData as Partial<TapHit>)
-    .filter((d): d is TapHit => d.moduleId !== undefined && d.part !== undefined);
-  const id = pickTap(hits);
-  if (id) useStore.getState().select(id);
-}
-
-/**
  * Two invisible boxes, the only things in a module that take taps: `body` over the model and a
  * generous `margin` around it for fingers. Neither is drawn (`visible={false}`).
  */
@@ -190,7 +181,7 @@ function TapBox({ id }: { id: BaseModuleId }) {
         position={[0, body.height / 2, 0]}
         userData={bodyHit}
         material={TAP_MATERIAL}
-        onClick={onTap}
+        onClick={onSceneTap}
       >
         <boxGeometry args={[body.halfX * 2, body.height, body.halfZ * 2]} />
       </mesh>
@@ -199,7 +190,7 @@ function TapBox({ id }: { id: BaseModuleId }) {
         position={[0, tapHeight / 2, 0]}
         userData={marginHit}
         material={TAP_MATERIAL}
-        onClick={onTap}
+        onClick={onSceneTap}
       >
         <boxGeometry args={[tapHalf[0] * 2, tapHeight, tapHalf[2] * 2]} />
       </mesh>

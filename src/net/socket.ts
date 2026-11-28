@@ -11,7 +11,7 @@ import { reconnectDelayMs } from './backoff';
 import { socketUrl } from './url';
 
 /**
- * Connects to `/ws?protocol=2` and keeps it alive. `open` is reported only after the first snapshot of a
+ * Connects to `/ws?protocol=3` and keeps it alive. `open` is reported only after the first snapshot of a
  * connection is applied. Returns a stop function.
  */
 export function startSocket(): () => void {
@@ -46,6 +46,7 @@ export function startSocket(): () => void {
     if (stopped) return;
     store().setConnection('reconnecting');
     store().dispatchHold({ type: 'disconnect', now: performance.now() });
+    store().dispatchPickup({ type: 'disconnect' });
     retryTimer = setTimeout(connect, reconnectDelayMs(attempt++));
   }
 

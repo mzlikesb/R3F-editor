@@ -139,3 +139,20 @@ describe('holdProgress', () => {
     expect(holdProgress({ kind: 'pending', faultId: 'f1', sentAt: 0 }, 100)).toBe(1);
   });
 });
+
+describe('noParts (plan 009 B.4, B.5)', () => {
+  it('stops a hold in progress, sending release', () => {
+    expect(run([press(0), { type: 'noParts', now: 300 }])).toEqual({ ui: initialRepairUi, sent: [hold, release] });
+  });
+
+  it('ends a pending repair the server turned away', () => {
+    expect(run([...toPending, { type: 'noParts', now: HOLD_MS + 50 }])).toEqual({
+      ui: initialRepairUi,
+      sent: [hold, repair],
+    });
+  });
+
+  it('does nothing when idle', () => {
+    expect(reduceHold(initialRepairUi, { type: 'noParts', now: 0 })).toEqual({ ui: initialRepairUi, send: null });
+  });
+});
