@@ -57,6 +57,30 @@ describe('selection colour', () => {
   });
 });
 
+describe('presence light colour (#106)', () => {
+  const MIN_LIGHT_HUE_GAP = 45;
+  const others = {
+    fault: PALETTE.fault,
+    repaired: PALETTE.repaired,
+    statusLight: PALETTE.statusLight,
+    select: PALETTE.select,
+    hold: PALETTE.hold,
+    panelOn: linearToHex(PALETTE.panelOn),
+    ping: PALETTE.ping,
+    spark: PALETTE.spark,
+  };
+
+  for (const [name, color] of Object.entries(others)) {
+    it(`is a different hue from ${name}`, () => {
+      expect(hueDistance(PALETTE.presenceLight, color)).toBeGreaterThanOrEqual(MIN_LIGHT_HUE_GAP);
+    });
+  }
+
+  it('shows against the sky, also dimmed in a blackout', () => {
+    expect(contrastRatio(PALETTE.presenceLight, PALETTE.sky[1]!)).toBeGreaterThanOrEqual(MIN_CONTRAST);
+  });
+});
+
 describe('sky and fog', () => {
   it('fog is the bottom of the sky, so the ground melts into it', () => {
     expect(PALETTE.fog).toBe(PALETTE.sky[PALETTE.sky.length - 1]);
