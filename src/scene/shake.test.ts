@@ -87,17 +87,21 @@ describe('ShakeDriver', () => {
       expect(shaken.pos.y).toBeCloseTo(base.pos.y, 9);
       expect(shaken.pos.z).toBeCloseTo(base.pos.z, 9);
       // ...and it did shake in between.
-      const moved = shaken.rendered.some(
-        (p, i) => len({ x: p.x - base.rendered[i].x, y: p.y - base.rendered[i].y, z: p.z - base.rendered[i].z }) > 1e-4,
-      );
+      const moved = shaken.rendered.some((p, i) => {
+        const b = base.rendered[i];
+        return b !== undefined && len({ x: p.x - b.x, y: p.y - b.y, z: p.z - b.z }) > 1e-4;
+      });
       expect(moved).toBe(true);
     });
 
     it(`${name}: unmounting mid-shake takes the offset back at once`, () => {
       const base = simulate(controls, 40);
       const cut = simulate(controls, 40, { shakeAt: [5], unmountAt: 8 });
-      expect(cut.rendered[8].x).toBeCloseTo(base.rendered[8].x, 9);
-      expect(cut.rendered[8].y).toBeCloseTo(base.rendered[8].y, 9);
+      const [c8, b8] = [cut.rendered[8], base.rendered[8]];
+      if (!c8 || !b8) throw new Error('frame 8 missing');
+      expect(c8.x).toBeCloseTo(b8.x, 9);
+      expect(c8.y).toBeCloseTo(b8.y, 9);
+      expect(c8.z).toBeCloseTo(b8.z, 9);
       expect(cut.pos.x).toBeCloseTo(base.pos.x, 9);
       expect(cut.pos.y).toBeCloseTo(base.pos.y, 9);
       expect(cut.pos.z).toBeCloseTo(base.pos.z, 9);

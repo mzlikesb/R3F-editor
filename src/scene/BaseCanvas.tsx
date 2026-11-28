@@ -4,6 +4,7 @@ import { selectBlackout, useStore } from '../store';
 import { MODULES } from '../modules';
 import { AsteroidBelt } from './AsteroidBelt';
 import { CameraRig } from './CameraRig';
+import { CameraShake } from './CameraShake';
 import { Ground } from './Ground';
 import { OVERVIEW_START } from './layout';
 import { LabelPlanProvider } from './fx/LabelPlanProvider';
@@ -18,6 +19,7 @@ import { Rocks } from './Rocks';
 import { SolarPanels } from './SolarPanels';
 import { SKY_GRADIENT, SKY_GRADIENT_DARK, Stars } from './Sky';
 import { isTap } from './tap';
+import { useReducedMotion } from './useReducedMotion';
 
 /**
  * The canvas and everything in it: sky, asteroid belt, lights, HDRI, ground, rocks, solar panels,
@@ -28,6 +30,7 @@ export function BaseCanvas() {
   const blackout = useStore(selectBlackout);
   // The prop, not `setDpr`: a re-render of `Canvas` resets dpr to whatever the prop says.
   const dpr = useQuality((s) => s.dpr);
+  const reducedMotion = useReducedMotion();
   return (
     <div className="sky-root" style={{ background: SKY_GRADIENT }}>
       <div className="sky-dark" style={{ background: SKY_GRADIENT_DARK, opacity: blackout ? 1 : 0 }} />
@@ -56,6 +59,7 @@ export function BaseCanvas() {
           ))}
         </LabelPlanProvider>
         <CameraRig />
+        {!reducedMotion && <CameraShake />}
         <QualityController />
         {PERF_ENABLED && <PerfHud />}
       </Canvas>

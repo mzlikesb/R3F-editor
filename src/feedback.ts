@@ -6,6 +6,7 @@
 import type { ModuleId } from '../shared/protocol';
 import { moduleName, withObjectParticle, withSubjectParticle } from './modules';
 import type { HoldState } from './hold';
+import { initialCombo, nextCombo, type Combo } from './combo';
 
 /** Toasts show this long (ms). */
 export const TOAST_MS = 3000;
@@ -27,6 +28,8 @@ export interface Toast {
   moduleId: ModuleId;
   /** Hidden from this time (ms, `performance.now()`). */
   until: number;
+  /** The combo this repair made (`nextCombo`), shown as `x2` and up; 0 on toasts that are not my repair. */
+  combo: number;
 }
 
 /** Which repair effects to play on the repaired module. */
@@ -60,9 +63,11 @@ export interface FeedbackState {
   hintDismissed: boolean;
   /** The latest repair seen over WS in this session (snapshots never set it). */
   effect: RepairEffect | null;
+  /** My repair run (plan 008 C.2). Snapshots never touch it, so it outlives a reconnect. */
+  combo: Combo;
 }
 
-export const initialFeedback: FeedbackState = { toast: null, hintDismissed: false, effect: null };
+export const initialFeedback: FeedbackState = { toast: null, hintDismissed: false, effect: null, combo: initialCombo };
 
 export type FeedbackEvent =
   /** A `repaired` that changed the base (not a stale version), already classified. */
@@ -117,7 +122,8 @@ export function effectsFor(outcome: RepairOutcome): RepairEffects {
 }
 
 /**
- * - `repaired`: toast for the outcome and module (replacing any toast), `effect` with the next `seq`.
+ * - `repaired`: toast for the outcome and module (replacing any toast), `effect` with the next `seq`,
+ *   `combo` from `nextCombo` (the toast carries its count only when this repair moved it).
  * - `fault`: toast `fault` for that module.
  * - `moduleTapped`: `hintDismissed` = true.
  * - `tick`: drop the toast once `now >= until`.
@@ -125,10 +131,17 @@ export function effectsFor(outcome: RepairOutcome): RepairEffects {
  */
 export function reduceFeedback(state: FeedbackState, event: FeedbackEvent): FeedbackState {
   switch (event.type) {
-    case 'repaired':
+    case 'repaired': {
+      const combo = nextCombo(state.combo, event);
       return {
         ...state,
-        toast: { kind: event.outcome, moduleId: event.moduleId, until: event.now + TOAST_MS },
+        combo,
+        toast: {
+          kind: event.outcome,
+          moduleId: event.moduleId,
+          until: event.now + TOAST_MS,
+          combo: combo === state.combo ? 0 : combo.count,
+        },
         effect: {
           outcome: event.outcome,
           moduleId: event.moduleId,
@@ -136,8 +149,9 @@ export function reduceFeedback(state: FeedbackState, event: FeedbackEvent): Feed
           at: event.now,
         },
       };
+    }
     case 'fault':
-      return { ...state, toast: { kind: 'fault', moduleId: event.moduleId, until: event.now + TOAST_MS } };
+      return { ...state, toast: { kind: 'fault', moduleId: event.moduleId, until: event.now + TOAST_MS, combo: 0 } };
     case 'moduleTapped':
       return state.hintDismissed ? state : { ...state, hintDismissed: true };
     case 'tick':
