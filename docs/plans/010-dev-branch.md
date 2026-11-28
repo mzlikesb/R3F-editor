@@ -50,6 +50,7 @@
 - `dev`로 가는 PR은 지금처럼 squash한다.
 - `dev → main` 릴리스 PR은 **merge commit**으로 머지한다. squash하면 `main`에 새 커밋이 생겨 `dev`와 기록이 갈라지고, 다음 릴리스 diff에 이미 나간 변경이 다시 보이거나 충돌이 난다.
 - GitHub 보호 규칙은 PR마다 머지 방식을 다르게 둘 수 없다. 그래서 저장소 설정에서 merge commit과 squash를 둘 다 허용하고, `pr-check`가 아래를 강제한다.
+- **켜는 스위치**: 아래 규칙은 저장소 변수 `DEV_FLOW`가 `on`일 때만 적용한다(`vars.DEV_FLOW`, 사용자가 F절에서 켠다). 꺼져 있으면 `pr-check`는 지금 규칙 그대로다. 010-1은 자기 자신이 `main`으로 가는 PR이라, 스위치 없이 규칙을 넣으면 스스로 거절돼 머지할 수 없다(Codex P1).
   - base가 `main`이면 head는 `dev`여야 한다(릴리스 PR만 `main`으로 간다).
   - 릴리스 PR에는 라벨 `release`가 붙는다. `size:*` 대신 이 라벨을 쓴다.
   - base가 `dev`면 지금 규칙(size·stage·마일스톤·관련 이슈)을 그대로 적용한다.
@@ -82,7 +83,8 @@
 - Settings → General → Pull Requests: **Allow merge commits** 켬. squash는 켠 채로 둔다.
 - Settings → Branches → `main`: Require linear history가 켜져 있으면 끈다.
 - Settings → Branches → Add rule `dev`: A.2대로 설정한다.
-- 설정한 뒤 `scripts/check-protection.sh`를 실행한다(G절에서 `dev`까지 대조하게 고친다).
+- **전환 순서**: (1) `main`으로 열려 있는 PR은 먼저 머지하거나 `gh pr edit <번호> --base dev`로 대상을 옮긴다(기획이 목록을 만든다). (2) 위 설정을 한다. (3) Settings → Secrets and variables → Actions → Variables에 `DEV_FLOW` = `on`을 만든다. 이 순간부터 C절 규칙이 적용된다.
+- 설정한 뒤 `scripts/check-protection.sh`를 실행한다(G절에서 `dev`와 `DEV_FLOW`까지 대조하게 고친다).
 
 ### G. 고칠 도구와 문서
 
@@ -133,7 +135,7 @@
 ## Verification
 
 - 010-1:
-  - `pr-check` 규칙 테스트: base `dev`의 small·large, base `main`의 릴리스(head `dev` + `release`), base `main`의 일반 PR(거절), `dev` 대상 large에 auto-merge가 예약된 경우(거절)
+  - `pr-check` 규칙 테스트: `DEV_FLOW` 꺼짐에서는 지금 규칙 그대로(010-1 자신이 통과), 켜짐에서 base `dev`의 small·large, base `main`의 릴리스(head `dev` + `release`), base `main`의 일반 PR(거절), `dev` 대상 large에 auto-merge가 예약된 경우(거절)
   - CODEOWNERS와 `AGENTS.md` 보호 경로가 일치하는지 확인하는 테스트
   - `check-protection.sh`가 `dev` 규칙이 없거나 다를 때 실패하는지 확인하는 테스트(가짜 gh)
 - F절 설정 뒤 `check-protection.sh`가 "일치"를 보고한다(사용자 실행)
