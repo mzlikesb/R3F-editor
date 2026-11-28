@@ -2,8 +2,11 @@
  * Adaptive quality (plan 007 C). Everything here is pure: the device tier, the dpr ladder, the FPS
  * meter's ring buffer and the stage transition. `QualityController.tsx` wires them to the frame loop.
  *
- * Only things that never recompile shaders change at runtime: dpr and instance counts. Shadows are
- * fixed by the tier at start.
+ * Two axes (plan 008 R3). Resolution and geometry (stages 0-4: dpr and instance counts) never
+ * recompile a shader and go both ways. Post-processing (`post`: N8AO off, Bloom off, composer off)
+ * rebuilds passes, so it may stall once; it only goes down, never back up in the session. A slow
+ * device drops N8AO first, then stages 0-4, then Bloom, then the composer. Shadows are fixed by the
+ * tier at start.
  */
 
 export type Tier = 'desktop' | 'mobile';
@@ -27,6 +30,12 @@ export const SHADOW_MAP_SIZE: Record<Tier, number> = { desktop: 2048, mobile: 10
 const TOP_DPR: Record<Tier, number> = { desktop: 2, mobile: 1.5 };
 const STEP_DPR = [1.25, 1] as const;
 export const LAST_STAGE = 4;
+
+/** Post-processing axis (008 R3): everything on, N8AO off, Bloom off, no composer (plain). */
+export const POST_FULL = 0;
+export const POST_NO_AO = 1;
+export const POST_NO_BLOOM = 2;
+export const POST_OFF = 3;
 
 export interface Ladder {
   /** Stages in use, top (0) first. A dpr stage equal to the one before it is left out. */
@@ -172,6 +181,8 @@ export const FLOOR_LOSS = 0.85;
 
 export interface QualityState {
   stage: number;
+  /** Post-processing axis, `POST_FULL`..`POST_OFF`; only ever goes up. */
+  post: number;
   hidden: boolean;
   /** Samples before this are dropped (warmup at start, 2 s after the tab shows again). */
   ignoreUntil: number;
@@ -197,12 +208,18 @@ export type QualityEvent =
   | { type: 'hidden'; t: number }
   | { type: 'visible'; t: number }
   /** The `?perf` toggle changed: what happened before says nothing about the real FPS. */
-  | { type: 'override'; t: number };
+  | { type: 'override'; t: number }
+  /** Post-processing went down from outside (the composer failed: plain). Never lowers `post`. */
+  | { type: 'post'; level: number };
 
-/** `t0` is the first frame after the load finished. Starts at the top stage. */
-export function initialQuality(t0: number): QualityState {
+/**
+ * `t0` is the first frame after the load finished. Starts at the top stage. `post` is where the
+ * post-processing axis starts: `POST_FULL` with a composer, `POST_OFF` (the default) without one.
+ */
+export function initialQuality(t0: number, post: number = POST_OFF): QualityState {
   return {
     stage: 0,
+    post,
     hidden: false,
     ignoreUntil: t0 + WARMUP_MS,
     lastChangeAt: -Infinity,
@@ -253,6 +270,8 @@ export function stepQuality(s: QualityState, e: QualityEvent, ladder: Ladder, th
         dropCheck: null,
         floor: null,
       };
+    case 'post':
+      return e.level > s.post ? { ...s, post: Math.min(e.level, POST_OFF) } : s;
     case 'sample':
       return sample(s, e.t, e.fps, e.forced === true, ladder, th);
   }
@@ -289,7 +308,13 @@ function sample(
 
   const down = lower(ladder.stages, s.stage);
   const floored = floor !== null && s.stage >= floor.stage;
-  if (belowSince !== null && t - belowSince >= DOWN_HOLD_MS && down !== null && !floored) {
+  const slow = belowSince !== null && t - belowSince >= DOWN_HOLD_MS;
+  // Post-processing steps: N8AO before any stage, Bloom and the composer once the stages are spent.
+  // Never checked or undone (a stall either way); the resolution timers start over after one.
+  if (slow && (s.post === POST_FULL || (s.post < POST_OFF && down === null && !floored))) {
+    return { ...next, ...NO_TIMERS, post: s.post + 1, lastChangeAt: t };
+  }
+  if (slow && down !== null && !floored) {
     const failedUp = t - s.lastUpAt <= FAIL_WINDOW_MS;
     return {
       ...next,

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { AdditiveBlending, InstancedMesh, MeshBasicMaterial, Object3D, SphereGeometry } from 'three';
 import { PALETTE } from '../palette';
 import { BURST_S, setOpacity, step, useOneShot } from './shared';
+import { registerFx } from './fxGain';
 
 const SPARK_GEOMETRY = new SphereGeometry(1, 6, 4);
 const GRAVITY = 4.5;
@@ -62,18 +63,18 @@ export function Sparks({ radius, height, token, soft = false }: SparksProps) {
   const timerRef = useOneShot(token);
   const dummy = useMemo(() => new Object3D(), []);
   const vel = useMemo(() => new Float32Array(pool * 3), [pool]);
-  const material = useMemo(
-    () =>
-      new MeshBasicMaterial({
-        color: PALETTE.spark,
-        transparent: true,
-        depthWrite: false,
-        blending: AdditiveBlending,
-        toneMapped: false,
-        fog: false,
-      }),
-    [],
-  );
+  const material = useMemo(() => {
+    const m = new MeshBasicMaterial({
+      color: PALETTE.spark,
+      transparent: true,
+      depthWrite: false,
+      blending: AdditiveBlending,
+      toneMapped: false,
+      fog: false,
+    });
+    registerFx(m, 'flash');
+    return m;
+  }, []);
   useEffect(() => () => material.dispose(), [material]);
 
   // Fresh random velocities for each burst.

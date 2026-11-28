@@ -1,6 +1,7 @@
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
 import { AdditiveBlending, CanvasTexture, Sprite, SpriteMaterial } from 'three';
+import { registerFx } from './fxGain';
 import { setOpacity, step, useOneShot } from './shared';
 
 const GLOW_S = 0.55;
@@ -20,23 +21,23 @@ function createGlowTexture(): CanvasTexture | null {
   return new CanvasTexture(canvas);
 }
 
-/** One additive glow sprite that flares and fades on my repair. No post-processing. */
+/** One additive glow sprite that flares and fades on my repair. Blooms under the composer (`fxGain.ts`). */
 export function Glow({ radius, height, token }: { radius: number; height: number; token: number }) {
   const sprite = useRef<Sprite>(null);
   const timerRef = useOneShot(token);
   const texture = useMemo(() => createGlowTexture(), []);
-  const material = useMemo(
-    () =>
-      new SpriteMaterial({
-        map: texture,
-        transparent: true,
-        depthWrite: false,
-        blending: AdditiveBlending,
-        toneMapped: false,
-        fog: false,
-      }),
-    [texture],
-  );
+  const material = useMemo(() => {
+    const m = new SpriteMaterial({
+      map: texture,
+      transparent: true,
+      depthWrite: false,
+      blending: AdditiveBlending,
+      toneMapped: false,
+      fog: false,
+    });
+    registerFx(m, 'burst');
+    return m;
+  }, [texture]);
   useEffect(
     () => () => {
       material.dispose();

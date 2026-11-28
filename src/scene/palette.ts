@@ -21,11 +21,11 @@ export const PALETTE = {
   /** Someone else's repair, rippling out on the floor. */
   ping: '#f0b8ff',
   /**
-   * The lights drifting over the base, one per other visitor (#106): a pale lime, the one hue 45
-   * degrees or more clear of the red, green, amber, cyan and lilac above. Small points, so the gap
-   * is a little under the selection ring's 60.
+   * The drones drifting over the base, one per other visitor (#106), and the mark next to the HUD's
+   * head count. A warm white, told apart from every state colour above by saturation, not hue: the
+   * pale lime it replaced read as one more green status light (#108 playtest, neon).
    */
-  presenceLight: '#9af25c',
+  presenceLight: '#f4efe6',
   spark: '#ffd27a',
   relight: '#ffe2a8',
   afterglow: '#5cf2a0',

@@ -13,6 +13,7 @@ import { Module } from './Module';
 import { PresenceLights } from './PresenceLights';
 import { PERF_ENABLED } from './perf';
 import { PerfHud } from './PerfHud';
+import { PostLayer } from './PostLayer';
 import { QualityController } from './QualityController';
 import { useQuality } from './qualityStore';
 import { RockField } from './RockField';
@@ -25,7 +26,8 @@ import { useReducedMotion } from './useReducedMotion';
 
 /**
  * The canvas and everything in it: sky and fog, asteroid belt, lights, HDRI, ground, rocks, solar panels,
- * modules, camera, tap-vs-drag, `?perf` HUD (plan 005 A, E), adaptive quality (plan 007 C).
+ * modules, camera, tap-vs-drag, `?perf` HUD (plan 005 A, E), adaptive quality (plan 007 C), and the
+ * post-processing composer when the session has one (plan 008 B.3, `PostLayer`).
  */
 export function BaseCanvas() {
   const down = useRef({ x: 0, y: 0 });
@@ -36,6 +38,8 @@ export function BaseCanvas() {
     <div className="sky-root">
       <Canvas
         shadows
+        // Stencil: the selection outline stays outside the selected body (`fx/hull.ts`).
+        gl={{ stencil: true }}
         dpr={dpr}
         camera={{ position: [...OVERVIEW_START], fov: 50, near: 0.5, far: 400 }}
         onPointerDown={(e) => {
@@ -64,6 +68,7 @@ export function BaseCanvas() {
         <CameraRig />
         {!reducedMotion && <CameraShake />}
         <QualityController />
+        <PostLayer />
         {PERF_ENABLED && <PerfHud />}
       </Canvas>
     </div>

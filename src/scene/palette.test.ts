@@ -57,8 +57,16 @@ describe('selection colour', () => {
   });
 });
 
-describe('presence light colour (#106)', () => {
-  const MIN_LIGHT_HUE_GAP = 45;
+describe('presence light colour (#106, #108)', () => {
+  /** HSV saturation of an sRGB hex. */
+  const saturation = (hex: string) => {
+    const n = parseInt(hex.slice(1), 16);
+    const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    const max = Math.max(...c);
+    return max === 0 ? 0 : (max - Math.min(...c)) / max;
+  };
+  const MAX_SATURATION = 0.12;
+  const MIN_SATURATION_GAP = 0.15;
   const others = {
     fault: PALETTE.fault,
     repaired: PALETTE.repaired,
@@ -70,11 +78,19 @@ describe('presence light colour (#106)', () => {
     spark: PALETTE.spark,
   };
 
+  it('is a near-white: low saturation', () => {
+    expect(saturation(PALETTE.presenceLight)).toBeLessThanOrEqual(MAX_SATURATION);
+  });
+
   for (const [name, color] of Object.entries(others)) {
-    it(`is a different hue from ${name}`, () => {
-      expect(hueDistance(PALETTE.presenceLight, color)).toBeGreaterThanOrEqual(MIN_LIGHT_HUE_GAP);
+    it(`is told from ${name} by saturation`, () => {
+      expect(saturation(color) - saturation(PALETTE.presenceLight)).toBeGreaterThanOrEqual(MIN_SATURATION_GAP);
     });
   }
+
+  it('is brighter than the green status light it used to look like', () => {
+    expect(luminance(PALETTE.presenceLight)).toBeGreaterThan(luminance(PALETTE.statusLight) * 1.3);
+  });
 
   it('shows against the sky, also dimmed in a blackout', () => {
     expect(contrastRatio(PALETTE.presenceLight, PALETTE.sky[1]!)).toBeGreaterThanOrEqual(MIN_CONTRAST);

@@ -1,6 +1,7 @@
 import { useEffect, useRef, type MutableRefObject } from 'react';
 import { AdditiveBlending, Color, DoubleSide, MeshBasicMaterial, RingGeometry } from 'three';
 import { PALETTE } from '../palette';
+import { registerFx } from './fxGain';
 
 /** Colors of the fault (red), healthy (green) and selected (cyan) states. */
 export const FAULT_COLOR = new Color(PALETTE.fault);
@@ -21,9 +22,12 @@ export const RING_GEOMETRY = new RingGeometry(0.9, 1, 64);
 /** The same, thinner: the selection ring. */
 export const THIN_RING_GEOMETRY = new RingGeometry(0.95, 1, 64);
 
-/** A new translucent, unlit ring material; each effect owns one so opacity is its own. No fog. */
+/**
+ * A new translucent, unlit ring material; each effect owns one so opacity is its own. No fog. Under
+ * the composer its colour takes the ring gain (`fxGain.ts`), staying under the Bloom threshold.
+ */
 export function createRingMaterial(color: Color, additive = false): MeshBasicMaterial {
-  return new MeshBasicMaterial({
+  const m = new MeshBasicMaterial({
     color,
     transparent: true,
     opacity: 0,
@@ -33,6 +37,8 @@ export function createRingMaterial(color: Color, additive = false): MeshBasicMat
     fog: false,
     blending: additive ? AdditiveBlending : undefined,
   });
+  registerFx(m, 'tone');
+  return m;
 }
 
 /**

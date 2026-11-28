@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BLINK,
+  HOVER,
   LIGHT_HEIGHT,
   LIGHT_RADIUS,
   MAX_PRESENCE_LIGHTS,
+  presenceBlink,
+  presenceHover,
   presenceLightAt,
   presenceLightCount,
   presenceLights,
@@ -93,5 +97,43 @@ describe('stepLightScale', () => {
     expect(s).toBe(0);
     for (let i = 0; i < 600; i++) s = stepLightScale(s, true, 1 / 60);
     expect(s).toBeCloseTo(1, 3);
+  });
+});
+
+describe('presenceBlink (#108)', () => {
+  it('stays between 0.6 and 1 and reaches both ends', () => {
+    let lo = 1;
+    let hi = 0;
+    for (let t = 0; t < BLINK.periodS; t += 0.01) {
+      const b = presenceBlink(0, t);
+      expect(b).toBeGreaterThanOrEqual(BLINK.min);
+      expect(b).toBeLessThanOrEqual(BLINK.max);
+      lo = Math.min(lo, b);
+      hi = Math.max(hi, b);
+    }
+    expect(lo).toBeCloseTo(BLINK.min, 2);
+    expect(hi).toBeCloseTo(BLINK.max, 2);
+  });
+
+  it('is slow (a cycle of seconds) and drones are not in step', () => {
+    expect(BLINK.periodS).toBeGreaterThanOrEqual(2);
+    expect(presenceBlink(0, 1)).not.toBeCloseTo(presenceBlink(1, 1), 2);
+  });
+});
+
+describe('presenceHover (#108: a drone floats, a pebble does not)', () => {
+  it('bobs 0.15-0.25 m, each drone on its own phase', () => {
+    expect(HOVER.amplitude).toBeGreaterThanOrEqual(0.15);
+    expect(HOVER.amplitude).toBeLessThanOrEqual(0.25);
+    let lo = 0;
+    let hi = 0;
+    for (let t = 0; t < HOVER.periodS; t += 0.01) {
+      const y = presenceHover(0, t);
+      lo = Math.min(lo, y);
+      hi = Math.max(hi, y);
+    }
+    expect(hi).toBeCloseTo(HOVER.amplitude, 2);
+    expect(lo).toBeCloseTo(-HOVER.amplitude, 2);
+    expect(presenceHover(0, 0.7)).not.toBeCloseTo(presenceHover(1, 0.7), 2);
   });
 });

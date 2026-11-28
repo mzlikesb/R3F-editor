@@ -62,6 +62,14 @@ export function peopleLine(repairs: number, presence: number): string {
   return `함께 고친 ${repairs}회 · ${people}`;
 }
 
+/**
+ * The small warm-white diamond before `N명 접속 중`: the same colour as the drones over the base, so
+ * the head count and the drones read as one thing (#108). Not when this player is alone (no drones).
+ */
+export function presenceMarkVisible(presence: number): boolean {
+  return presence > 1;
+}
+
 /** The parts of a HUD line between ` · `. Each is laid out unbroken, so a line wraps only between them. */
 export function segments(line: string): string[] {
   return line.split(' · ');

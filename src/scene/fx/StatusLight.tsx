@@ -2,18 +2,23 @@ import { useLayoutEffect, useRef } from 'react';
 import { AdditiveBlending, CanvasTexture, MeshBasicMaterial, SphereGeometry, SpriteMaterial, Vector3 } from 'three';
 import type { Group } from 'three';
 import { PALETTE } from '../palette';
+import { registerFx } from './fxGain';
 
-/** World-space size of the dot, the same on every module whatever its model scale. */
-const LIGHT_RADIUS = 0.17;
+/** World-space size of the dot, the same on every module whatever its model scale (x1.4 in #108). */
+const LIGHT_RADIUS = 0.24;
 /** World-space gap between the model's top and the dot. */
 const LIFT = 0.3;
-/** World-space size of the soft glow behind the dot (smaller since neon: a near module's glow was loud). */
-const GLOW_SIZE = 0.75;
+/**
+ * World-space size of the soft glow behind the dot. Smaller after neon (a near module's glow was
+ * loud), larger again with the dot in #108 (the user's phone: the green did not stand out).
+ */
+const GLOW_SIZE = 1.05;
 /** World-space height of the glow's top above the model's top: name tags hang above this. */
 export const STATUS_LIGHT_TOP = LIFT + GLOW_SIZE / 2;
 
 const LIGHT_GEOMETRY = new SphereGeometry(1, 12, 8);
 const LIGHT_MATERIAL = new MeshBasicMaterial({ color: PALETTE.statusLight, toneMapped: false, fog: false });
+registerFx(LIGHT_MATERIAL, 'tone');
 
 let glowMaterial: SpriteMaterial | null = null;
 
@@ -28,7 +33,7 @@ function getGlowMaterial(): SpriteMaterial {
     if (ctx) {
       const g = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
       g.addColorStop(0, 'rgba(120,255,170,0.9)');
-      g.addColorStop(0.4, 'rgba(74,222,128,0.35)');
+      g.addColorStop(0.45, 'rgba(74,222,128,0.45)');
       g.addColorStop(1, 'rgba(74,222,128,0)');
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, 32, 32);
@@ -44,6 +49,7 @@ function getGlowMaterial(): SpriteMaterial {
     toneMapped: false,
     fog: false,
   });
+  registerFx(glowMaterial, 'halo');
   return glowMaterial;
 }
 
