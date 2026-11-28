@@ -16,7 +16,7 @@ const RING_MATERIAL = createRingMaterial(SELECT_COLOR);
 setOpacity(RING_MATERIAL, 0.9);
 
 /**
- * A thin violet ring just outside the tap box. It never moves: the red fault ring pulses outside it
+ * A thin cyan ring just outside the tap box. It never moves: the red fault ring pulses outside it
  * (`layout.floorRingRange`), so a selected broken module shows both, apart in colour and motion.
  */
 export function SelectRing({ id }: { id: BaseModuleId }) {

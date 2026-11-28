@@ -2,7 +2,7 @@ import { useEffect, useRef, type MutableRefObject } from 'react';
 import { AdditiveBlending, Color, DoubleSide, MeshBasicMaterial, RingGeometry } from 'three';
 import { PALETTE } from '../palette';
 
-/** Colors of the fault (red), healthy (green) and selected (violet) states. */
+/** Colors of the fault (red), healthy (green) and selected (cyan) states. */
 export const FAULT_COLOR = new Color(PALETTE.fault);
 export const OK_COLOR = new Color(PALETTE.repaired);
 export const SELECT_COLOR = new Color(PALETTE.select);

@@ -11,13 +11,15 @@ export const PALETTE = {
   /** A healthy module's status light. */
   statusLight: '#4ade80',
   /**
-   * The selected module: its ring and outline. Violet, the widest gap in the hue circle: red is a
-   * fault and the emergency light, green a repair, amber the hold ring, cyan the panel lights and ping.
+   * The selected module: its ring and outline. Cyan leaning blue, to stay 60 degrees clear of the
+   * greens: red is a fault and the emergency light, green a repair, amber the hold ring and the lit
+   * panels, pink-lilac the ping.
    */
-  select: '#c08cff',
+  select: '#5cb0ff',
   emergency: '#ff2a1a',
   hold: '#ffd166',
-  ping: '#9fe3ff',
+  /** Someone else's repair, rippling out on the floor. */
+  ping: '#f0b8ff',
   spark: '#ffd27a',
   relight: '#ffe2a8',
   afterglow: '#5cf2a0',
@@ -32,7 +34,8 @@ export const PALETTE = {
   fog: '#2b3f5e',
   /** Solar panels: quieter than the modules (A.4). */
   panel: { frame: '#79818c', face: '#1a2335', post: '#5a5f68' },
-  panelOn: [0.25, 0.85, 1] as readonly [number, number, number],
+  /** Warm white-amber: the blackout relight still reads, and it stays clear of the cyan selection. */
+  panelOn: [1, 0.72, 0.38] as readonly [number, number, number],
   panelOff: [0.02, 0.03, 0.04] as readonly [number, number, number],
 } as const;
 
