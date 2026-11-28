@@ -11,6 +11,7 @@ import {
   MAX_POLAR,
   maxCameraDistance,
   overviewPose,
+  overviewReturnPose,
   polarPose,
 } from './cameraPath';
 import { overviewFov } from './framing';
@@ -46,6 +47,7 @@ export function CameraRig() {
     if (!c || width === 0 || height === 0) return;
     const phone = window.matchMedia(PHONE).matches;
     // Animate only when the selection changed; a resize or the first frame jumps.
+    const changed = first.current || lastSelected.current !== selected;
     const animate = !first.current && lastSelected.current !== selected;
     first.current = false;
     lastSelected.current = selected;
@@ -62,14 +64,18 @@ export function CameraRig() {
     const az = c.azimuthAngle;
     if (selected === null) {
       const t = OVERVIEW_TARGET;
-      // Fit for the azimuth we keep: the fit distance depends on the viewing direction.
-      const { dir, distance: dist, lift } = overviewPose(az, fov, width, height);
+      // Releasing a selection (or the first frame) goes back to the first screen's direction; a resize
+      // while looking around keeps the azimuth the player orbited to. The fit distance depends on it.
+      const pose = changed
+        ? overviewReturnPose(az, fov, width, height)
+        : { ...overviewPose(az, fov, width, height), azimuth: az };
+      const { dir, distance: dist, lift, azimuth: toAz } = pose;
       const { polar } = polarPose(Math.hypot(dir.x, dir.z), dir.y);
       // A portrait screen lifts the camera so the base rests just above the bottom UI (008 A.2).
       void c.setFocalOffset(0, -lift * dist, 0, animate);
       if (animate) {
         void c.setTarget(t.x, t.y, t.z, true);
-        void c.rotateTo(az, polar, true);
+        void c.rotateTo(toAz, polar, true);
         void c.dollyTo(dist, true);
         return;
       }
