@@ -18,7 +18,7 @@ export interface SensorSpec {
   wobble: number;
   /** Where a fault drives the value to, and stays (the cap). */
   worst: number;
-  /** A fault reaches `worst` after this long (ease-out). */
+  /** A fault reaches `worst` after this long (a quick jump first, then ease-out). */
   rampMs: number;
   /** Decimals when shown. */
   digits: number;
@@ -73,17 +73,26 @@ const SLOW_MS = 7_300;
 const FAST_MS = 2_300;
 const PHASE: Record<ModuleId, number> = { generator: 0, oxygen: 1.3, greenhouse: 2.6, comms: 3.9, habitat: 5.2 };
 
-/** 0..1, how far a fault has pushed the sensor toward `worst` after `elapsedMs`. Ease-out, capped at 1. */
+/** Share of the fault's full drop that lands almost at once (playtest: the number looked healthy right after a fault). */
+export const JUMP_SHARE = 0.3;
+/** The jump is done this soon after the fault starts. */
+export const JUMP_MS = 400;
+
+/**
+ * 0..1, how far a fault has pushed the sensor toward `worst` after `elapsedMs`. A quick first jump
+ * (`JUMP_SHARE` within `JUMP_MS`), then an ease-out the rest of the way over `rampMs`; capped at 1.
+ */
 export function severity(elapsedMs: number, rampMs: number): number {
   if (!(elapsedMs > 0)) return 0;
+  const j = Math.min(1, elapsedMs / JUMP_MS);
   const x = Math.min(1, elapsedMs / rampMs);
-  return 1 - (1 - x) * (1 - x);
+  return JUMP_SHARE * (1 - (1 - j) * (1 - j)) + (1 - JUMP_SHARE) * (1 - (1 - x) * (1 - x));
 }
 
 /**
  * The sensor value of `moduleId` at server time `now` (epoch ms). Deterministic.
  * - Healthy (`fault` null, or `now` before `fault.createdAt`): `nominal` plus a wobble within ±`wobble`.
- * - Faulted: moves from `nominal` to `worst` over `rampMs` and stays there (still wobbling).
+ * - Faulted: jumps part of the way at once, then moves from `nominal` to `worst` over `rampMs` and stays there (still wobbling).
  * So every value is within [min(nominal, worst) - wobble, max(nominal, worst) + wobble].
  * A `fault` for another module is treated as no fault.
  */

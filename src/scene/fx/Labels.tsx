@@ -7,7 +7,7 @@ import { moduleName, type BaseModuleId } from '../../modules';
 import { selectReady, selectServerNow, useStore } from '../../store';
 import { isLabelOccluded } from './labelOcclusion';
 import { badgeText, dotText, LABEL_WRAPPER_STYLE } from './labelRules';
-import { labelShift } from './labelClamp';
+import { labelShift, tailOffset } from './labelClamp';
 import { STATUS_LIGHT_TOP } from './StatusLight';
 import './fx.css';
 
@@ -92,6 +92,7 @@ function clampToScreen(el: HTMLElement, shift: { dx: number; dy: number }) {
   shift.dy = next.dy;
   el.style.setProperty('--fx-dx', `${Math.round(next.dx)}px`);
   el.style.setProperty('--fx-dy', `${Math.round(next.dy)}px`);
+  el.style.setProperty('--fx-tail', `${Math.round(tailOffset(next.dx, r.width))}px`);
   el.classList.toggle('fx-lowered', next.dy > 0);
 }
 
