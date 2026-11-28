@@ -365,7 +365,7 @@ export class BaseRoom extends DurableObject<Env> {
    */
   private async loadState(): Promise<{ state: BaseState; stored: boolean }> {
     const stored = await this.ctx.storage.get<BaseState>(STATE_KEY);
-    if (stored) return { state: withPartDefaults(stored), stored: true };
+    if (stored) return { state: withPartDefaults(stored, Date.now()), stored: true };
     const now = Date.now();
     const legacy = await this.ctx.storage.get<LegacyState>(LEGACY_STATE_KEY);
     if (legacy) return { state: migrateLegacy(legacy, now, this.rng), stored: false };

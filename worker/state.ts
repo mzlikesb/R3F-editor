@@ -24,7 +24,7 @@ import {
   type ModuleId,
   type SnapshotMessage,
 } from '../shared/protocol';
-import { PARTS_CAP, PART_EARLY_MS, PART_SLOT_MS, partSlot } from '../shared/parts';
+import { PARTS_CAP, PART_EARLY_MS, PART_SLOT_MS, clampParts, partSlot } from '../shared/parts';
 
 /** Next-fault delay is drawn from [REFAULT_MIN_MS, REFAULT_MAX_MS]. */
 export const REFAULT_MIN_MS = 20_000;
@@ -85,10 +85,13 @@ export interface BaseState {
  * (plan 009 A.1). Only fills in on read; whoever saves next writes the full shape. Returns `stored`
  * itself when nothing is missing.
  */
-export function withPartDefaults(stored: BaseState): BaseState {
+export function withPartDefaults(stored: BaseState, now: number): BaseState {
   const raw: Partial<BaseState> = stored;
-  const parts = Number.isInteger(raw.parts) && raw.parts! >= 0 ? Math.min(raw.parts!, PARTS_CAP) : 0;
-  const lastPartSlot = Number.isInteger(raw.lastPartSlot) && raw.lastPartSlot! >= -1 ? raw.lastPartSlot! : -1;
+  const parts = clampParts(raw.parts) ?? 0;
+  const slot = Number.isInteger(raw.lastPartSlot) && raw.lastPartSlot! >= -1 ? raw.lastPartSlot! : -1;
+  // A slot past the current one (a clock that jumped back, a bad write) would block every piece
+  // until then; read it as the current slot.
+  const lastPartSlot = Math.min(slot, partSlot(now));
   if (parts === raw.parts && lastPartSlot === raw.lastPartSlot) return stored;
   return { ...stored, parts, lastPartSlot };
 }

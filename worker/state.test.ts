@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { GENERATOR, HISTORY_BLACKOUTS, MAX_FAULTS, MODULE_IDS, type Fault, type ModuleId } from '../shared/protocol';
-import { PARTS_CAP, PART_SLOT_MS, partSlot } from '../shared/parts';
+import { PARTS_CAP, PART_SLOT_MS, clampParts, partSlot } from '../shared/parts';
 import { PRE009_STORED } from '../shared/testdata/pre009';
 import {
   FIRST_FAULT_WAIT_MS,
@@ -745,23 +745,44 @@ describe('withPartDefaults (plan 009 A.1, R3)', () => {
   const old = JSON.parse(PRE009_STORED) as BaseState;
 
   it('reads a base:v2 from before 009 with an empty store, every old field the same', () => {
-    expect(withPartDefaults(old)).toEqual({ ...old, parts: 0, lastPartSlot: -1 });
+    expect(withPartDefaults(old, T)).toEqual({ ...old, parts: 0, lastPartSlot: -1 });
   });
 
   it('does not change the stored object (the read writes nothing)', () => {
     const copy = structuredClone(old);
-    withPartDefaults(old);
+    withPartDefaults(old, T);
     expect(old).toEqual(copy);
   });
 
   it('keeps a 009 store as it is', () => {
     const now = { ...old, parts: 2, lastPartSlot: 179_500_004 };
-    expect(withPartDefaults(now)).toBe(now);
+    expect(withPartDefaults(now, T)).toBe(now);
   });
 
   it('repairs broken values instead of trusting them', () => {
     const broken = { ...old, parts: 9, lastPartSlot: 'x' } as unknown as BaseState;
-    expect(withPartDefaults(broken)).toMatchObject({ parts: PARTS_CAP, lastPartSlot: -1 });
-    expect(withPartDefaults({ ...old, parts: -1 } as BaseState).parts).toBe(0);
+    expect(withPartDefaults(broken, T)).toMatchObject({ parts: PARTS_CAP, lastPartSlot: -1 });
+    expect(withPartDefaults({ ...old, parts: -1 } as BaseState, T).parts).toBe(0);
+    expect(withPartDefaults({ ...old, parts: 2.5 } as BaseState, T).parts).toBe(0);
+  });
+
+  it('cuts parts the same way as the client parser (clampParts)', () => {
+    for (const parts of [-3, 0, 3, 5, 6, 99]) {
+      expect(withPartDefaults({ ...old, parts, lastPartSlot: -1 }, T).parts).toBe(clampParts(parts));
+    }
+  });
+
+  it('reads a lastPartSlot past the current slot as the current slot, without changing storage', () => {
+    const SLOT_T = partSlot(T);
+    const ahead = { ...old, parts: 1, lastPartSlot: SLOT_T + 500 };
+    const copy = structuredClone(ahead);
+    const read = withPartDefaults(ahead, T);
+    expect(read.lastPartSlot).toBe(SLOT_T);
+    expect(ahead).toEqual(copy);
+    // So the next slot can be collected again.
+    expect(collect(read, SLOT_T + 1, T + PART_SLOT_MS)?.lastPartSlot).toBe(SLOT_T + 1);
+    // A current or past slot is left as it is.
+    const now = { ...old, parts: 1, lastPartSlot: SLOT_T };
+    expect(withPartDefaults(now, T)).toBe(now);
   });
 });

@@ -17,6 +17,15 @@ export const PART_EARLY_MS = 1_000;
 /** Height (world units) a piece floats at. */
 export const PART_Y = 0.5;
 
+/**
+ * A store count cut to 0..`PARTS_CAP`; null when `v` is not an integer. The client parser and the
+ * server's storage read use this one rule, so both read the same count from the same value.
+ */
+export function clampParts(v: unknown): number | null {
+  if (typeof v !== 'number' || !Number.isInteger(v)) return null;
+  return Math.min(PARTS_CAP, Math.max(0, v));
+}
+
 /** The slot that `serverNow` (epoch ms, server clock) falls in. */
 export function partSlot(serverNow: number): number {
   return Math.floor(serverNow / PART_SLOT_MS);

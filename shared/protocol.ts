@@ -9,7 +9,7 @@
  * them, so there is no legacy parser here (the deployed one lives in `shared/testdata/v1.ts`).
  */
 
-import { PARTS_CAP } from './parts';
+import { clampParts } from './parts';
 
 /** The protocol this build speaks. Sent in every snapshot and in the WebSocket URL query. */
 export const PROTOCOL_VERSION = 2;
@@ -409,10 +409,8 @@ function parseSnapshot(m: Record<string, unknown>): SnapshotMessage | null {
   };
 }
 
-/** A store count, or null when missing or out of range. */
-function partsCount(v: unknown): number | null {
-  return isCount(v) && v <= PARTS_CAP ? v : null;
-}
+/** A store count cut to 0..`PARTS_CAP` (`clampParts`), or null when it is not an integer. */
+const partsCount = clampParts;
 
 /** A slot number or -1 (none). */
 function isSlot(v: unknown): v is number {

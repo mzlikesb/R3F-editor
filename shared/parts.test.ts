@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { PARTS_CAP, PART_EARLY_MS, PART_SLOT_MS, PART_SPOTS, PART_Y, partPosition, partSlot } from './parts';
+import {
+  PARTS_CAP,
+  PART_EARLY_MS,
+  PART_SLOT_MS,
+  PART_SPOTS,
+  PART_Y,
+  clampParts,
+  partPosition,
+  partSlot,
+} from './parts';
 
 const T = 1_800_000_000_000;
 
@@ -50,5 +59,12 @@ describe('partPosition', () => {
   it('uses many spots, not a few', () => {
     const used = new Set(slots.map((s) => JSON.stringify(partPosition(s))));
     expect(used.size).toBeGreaterThanOrEqual(PART_SPOTS.length * 0.8);
+  });
+});
+
+describe('clampParts', () => {
+  it('cuts an integer to 0..PARTS_CAP and rejects anything else', () => {
+    expect([-3, 0, 3, 5, 6, 99].map(clampParts)).toEqual([0, 0, 3, 5, 5, 5]);
+    for (const v of [1.5, '2', null, undefined, Number.NaN]) expect(clampParts(v)).toBeNull();
   });
 });

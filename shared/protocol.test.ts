@@ -193,13 +193,27 @@ describe('parseServerMessage: the parts store (plan 009)', () => {
   it('reads parts and lastPartSlot on a snapshot; missing or malformed is 0 and -1, never a rejection', () => {
     const { parts: _p, lastPartSlot: _l, ...old } = snapshot;
     expect(parseServerMessage(json(old))).toEqual({ ...snapshot, parts: 0, lastPartSlot: -1 });
-    for (const parts of [null, -1, 1.5, '2', 6]) {
+    for (const parts of [null, -1, 1.5, '2']) {
       expect((parseServerMessage(json({ ...snapshot, parts })) as SnapshotMessage).parts).toBe(0);
     }
     for (const lastPartSlot of [null, -2, 1.5, '7']) {
       expect((parseServerMessage(json({ ...snapshot, lastPartSlot })) as SnapshotMessage).lastPartSlot).toBe(-1);
     }
     expect((parseServerMessage(json({ ...snapshot, parts: 5 })) as SnapshotMessage).parts).toBe(5);
+  });
+
+  it('cuts parts to 0..5 the way the server reads storage (clampParts)', () => {
+    for (const [parts, read] of [
+      [6, 5],
+      [99, 5],
+      [-3, 0],
+    ] as const) {
+      expect((parseServerMessage(json({ ...snapshot, parts })) as SnapshotMessage).parts).toBe(read);
+    }
+    const base = { type: 'repaired', version: 6, faultId: 'f1', moduleId: 'oxygen', repairs: 3, at: 4000 };
+    expect(parseServerMessage(json({ ...base, parts: 7 }))).toMatchObject({ parts: 5 });
+    const msg = { type: 'parts', version: 9, count: 8, slot: 1, mine: false, serverNow: 5000 };
+    expect(parseServerMessage(json(msg))).toMatchObject({ count: 5 });
   });
 
   it('reads parts and serverNow on a repaired; missing or malformed is null', () => {
@@ -222,8 +236,8 @@ describe('parseServerMessage: the parts store (plan 009)', () => {
       expect((parseServerMessage(json({ ...msg, mine })) as PartsMessage).mine).toBe(false);
     }
     for (const bad of [
-      { count: 6 },
-      { count: -1 },
+      { count: 1.5 },
+      { count: '2' },
       { slot: -1 },
       { slot: 1.5 },
       { version: 'x' },
