@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { ClientMessage, FaultMessage, RepairedMessage, SnapshotMessage } from '../shared/protocol';
+import type { BlackoutStart, ClientMessage, FaultMessage, RepairedMessage, SnapshotMessage } from '../shared/protocol';
 import { initialFeedback } from './feedback';
 import { HOLD_MS, initialRepairUi } from './hold';
 import {
@@ -156,6 +156,26 @@ describe('store.receive', () => {
     const effect = s().feedback.effect;
     s().receive(snapshot({ version: 7, faults: [] }), 200, T);
     expect(shouldShake(effect, s().feedback.effect)).toBe(false);
+  });
+
+  it('a blackout seen starting live stamps blackoutLiveAt; one in a snapshot does not (008 C.3, R6)', () => {
+    const start = {
+      blackout: { id: 'b1', startedAt: T },
+      uptimeStartedAt: null,
+      longestUptimeMs: 60_000,
+      record: { id: 'b1', startedAt: T, endedAt: null },
+    } satisfies BlackoutStart;
+    useStore.setState({ blackoutLiveAt: null });
+    s().receive(snapshot({ faults: [oxy] }), 0, T);
+    s().receive(faultMsg({ blackoutStart: start }), 700, T);
+    expect(selectBlackout(s())).toBe(true);
+    expect(s().blackoutLiveAt).toBe(700);
+
+    // Joining (or reconnecting) into a blackout: the snapshot carries it, nothing is stamped.
+    useStore.setState({ sync: initialSync, blackoutLiveAt: null });
+    s().receive(snapshot({ faults: [oxy, gen], blackout: { id: 'b1', startedAt: T } }), 900, T);
+    expect(selectBlackout(s())).toBe(true);
+    expect(s().blackoutLiveAt).toBeNull();
   });
 
   it('ignores a stale repaired: no toast, no effect, no hold change', () => {
