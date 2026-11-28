@@ -83,16 +83,46 @@ dcheck "dev: clean words from another author -> pending" pending dev "[$(cmt som
 dcheck "main: findings still count as reviewed" success main '[]' "[$FIND_R]" "[$(inline 11 "$HEAD")]"
 dcheck "main: Approve alone is not a review" pending main '[]' "[$APPROVE]" '[]'
 
-# Large inline lists go through files (an argv value over ~128KB would fail).
-big=$(jq -n --arg b "$(head -c 2000 /dev/zero | tr '\0' x)" '[range(0; 120) | {pull_request_review_id: 999, commit_id: "x", user: {login: "someone"}, body: $b}]')
-echo "[$CLEAN_C]" >"$tmp/c.json"; echo '[]' >"$tmp/r.json"; echo "$big" >"$tmp/rc.json"
-size=$(wc -c <"$tmp/rc.json" | tr -d ' ')
-got=$(bash codex-gate.sh "$HEAD" "$tmp/c.json" "$tmp/r.json" dev "$tmp/rc.json" 2>&1 | jq -r .state 2>&1)
-if [ "$size" -gt 200000 ] && [ "$got" = success ]; then echo "ok   dev with a ${size}-byte inline list"; else echo "FAIL big inline list (size $size, got $got)"; fail=1; fi
-echo "[$(inline 11 "$HEAD")]" | jq --argjson big "$big" '. + $big' >"$tmp/rc.json"
-echo '[]' >"$tmp/c.json"; echo "[$FIND_R]" >"$tmp/r.json"
-got=$(bash codex-gate.sh "$HEAD" "$tmp/c.json" "$tmp/r.json" dev "$tmp/rc.json" | jq -r .state)
-if [ "$got" = pending ]; then echo "ok   finding inside a big inline list"; else echo "FAIL finding inside a big inline list ($got)"; fail=1; fi
+# Large inline lists go through files: Linux caps one argv string at 128KB (MAX_ARG_STRLEN),
+# so a list passed as an argument would fail there. Fixtures are built into files (never
+# through argv) and checked before use, so a broken fixture fails instead of passing quietly.
+# A review whose body reads clean: only its inline comments can make it pending.
+CLEAN_REVIEW=$(rev 15 "$BOT" COMMENTED "$HEAD" "$T1" "$(CLEAN_RECEIPT "${HEAD:0:10}")")
+fixture_ok() { # fixture_ok <file> <min-bytes> <want-length>
+  local size len
+  size=$(wc -c <"$1" | tr -d ' ')
+  len=$(jq 'length' "$1" 2>/dev/null) || len=bad
+  if [ "$size" -gt "$2" ] && [ "$len" = "$3" ]; then echo "ok   fixture $(basename "$1"): $size bytes, $len items"; return 0; fi
+  echo "FAIL fixture $(basename "$1"): $size bytes, length $len (want > $2 bytes, $3 items)"; fail=1; return 1
+}
+gate() { # gate <rc-file> -> "state<TAB>description" for base dev, CLEAN_REVIEW only
+  echo '[]' >"$tmp/c.json"; echo "[$CLEAN_REVIEW]" >"$tmp/r.json"
+  bash codex-gate.sh "$HEAD" "$tmp/c.json" "$tmp/r.json" dev "$1" | jq -r '[.state, .description] | @tsv'
+}
+# 120 unrelated inline comments of 2000 chars each (other review ids), written by jq to a file.
+if jq -n '[range(0; 120) | {pull_request_review_id: (1000 + .), commit_id: "x",
+      user: {login: "someone"}, body: ("x" * 2000)}]' >"$tmp/big.json" &&
+  fixture_ok "$tmp/big.json" 200000 120; then
+  out=$(gate "$tmp/big.json")
+  if [ "${out%%$'\t'*}" = success ]; then echo "ok   dev: clean review with a big unrelated inline list -> success"
+  else echo "FAIL dev: big clean list ($out)"; fail=1; fi
+  # The same big list plus one inline finding on the clean-looking review.
+  inline 15 "$HEAD" >"$tmp/one.json"
+  if jq -s '.[0] + [.[1]]' "$tmp/big.json" "$tmp/one.json" >"$tmp/big-find.json" &&
+    fixture_ok "$tmp/big-find.json" 200000 121; then
+    out=$(gate "$tmp/big-find.json")
+    case "$out" in
+      pending$'\t'*"Codex 지적"*) echo "ok   dev: finding inside a big inline list -> pending (read the finding)" ;;
+      *) echo "FAIL dev: finding inside a big inline list ($out)"; fail=1 ;;
+    esac
+  fi
+else
+  echo "FAIL could not build the big inline fixture"; fail=1
+fi
+# Control: the reason differs when the list is missing (fail closed), so the case above
+# really saw the finding rather than an unreadable list.
+out=$(echo '[]' >"$tmp/c.json"; echo "[$CLEAN_REVIEW]" >"$tmp/r.json"; bash codex-gate.sh "$HEAD" "$tmp/c.json" "$tmp/r.json" dev | jq -r .description)
+case "$out" in *"읽지 못함"*) echo "ok   missing list has its own reason" ;; *) echo "FAIL missing list reason ($out)"; fail=1 ;; esac
 
 # (b) needs the Approve strictly after the latest Codex result for head.
 T0=2026-11-28T08:00:00Z
