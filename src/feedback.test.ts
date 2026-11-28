@@ -76,7 +76,7 @@ describe('effectsFor', () => {
 describe('reduceFeedback', () => {
   it('a repair toasts and records an effect on that module', () => {
     const s = run([{ type: 'repaired', outcome: 'mine', moduleId: 'comms', now: 100 }]);
-    expect(s.toast).toEqual({ kind: 'mine', moduleId: 'comms', until: 100 + TOAST_MS });
+    expect(s.toast).toEqual({ kind: 'mine', moduleId: 'comms', until: 100 + TOAST_MS, combo: 1 });
     expect(s.effect).toEqual({ outcome: 'mine', moduleId: 'comms', seq: 1, at: 100 });
   });
 
@@ -92,7 +92,7 @@ describe('reduceFeedback', () => {
   it('a new fault toasts with its module and leaves the effect alone', () => {
     const repairedOnce = run([{ type: 'repaired', outcome: 'other', moduleId: 'oxygen', now: 100 }]);
     const s = run([{ type: 'fault', moduleId: 'greenhouse', now: 500 }], repairedOnce);
-    expect(s.toast).toEqual({ kind: 'fault', moduleId: 'greenhouse', until: 500 + TOAST_MS });
+    expect(s.toast).toEqual({ kind: 'fault', moduleId: 'greenhouse', until: 500 + TOAST_MS, combo: 0 });
     expect(s.effect).toBe(repairedOnce.effect);
   });
 

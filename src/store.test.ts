@@ -17,6 +17,7 @@ import {
   useStore,
 } from './store';
 import { initialSync } from './sync';
+import { shouldShake } from './scene/shake';
 
 const T = 1_800_000_000_000;
 const oxy = { id: 'f1', moduleId: 'oxygen', createdAt: T - 9000 } as const;
@@ -132,6 +133,29 @@ describe('store.receive', () => {
     expect(s().feedback.toast).toBeNull();
     s().receive(faultMsg({ fault: { id: 'c1', moduleId: 'comms', createdAt: T } }), 500, T);
     expect(s().feedback.toast).toMatchObject({ kind: 'fault', moduleId: 'comms' });
+  });
+
+  it('combo: my repair, a helped one, a reconnect, my next repair is x3; others leave it alone (008 C.2, R7)', () => {
+    const fault = (id: string, moduleId: 'oxygen' | 'comms' | 'habitat') => ({ id, moduleId, createdAt: T });
+    s().receive(snapshot({ faults: [fault('a', 'oxygen'), fault('b', 'comms')] }), 0, T);
+    s().receive(repaired(true, { faultId: 'a', version: 6 }), 1000, T);
+    expect(s().feedback.toast).toMatchObject({ kind: 'mine', combo: 1 });
+    s().receive(repaired(false, { faultId: 'b', moduleId: 'comms', version: 7, helped: true, helpers: 1 }), 5000, T);
+    expect(s().feedback.toast).toMatchObject({ kind: 'helped', combo: 2 });
+    // The socket drops and comes back: a fresh snapshot does not touch the combo.
+    s().receive(snapshot({ version: 8, faults: [fault('c', 'habitat'), fault('d', 'oxygen')] }), 9000, T);
+    s().receive(repaired(false, { faultId: 'c', moduleId: 'habitat', version: 9 }), 10_000, T);
+    expect(s().feedback.toast).toMatchObject({ kind: 'other', combo: 0 });
+    s().receive(repaired(true, { faultId: 'd', version: 10 }), 12_000, T);
+    expect(s().feedback.toast).toMatchObject({ kind: 'mine', combo: 3 });
+  });
+
+  it('a reconnect snapshot keeps the latest effect as is, so it starts no shake (008 C.1)', () => {
+    s().receive(snapshot(), 0, T);
+    s().receive(repaired(true), 100, T);
+    const effect = s().feedback.effect;
+    s().receive(snapshot({ version: 7, faults: [] }), 200, T);
+    expect(shouldShake(effect, s().feedback.effect)).toBe(false);
   });
 
   it('ignores a stale repaired: no toast, no effect, no hold change', () => {
