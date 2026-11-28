@@ -23,7 +23,7 @@
 ### A. 브랜치와 보호 규칙
 
 1. `dev`는 `main`에서 만든다. 기본 브랜치는 `main`으로 둔다. Codex 게이트(`codex-gate.yml`)가 기본 브랜치의 판정 스크립트만 믿기 때문이다.
-2. **`dev` 보호 규칙**(사용자가 설정한다, F절):
+2. **`dev` 보호 규칙**(사용자가 설정한다, F절). `dev`의 커밋은 모두 auto-merge(에이전트 계정)로만 들어온다(C절):
    - PR 필수, 필수 Approve 0
    - **코드 주인 리뷰 필수**(B절)
    - 새 커밋이 오면 기존 Approve 해제
@@ -45,6 +45,15 @@
 - `main`에서도 CODEOWNERS는 같은 파일이 적용된다. 릴리스 PR은 어차피 사용자 Approve를 거친다.
 - 테스트(`scripts/`): CODEOWNERS의 경로 목록이 `AGENTS.md`의 보호 경로 목록과 같은지 확인한다(문서와 설정이 같이 움직이게).
 
+### B2. Approve 0에서 Codex 지적이 그냥 머지되지 않게
+
+지금은 Codex가 지적을 남겨도, 고치기 전 머지를 막는 브레이크가 사용자 Approve였다. `dev`는 Approve가 0이므로 이 브레이크가 없다.
+
+- `codex-reviewed` 판정(`scripts/codex-gate.sh`, 기본 브랜치 스크립트)에 조건을 더한다. **base가 `dev`인 PR은 head SHA에 대한 Codex 리뷰에 인라인 지적이 하나도 없을 때만 success다.** 요약만 있고 인라인 지적이 없으면 success이고, 지적이 있으면 pending이다. 지적을 반영해 새 커밋을 push하면 다시 리뷰받는다.
+- base가 `main`인 PR(릴리스)은 지금 판정 그대로다. 사람 Approve가 브레이크다.
+- 기획은 지적을 "막지 않음"으로 판단하더라도 무시하지 않는다. 반영하거나, 이슈로 넘기고 PR 코멘트로 근거를 남긴 뒤 다시 `@codex review`를 요청한다.
+- 테스트: 지적 없는 리뷰는 success, 인라인 지적이 있는 리뷰는 pending, 지적 뒤 새 head에서 지적 없는 리뷰는 success, base `main`은 지금 판정.
+
 ### C. 머지 방식 — PR은 squash, 릴리스는 merge commit
 
 - `dev`로 가는 PR은 지금처럼 squash한다.
@@ -54,14 +63,20 @@
   - base가 `main`이면 head는 `dev`여야 한다(릴리스 PR만 `main`으로 간다).
   - 릴리스 PR에는 라벨 `release`가 붙는다. `size:*` 대신 이 라벨을 쓴다.
   - base가 `dev`면 지금 규칙(size·stage·마일스톤·관련 이슈)을 그대로 적용한다.
-  - auto-merge 예약은 base가 `dev`인 small에만 허용한다. 릴리스 PR과 large는 사용자가 머지한다.
+  - base `dev`의 small은 auto-merge 예약을 허용한다.
+  - base `dev`의 **large는 사용자 Approve 리뷰가 있을 때만** auto-merge 예약을 허용한다. 사용자가 Approve하면 에이전트가 예약한다. 사용자가 직접 `dev`에 머지하지 않는 이유는 "마지막 push 승인" 때문이다. 사용자가 `dev`의 마지막 pusher가 되면, `main` 보호의 "마지막 push도 승인 필요" 규칙 때문에 다음 릴리스 PR을 사용자 본인이 Approve할 수 없다. auto-merge가 머지하면 예약한 에이전트 계정이 pusher가 된다.
+  - 이에 맞춰 `guard-bash.sh`의 `gh pr merge --auto` 허용 조건(small만)을 "base `dev`의 small, 또는 사용자 Approve가 있는 large"로 바꾼다. 새 규칙을 늘리는 게 아니라 기존 규칙의 조건을 바꾸는 것이다.
+  - 릴리스 PR(`dev → main`)은 지금 large처럼 사용자가 직접 머지한다(merge commit). `main`으로 가는 push라 `dev`의 pusher와는 상관없다.
 - 머지 방식은 GitHub이 PR에서 강제할 수 없다. 그래서 릴리스 PR 본문 맨 위에 "merge commit으로 머지"를 적고, `check-protection.sh`가 `main`의 merge commit 허용을 확인한다. 실수로 squash했으면 다음 릴리스 전에 `main`을 `dev`에 merge해서 맞춘다(강제 push는 쓰지 않는다).
 
 ### D. 배포
 
 - production은 지금처럼 `main` push 때만 배포한다(`deploy.yml`).
 - PR Preview(`pr-N`)는 base와 관계없이 지금처럼 만든다.
-- **staging**: `dev` push 때 고정 Preview(`dev-outpost`)에 배포한다. 여러 PR이 합쳐진 상태를 릴리스 전에 이 주소에서 확인한다. DO 저장소는 staging 전용이다(production과 분리).
+- **staging**: `dev` push 때 PR Preview와 **같은 방식**(`wrangler preview --name <이름>`, Preview마다 DO 저장소가 따로)으로 이름 `dev`인 고정 Preview에 배포한다(`dev-outpost.<계정>.workers.dev`). production Worker·DO는 건드리지 않는다. 새 `wrangler` 환경이나 DO 바인딩·마이그레이션은 만들지 않는다.
+  - `deploy.yml`의 PR 정리 job(`cleanup`)은 PR이 닫힐 때 `pr-N`만 지운다. `dev`는 지우지 않는다(이름 조건 테스트).
+  - staging 배포 job도 기존 preview job처럼 Cloudflare 토큰을 wrangler step에만 넘긴다. 새 시크릿은 필요 없다.
+  - 여러 PR이 합쳐진 상태를 릴리스 전에 이 주소에서 확인한다.
 
 ### E. 릴리스 절차
 
@@ -118,7 +133,7 @@
 
 | PR    | 내용                                                                                    | 의존  |
 | ----- | --------------------------------------------------------------------------------------- | ----- |
-| 010-1 | B(CODEOWNERS + 테스트) + C의 `pr-check` 규칙 + `ci.yml` 트리거 + `check-protection.sh` `dev` 대조 + `dev` 브랜치 생성 | 없음  |
+| 010-1 | B(CODEOWNERS + `AGENTS.md`에 보호 경로 목록 + 일치 테스트) + B2(codex-gate `dev` 판정) + C의 `pr-check` 규칙(`DEV_FLOW` 스위치) + `ci.yml` 트리거 + `check-protection.sh` `dev` 대조 + `dev` 브랜치 생성 | 없음  |
 | 010-2 | D(staging 배포) + E(`release-notes.sh`, 릴리스 PR 절차) + G의 스킬·훅·스크립트·문서 | 010-1 |
 
 - 010-1은 `main`으로 머지한다. `dev`가 아직 없거나 보호되지 않았기 때문이다. 머지 뒤 기획이 `dev`를 `main`에서 만들고, 사용자가 F절 설정을 한다.
@@ -136,13 +151,18 @@
 
 - 010-1:
   - `pr-check` 규칙 테스트: `DEV_FLOW` 꺼짐에서는 지금 규칙 그대로(010-1 자신이 통과), 켜짐에서 base `dev`의 small·large, base `main`의 릴리스(head `dev` + `release`), base `main`의 일반 PR(거절), `dev` 대상 large에 auto-merge가 예약된 경우(거절)
-  - CODEOWNERS와 `AGENTS.md` 보호 경로가 일치하는지 확인하는 테스트
+  - CODEOWNERS와 `AGENTS.md` 보호 경로가 일치하는지 확인하는 테스트(같은 PR에 `AGENTS.md` 목록을 넣는다)
+  - codex-gate: base `dev`에서 인라인 지적이 있으면 pending, base `main`은 지금 판정
+  - `guard-bash.sh` `--auto` 조건: base `dev` small 허용, Approve 있는 large 허용, Approve 없는 large 거절
+  - `deploy.yml` cleanup이 `dev`를 지우지 않음
   - `check-protection.sh`가 `dev` 규칙이 없거나 다를 때 실패하는지 확인하는 테스트(가짜 gh)
 - F절 설정 뒤 `check-protection.sh`가 "일치"를 보고한다(사용자 실행)
 - 첫 실전(010-2 이후):
   - 보호 경로를 안 건드린 small PR이 `dev`로 Approve 없이 자동 머지된다
   - 보호 경로를 건드린 small PR은 사용자 Approve를 기다린다
   - `dev` push 뒤 staging에 배포된다
+  - large를 사용자 Approve 뒤 auto-merge로 `dev`에 넣은 다음, 릴리스 PR을 사용자가 Approve할 수 있다(마지막 pusher 교착 없음)
+  - Codex가 인라인 지적을 남긴 small PR은 `dev`에 자동 머지되지 않는다
   - 릴리스 PR이 merge commit으로 머지되고 production에 배포된다
   - 다음 릴리스 PR diff에 이미 나간 변경이 다시 보이지 않는다
 - 기존 검사(`npm test`, `test:hooks`, `actionlint`)는 통과한다
