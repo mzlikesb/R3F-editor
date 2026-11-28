@@ -12,7 +12,8 @@ permissions:
 
 jobs:
   preview:
-    if: github.event_name == 'pull_request' && github.event.action != 'closed'
+    # Fork PRs get no secrets, so the job would only fail; skip them.
+    if: github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 15
     concurrency:
@@ -62,7 +63,7 @@ jobs:
           fi
 
   cleanup:
-    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
