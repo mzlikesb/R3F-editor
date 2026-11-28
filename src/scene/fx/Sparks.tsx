@@ -72,7 +72,7 @@ export function Sparks({ radius, height, token, soft = false }: SparksProps) {
       toneMapped: false,
       fog: false,
     });
-    registerFx(m, 'glow');
+    registerFx(m, 'flash');
     return m;
   }, []);
   useEffect(() => () => material.dispose(), [material]);

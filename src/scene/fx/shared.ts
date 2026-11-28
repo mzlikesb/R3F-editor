@@ -37,7 +37,7 @@ export function createRingMaterial(color: Color, additive = false): MeshBasicMat
     fog: false,
     blending: additive ? AdditiveBlending : undefined,
   });
-  registerFx(m, 'ring');
+  registerFx(m, 'tone');
   return m;
 }
 

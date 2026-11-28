@@ -16,7 +16,7 @@ import {
   type ChromaticAberrationEffect,
   type EffectComposer as Composer,
 } from 'postprocessing';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Vector2, type Camera, type Scene, type WebGLRenderer, type WebGLRenderTarget } from 'three';
 import { useStore } from '../../store';
 import { chromaAmount } from '../chroma';
@@ -42,8 +42,6 @@ class CountingRenderPass extends RenderPass {
 }
 /** Module level: `EffectComposer` rebuilds itself when this function changes. */
 const countingRenderPass = (scene: Scene, camera: Camera) => new CountingRenderPass(scene, camera);
-
-const NO_OFFSET = new Vector2(0, 0);
 
 /**
  * The colour-offset hit when a blackout starts live (008 C.3). The effect is always in the chain at
@@ -109,6 +107,8 @@ function useFrameCount() {
  */
 export function PostStack({ post }: { post: number }) {
   const composer = useRef<Composer>(null);
+  // Owned by this stack: the effect may keep it as its uniform value and `useChromaPulse` writes it.
+  const [offset] = useState(() => new Vector2(0, 0));
   const chroma = useChromaPulse();
   useFramebufferCheck(composer);
   useFrameCount();
@@ -131,7 +131,7 @@ export function PostStack({ post }: { post: number }) {
       ) : (
         <></>
       )}
-      <ChromaticAberration ref={chroma} offset={NO_OFFSET} radialModulation={false} modulationOffset={0} />
+      <ChromaticAberration ref={chroma} offset={offset} radialModulation={false} modulationOffset={0} />
       <Vignette offset={0.3} darkness={0.55} />
       <Noise premultiply blendFunction={BlendFunction.SOFT_LIGHT} opacity={0.08} />
       <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />

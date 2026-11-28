@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { Color, InstancedMesh, MeshBasicMaterial, Object3D, SphereGeometry } from 'three';
 import { useStore } from '../store';
 import { darkness, daylight } from './blackout';
+import { fxColor } from './fx/fxGain';
 import { PALETTE } from './palette';
 import {
   MAX_PRESENCE_LIGHTS,
@@ -13,7 +14,8 @@ import {
 } from './presenceLightPath';
 
 const GEOMETRY = new SphereGeometry(0.24, 10, 8);
-const BASE = new Color(PALETTE.presenceLight);
+/** Its plain colour, and the one that comes out of the composer's tone mapping as that (plan 008 B.4). */
+const BASE = fxColor(new Color(PALETTE.presenceLight), 'tone');
 /** Share of the brightness lost at the depth of a blackout: dimmer, still visible (the base is dark, the visitors are not). */
 const BLACKOUT_DIM = 0.6;
 
@@ -30,7 +32,7 @@ const pos: LightPosition = { x: 0, y: 0, z: 0 };
 export function PresenceLights() {
   const mesh = useRef<InstancedMesh>(null);
   const scales = useRef(new Float32Array(MAX_PRESENCE_LIGHTS));
-  const material = useMemo(() => new MeshBasicMaterial({ color: BASE.clone(), toneMapped: false }), []);
+  const material = useMemo(() => new MeshBasicMaterial({ color: BASE.plain.clone(), toneMapped: false }), []);
   useEffect(() => () => material.dispose(), [material]);
 
   useFrame(({ clock }, delta) => {
@@ -50,7 +52,7 @@ export function PresenceLights() {
     }
     m.count = live;
     m.instanceMatrix.needsUpdate = true;
-    material.color.copy(BASE).multiplyScalar(1 - BLACKOUT_DIM * darkness(daylight.level));
+    material.color.copy(BASE.get()).multiplyScalar(1 - BLACKOUT_DIM * darkness(daylight.level));
   });
 
   return (

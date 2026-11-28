@@ -35,7 +35,7 @@ export function Glow({ radius, height, token }: { radius: number; height: number
       toneMapped: false,
       fog: false,
     });
-    registerFx(m, 'glow');
+    registerFx(m, 'burst');
     return m;
   }, [texture]);
   useEffect(
