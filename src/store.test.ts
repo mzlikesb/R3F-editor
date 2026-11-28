@@ -134,6 +134,21 @@ describe('store.receive', () => {
     expect(s().feedback.toast).toMatchObject({ kind: 'fault', moduleId: 'comms' });
   });
 
+  it('combo: my repair, a helped one, a reconnect, my next repair is x3; others leave it alone (008 C.2, R7)', () => {
+    const fault = (id: string, moduleId: 'oxygen' | 'comms' | 'habitat') => ({ id, moduleId, createdAt: T });
+    s().receive(snapshot({ faults: [fault('a', 'oxygen'), fault('b', 'comms')] }), 0, T);
+    s().receive(repaired(true, { faultId: 'a', version: 6 }), 1000, T);
+    expect(s().feedback.toast).toMatchObject({ kind: 'mine', combo: 1 });
+    s().receive(repaired(false, { faultId: 'b', moduleId: 'comms', version: 7, helped: true, helpers: 1 }), 5000, T);
+    expect(s().feedback.toast).toMatchObject({ kind: 'helped', combo: 2 });
+    // The socket drops and comes back: a fresh snapshot does not touch the combo.
+    s().receive(snapshot({ version: 8, faults: [fault('c', 'habitat'), fault('d', 'oxygen')] }), 9000, T);
+    s().receive(repaired(false, { faultId: 'c', moduleId: 'habitat', version: 9 }), 10_000, T);
+    expect(s().feedback.toast).toMatchObject({ kind: 'other', combo: 0 });
+    s().receive(repaired(true, { faultId: 'd', version: 10 }), 12_000, T);
+    expect(s().feedback.toast).toMatchObject({ kind: 'mine', combo: 3 });
+  });
+
   it('ignores a stale repaired: no toast, no effect, no hold change', () => {
     s().receive(snapshot({ version: 10 }), 0, T);
     s().dispatchHold({ type: 'press', faultId: 'f1', now: 0 });
