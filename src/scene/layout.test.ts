@@ -10,7 +10,9 @@ import {
   OVERVIEW_MARGIN,
   OVERVIEW_POINTS,
   OVERVIEW_TARGET,
+  FLOOR_RING_POINTS,
   floorRingRange,
+  selectRingRadius,
   type ModuleLayout,
 } from './layout';
 import { pickTap, type TapHit } from './tapPick';
@@ -188,5 +190,25 @@ describe('floor rings (neon: two broken neighbours, crossing rings)', () => {
       expect(r.from).toBeGreaterThan(footprint(id));
       expect(r.to).toBeGreaterThan(r.from * 1.3);
     }
+  });
+});
+
+describe('selection ring (plan 008 B.1)', () => {
+  it('sits just outside the tap box, inside where the fault ring starts', () => {
+    for (const id of MODULE_IDS) {
+      const r = selectRingRadius(id);
+      expect(r).toBeGreaterThan(Math.max(LAYOUT[id].tapHalf[0], LAYOUT[id].tapHalf[2]));
+      // The ring geometry is 0.9..1 of its radius: the fault ring's inner start stays clear of it.
+      expect(floorRingRange(id).from * 0.9).toBeGreaterThan(r);
+    }
+  });
+
+  it('floor ring points mark each fault ring at full size, for the overview framing', () => {
+    for (const id of MODULE_IDS) {
+      const l = LAYOUT[id];
+      const own = FLOOR_RING_POINTS.filter((p) => Math.hypot(p.x - l.x, p.z - l.z) < floorRingRange(id).to * l.scale + 0.01);
+      expect(own.length).toBeGreaterThanOrEqual(8);
+    }
+    for (const p of FLOOR_RING_POINTS) expect(p.y).toBe(0);
   });
 });
