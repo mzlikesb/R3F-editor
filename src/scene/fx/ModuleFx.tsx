@@ -88,7 +88,7 @@ export function ModuleFx({ id, handle }: ModuleFxProps) {
       ) : label === 'dot' ? (
         <FaultDot id={id} height={labelHeight} unit={unit} />
       ) : label === 'tag' ? (
-        <NameTag id={id} height={labelHeight} unit={unit} />
+        <NameTag id={id} height={labelHeight} unit={unit} broken={faulted} />
       ) : label === 'intro' ? (
         <NameTag id={id} height={labelHeight} unit={unit} faint />
       ) : null}

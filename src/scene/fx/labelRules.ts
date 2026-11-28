@@ -103,3 +103,14 @@ export function dotText(id: BaseModuleId): string {
  * and a tap on the body hit it instead of the tap box (#105). The tappable labels set `auto` themselves.
  */
 export const LABEL_WRAPPER_STYLE = { pointerEvents: 'none' } as const;
+
+/**
+ * World units between a model's top and the foot of its name tag (the leader's dot). A healthy
+ * module has its status light up there, so the tag clears it (`lightTop`); a broken module has no
+ * light, and the same lift left the pin a metre above the roof, where from a close PC view it landed
+ * on whatever stood behind (the greenhouse's pin on the generator, neon on #124).
+ */
+export const BROKEN_TAG_LIFT = 0.2;
+export function tagLift(broken: boolean, lightTop: number): number {
+  return broken ? BROKEN_TAG_LIFT : lightTop + 0.15;
+}
