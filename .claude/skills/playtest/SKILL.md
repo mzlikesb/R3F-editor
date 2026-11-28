@@ -58,4 +58,4 @@ scripts/playtest.sh https://pr-N-outpost.<계정>.workers.dev
 
 ## small PR
 
-small PR은 페르소나 플레이테스트를 돌리지 않는다. `src/scene/`·`src/ui/`·`src/index.css`를 바꿨다면 Preview 배포 뒤 `scripts/snapshot-critique.sh N <Preview URL> [SHA]` 한 번으로 폰·PC 스크린샷 아트 크리틱을 PR 코멘트로 남기고(4단계와 같은 코멘트), 지적은 `art-ux` 이슈로 올리거나 바로 반영한다.
+small PR은 페르소나 플레이테스트를 돌리지 않는다. `src/scene/`·`src/ui/`·`src/index.css`를 바꿨다면 Preview 배포 뒤 `scripts/snapshot-critique.sh N [Preview URL] [SHA]` 한 번으로(URL·배포 SHA는 배포 봇 코멘트에서 읽고, 배포 SHA가 head와 다르면 최대 10분 기다린다) 폰·PC 스크린샷 아트 크리틱을 PR 코멘트로 남기고(4단계와 같은 코멘트), 지적은 `art-ux` 이슈로 올리거나 바로 반영한다.
