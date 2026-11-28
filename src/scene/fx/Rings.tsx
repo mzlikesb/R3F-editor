@@ -87,6 +87,16 @@ export function SweepRing({ radius, height, token }: RingProps & { token: number
   return <mesh ref={mesh} geometry={RING_GEOMETRY} material={material} rotation-x={-Math.PI / 2} visible={false} />;
 }
 
+/**
+ * How far (x the module's radius, on top of the radius itself) and how bright the ping gets. It
+ * used to reach 3.2 radii at 0.85, which on a phone is a ring about a module wide: gone before the
+ * eye got there. 5.5 radii spans to the neighbouring modules (they stand about 10 m apart, radii
+ * 1 to 2.5 m), and the fade is quadratic (`1 - p^2`) so it stays near full strength through the
+ * first half of the 2.6 s. The colour stays the ping lilac, never the repair green of one's own sweep.
+ */
+const PING_REACH = 5.5;
+const PING_PEAK_OPACITY = 1;
+
 /** Ripple spreading flat across the ground when someone else repaired. */
 export function RingPing({ radius, token }: { radius: number; token: number }) {
   const mesh = useRef<Mesh>(null);
@@ -104,10 +114,10 @@ export function RingPing({ radius, token }: { radius: number; token: number }) {
       return;
     }
     const eased = 1 - (1 - p) * (1 - p);
-    const s = radius * (1 + eased * 3.2);
+    const s = radius * (1 + eased * PING_REACH);
     m.visible = true;
     m.scale.set(s, s, 1);
-    setOpacity(material, 0.85 * (1 - p));
+    setOpacity(material, PING_PEAK_OPACITY * (1 - p * p));
   });
 
   return (
