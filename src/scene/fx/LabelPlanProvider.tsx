@@ -19,9 +19,18 @@ export function LabelPlanProvider({ children }: { children: ReactNode }) {
     const timer = setTimeout(() => setIntro(false), INTRO_MS);
     return () => clearTimeout(timer);
   }, [shown]);
+  // The faint names mount only once visible: their CSS fade-out runs from mount, and labels mount early.
   const plan = useMemo(
-    () => labelPlan({ ready: baseIn, faults, selected, blackout, holding: holdingModules(faults, activity), intro }),
-    [baseIn, faults, selected, blackout, activity, intro],
+    () =>
+      labelPlan({
+        ready: baseIn,
+        faults,
+        selected,
+        blackout,
+        holding: holdingModules(faults, activity),
+        intro: intro && shown,
+      }),
+    [baseIn, faults, selected, blackout, activity, intro, shown],
   );
   return <LabelPlanContext.Provider value={plan}>{children}</LabelPlanContext.Provider>;
 }
