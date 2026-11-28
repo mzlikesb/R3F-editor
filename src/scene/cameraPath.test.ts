@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  HOME_AZIMUTH,
   nearestAzimuth,
   outwardAzimuth,
   overviewDirAt,
   overviewDistanceAt,
   overviewDistanceMax,
   overviewPose,
+  overviewReturnPose,
   polarPose,
   wrapAngle,
 } from './cameraPath';
@@ -118,5 +120,37 @@ describe('overview return poses', () => {
     expect(d.x).toBeCloseTo(0);
     expect(d.z).toBeCloseTo(OVERVIEW_DIR.z);
     expect(d.y).toBe(OVERVIEW_DIR.y);
+  });
+});
+
+describe('overviewReturnPose', () => {
+  const sizes: [number, number][] = [
+    [390, 844],
+    [1280, 800],
+  ];
+  it('is the first screen pose from any orbited azimuth', () => {
+    for (const [w, h] of sizes) {
+      const fov = overviewFov(w / h);
+      const first = overviewPose(HOME_AZIMUTH, fov, w, h);
+      for (const a of [0, 1, -2.5, 4, 9]) {
+        const r = overviewReturnPose(a, fov, w, h);
+        expect(r.distance).toBeCloseTo(first.distance);
+        expect(r.lift).toBeCloseTo(first.lift);
+        expect(r.dir.x).toBeCloseTo(first.dir.x);
+        expect(r.dir.y).toBeCloseTo(first.dir.y);
+        expect(r.dir.z).toBeCloseTo(first.dir.z);
+        expect(wrapAngle(r.azimuth - HOME_AZIMUTH)).toBeCloseTo(0);
+      }
+    }
+  });
+  it('faces the OVERVIEW_DIR direction', () => {
+    expect(Math.sin(HOME_AZIMUTH)).toBeCloseTo(OVERVIEW_DIR.x / Math.hypot(OVERVIEW_DIR.x, OVERVIEW_DIR.z));
+  });
+  it('turns the short way round', () => {
+    const fov = overviewFov(390 / 844);
+    for (const a of [HOME_AZIMUTH + 7 * Math.PI, HOME_AZIMUTH - 5.5, 12]) {
+      const r = overviewReturnPose(a, fov, 390, 844);
+      expect(Math.abs(r.azimuth - a)).toBeLessThanOrEqual(Math.PI + 1e-9);
+    }
   });
 });

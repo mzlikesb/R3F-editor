@@ -86,6 +86,26 @@ export function overviewPose(azimuth: number, fovDeg: number, width: number, hei
   return { fov: fovDeg, dir, distance: land + (port.distance - land) * t, lift: port.lift * t };
 }
 
+/** The azimuth of the first screen: the fixed `OVERVIEW_DIR` direction. */
+export const HOME_AZIMUTH = Math.atan2(OVERVIEW_DIR.x, OVERVIEW_DIR.z);
+
+/**
+ * Where the camera goes when the selection is released: the same pose as the first screen (fixed
+ * azimuth, polar angle and fit distance, phone lift included). The azimuth is the equivalent angle
+ * nearest to `currentAzimuth`, so the turn back is the short way round. Resizes while nothing is
+ * selected do not use this; they keep whatever azimuth the player orbited to.
+ */
+export function overviewReturnPose(
+  currentAzimuth: number,
+  fovDeg: number,
+  width: number,
+  height: number,
+): OverviewPose & { azimuth: number; polar: number } {
+  const azimuth = nearestAzimuth(currentAzimuth, HOME_AZIMUTH);
+  const pose = overviewPose(azimuth, fovDeg, width, height);
+  return { ...pose, azimuth, polar: polarPose(Math.hypot(pose.dir.x, pose.dir.z), pose.dir.y).polar };
+}
+
 /** Distance that fits the whole base in the overview when viewed from `azimuth`. */
 export function overviewDistanceAt(azimuth: number, fovDeg: number, width: number, height: number): number {
   return overviewPose(azimuth, fovDeg, width, height).distance;
