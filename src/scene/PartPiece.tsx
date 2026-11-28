@@ -1,5 +1,5 @@
 import { Html } from '@react-three/drei';
-import { useFrame, type ThreeEvent } from '@react-three/fiber';
+import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, type MouseEvent } from 'react';
 import {
   BoxGeometry,
@@ -20,6 +20,7 @@ import { RingPing } from './fx/Rings';
 import { registerFx } from './fx/fxGain';
 import { LABEL_WRAPPER_STYLE } from './fx/labelRules';
 import { PALETTE } from './palette';
+import { pieceTrack, onSceneTap } from './sceneTap';
 import type { PieceHit } from './tapPick';
 
 /**
@@ -55,6 +56,8 @@ const SUCK_S = 0.35;
 const SUCK_RISE = 2.5;
 /** World units from the ground up to the bottom edge of the `부품` tag. */
 const TAG_LIFT = 0.75;
+/** About half the tag's height in world units at the overview distance (for `pieceTrack`). */
+const TAG_CENTRE = 0.3;
 
 const noRaycast = () => {};
 const HIDDEN = { visibility: 'hidden' } as const;
@@ -62,13 +65,6 @@ const meshRaycast = Mesh.prototype.raycast;
 
 /** What the piece's finger box says to the module tap handler (`tapPick.ts`). */
 const PIECE_HIT: PieceHit = { piece: true };
-
-function onTap(e: ThreeEvent<MouseEvent>) {
-  e.stopPropagation();
-  useStore
-    .getState()
-    .collectPiece(performance.now(), Date.now(), { x: e.nativeEvent.clientX, y: e.nativeEvent.clientY });
-}
 
 /** The name tag `부품` over the piece takes taps like the piece. */
 function onTagTap(e: MouseEvent) {
@@ -156,7 +152,7 @@ export function PartPiece() {
   const ping = useStore((s) => s.partPing);
   const [pingX, pingZ] = ping.seq > 0 ? partSpot(ping.slot) : [0, 0];
 
-  useFrame(({ clock }, delta) => {
+  useFrame(({ clock, camera }, delta) => {
     const g = group.current;
     const b = body.current;
     const m = mark.current;
@@ -178,6 +174,9 @@ export function PartPiece() {
     const mine = pickup.kind === 'pending' && pickup.slot === slot;
     if (a.shown && !shown && mine) a.suckAt = time;
     if (shown) a.suckAt = -1;
+    if (pieceTrack.live && !shown) pieceTrack.goneAt = performance.now();
+    pieceTrack.live = shown;
+    pieceTrack.camera = camera;
     a.shown = shown;
     t.raycast = shown ? meshRaycast : noRaycast;
     // The tag goes with the piece; written to the DOM only when that changes.
@@ -202,6 +201,10 @@ export function PartPiece() {
     }
     g.visible = true;
     g.position.set(x, 0, z);
+    pieceTrack.x = x;
+    pieceTrack.y = REST_Y;
+    pieceTrack.tagY = TAG_LIFT + TAG_CENTRE;
+    pieceTrack.z = z;
     b.position.y = y;
     b.visible = sucking || blinkOn(now);
     b.scale.setScalar(scale);
@@ -230,7 +233,7 @@ export function PartPiece() {
           visible={false}
           position-y={PART_Y}
           userData={PIECE_HIT}
-          onClick={onTap}
+          onClick={onSceneTap}
         />
         <Html position={[0, TAG_LIFT, 0]} style={LABEL_WRAPPER_STYLE} zIndexRange={[0, 0]}>
           <div ref={tag} className="fx-anchor fx-part-anchor" style={HIDDEN}>

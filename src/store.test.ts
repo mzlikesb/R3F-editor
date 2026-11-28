@@ -585,3 +585,14 @@ describe('store.markModelIn (the loading pill waits for the module models)', () 
     expect(s().modelsIn).toEqual(['oxygen', 'generator']);
   });
 });
+
+describe('pingNextPiece (a tap where a piece just was)', () => {
+  it('keeps the selection and pings the piece out now, or the next one', () => {
+    const START = (partSlot(T) + 1) * PART_SLOT_MS;
+    s().receive(snapshot({ parts: 0, lastPartSlot: partSlot(START), serverNow: START }), 0, START);
+    s().select('oxygen');
+    s().pingNextPiece(START);
+    expect(s().selected).toBe('oxygen');
+    expect(s().partPing.waitFor).toBe(partSlot(START) + 1);
+  });
+});

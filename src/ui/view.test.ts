@@ -146,11 +146,12 @@ describe('banners', () => {
 });
 
 describe('lastRepairLine', () => {
-  const last = (mine: boolean | null, helpers = 0, moduleId: 'oxygen' | 'comms' = 'oxygen') => ({
+  const last = (mine: boolean | null, helpers = 0, moduleId: 'oxygen' | 'comms' = 'oxygen', helped = false) => ({
     moduleId,
     at: T,
     mine,
     helpers,
+    helped,
   });
 
   it('says who and which module', () => {
@@ -162,6 +163,12 @@ describe('lastRepairLine', () => {
     expect(lastRepairLine(last(true, 1), T + 1000)).toBe('마지막: 나 외 1명 · 산소 탱크 · 방금');
     expect(lastRepairLine(last(true, 2), T + 1000)).toBe('마지막: 나 외 2명 · 산소 탱크 · 방금');
     expect(lastRepairLine(last(false, 2), T + 1000)).toBe('마지막: 다른 사람 외 2명 · 산소 탱크 · 방금');
+  });
+
+  it('a repair I helped with counts me in: 나 외 N명 (009-2 playtest)', () => {
+    // helpers counts me; the others are whoever made it count plus the other helpers.
+    expect(lastRepairLine(last(false, 2, 'oxygen', true), T + 1000)).toBe('마지막: 나 외 2명 · 산소 탱크 · 방금');
+    expect(lastRepairLine(last(false, 1, 'oxygen', true), T + 1000)).toBe('마지막: 나 외 1명 · 산소 탱크 · 방금');
   });
 
   it('leaves out who when it came from a snapshot', () => {
@@ -308,7 +315,8 @@ describe('repairButton (plan 009 B.4)', () => {
   });
 
   it('with an empty store and a piece out: go and pick it up', () => {
-    expect(repairButton({ ...ctx, parts: 0 })).toEqual({ mode: 'fetch', label: '부품을 먼저 주워요' });
+    // 009-2 playtest: `부품을 먼저 주워요` read as a button that picks one up.
+    expect(repairButton({ ...ctx, parts: 0 })).toEqual({ mode: 'fetch', label: '보라색 부품을 눌러 주워요' });
   });
 
   it('with an empty store and this slot taken: seconds to the next piece, rounded up', () => {

@@ -17,6 +17,7 @@ import { PALETTE } from './palette';
 import {
   HALO_PEAK,
   HALO_SIZE,
+  haloNearScale,
   MAX_PRESENCE_LIGHTS,
   presenceBlink,
   presenceHover,
@@ -116,7 +117,8 @@ export function PresenceLights() {
       m.setColorAt(i, tint.copy(base).multiplyScalar(blink));
       // The halo faces the camera; its plane runs through the drone, so the drone hides its centre.
       dummy.quaternion.copy(camera.quaternion);
-      dummy.scale.setScalar(s[i]! * HALO_SIZE);
+      const near = haloNearScale(camera.position.distanceTo(dummy.position));
+      dummy.scale.setScalar(s[i]! * HALO_SIZE * near);
       dummy.updateMatrix();
       h.setMatrixAt(i, dummy.matrix);
       h.setColorAt(i, tint.copy(base).multiplyScalar(blink * HALO_PEAK));

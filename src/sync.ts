@@ -23,6 +23,8 @@ export interface LastRepairView {
   mine: boolean | null;
   /** Others who were holding it when it counted (`repaired.helpers`, #56); 0 from a snapshot. */
   helpers: number;
+  /** I was one of the helpers (`repaired.helped`); false from a snapshot. */
+  helped: boolean;
 }
 
 /** The versioned part of the base, as last heard from the server. */
@@ -124,7 +126,7 @@ export function applyServerMessage(state: SyncState, msg: ServerMessage, dateNow
         faults: base.faults.filter((f) => f.id !== msg.faultId),
         repairs: msg.repairs,
         version: msg.version,
-        lastRepair: { moduleId: msg.moduleId, at: msg.at, mine: msg.mine, helpers: msg.helpers },
+        lastRepair: { moduleId: msg.moduleId, at: msg.at, mine: msg.mine, helpers: msg.helpers, helped: msg.helped },
         parts: msg.parts ?? base.parts,
       };
       const end = msg.blackoutEnd;
@@ -166,7 +168,7 @@ function baseFromSnapshot(msg: SnapshotMessage): BaseView {
     longestUptimeMs: msg.longestUptimeMs,
     blackout: msg.blackout,
     blackouts: msg.blackouts,
-    lastRepair: msg.lastRepair ? { ...msg.lastRepair, mine: null, helpers: 0 } : null,
+    lastRepair: msg.lastRepair ? { ...msg.lastRepair, mine: null, helpers: 0, helped: false } : null,
     parts: msg.parts,
     lastPartSlot: msg.lastPartSlot,
   };
