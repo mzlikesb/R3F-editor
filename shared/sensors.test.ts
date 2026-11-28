@@ -69,11 +69,38 @@ describe('sensorValue', () => {
   });
 });
 
+describe('fault onset (playtest: the value looked healthy right after a fault)', () => {
+  it('half a second in, the value is already far from nominal: at least 25% of the way to worst', () => {
+    for (const id of MODULE_IDS) {
+      const spec = SENSORS[id];
+      const f = faultOn(id);
+      const full = Math.abs(spec.worst - spec.nominal);
+      // The wobble is up to +-wobble, so take the worst case over a few sample times.
+      for (const dt of [500, 600, 1000, 2000]) {
+        const off = Math.abs(sensorValue(id, f, T0 + dt) - spec.nominal);
+        expect(off).toBeGreaterThanOrEqual(0.25 * full - spec.wobble);
+        expect(off).toBeGreaterThan(spec.wobble * 2);
+      }
+    }
+  });
+
+  it('reads abnormal within one second', () => {
+    for (const id of MODULE_IDS) expect(isAbnormal(id, sensorValue(id, faultOn(id), T0 + 1000))).toBe(true);
+  });
+
+  it('keeps getting worse after the jump', () => {
+    for (const id of MODULE_IDS) {
+      expect(severity(5000, SENSORS[id].rampMs)).toBeGreaterThan(severity(600, SENSORS[id].rampMs));
+    }
+  });
+});
+
 describe('severity', () => {
   it('eases from 0 to 1 over the ramp and caps', () => {
     expect(severity(-5, 1000)).toBe(0);
     expect(severity(0, 1000)).toBe(0);
-    expect(severity(500, 1000)).toBeCloseTo(0.75);
+    expect(severity(500, 1000)).toBeGreaterThan(0.75);
+    expect(severity(500, 1000)).toBeLessThan(1);
     expect(severity(1000, 1000)).toBe(1);
     expect(severity(5000, 1000)).toBe(1);
     expect(severity(Number.NaN, 1000)).toBe(0);

@@ -25,3 +25,13 @@ export function labelShift(box: LabelBox, viewportWidth: number, hudBottom: numb
   const dy = hudBottom > 0 && box.top < floor ? floor - box.top : 0;
   return { dx, dy };
 }
+
+/**
+ * Where the leader line (the tail) sits from the label's center, px. The label was shifted by `dx`,
+ * so the module is `-dx` away from the center; the tail follows it, but stays on the label's face
+ * (at least `LABEL_MARGIN` from either end) so it never hangs off a corner.
+ */
+export function tailOffset(dx: number, width: number): number {
+  const reach = Math.max(0, width / 2 - LABEL_MARGIN);
+  return Math.max(-reach, Math.min(reach, -dx));
+}

@@ -116,12 +116,13 @@ export function Panel() {
   // The faint dashed line is the healthy level; the part of the trend away from it turns red.
   const baselineY = trendBaselineY(selected, TREND_H);
   const repairButton = view.repairFaultId !== null;
+  const calm = !view.goTo && !repairButton;
 
   const dispatch = (event: HoldEvent) => useStore.getState().dispatchHold(event);
   const label = holdKind === 'holding' ? '계속 누르세요…' : holdKind === 'pending' ? '수리 중…' : '꾹 눌러 수리 (1초)';
 
   return (
-    <aside className="panel" onContextMenu={(e) => e.preventDefault()}>
+    <aside className={calm ? 'panel panel-calm' : 'panel'} onContextMenu={(e) => e.preventDefault()}>
       <div className="panel-head">
         <h2>{view.title}</h2>
         <p className={view.status === 'fault' ? 'status warn' : 'status ok'}>

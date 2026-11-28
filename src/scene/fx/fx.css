@@ -1,24 +1,43 @@
 /* Labels hang from their bottom edge at the anchor point, centered horizontally. */
 .fx-anchor {
   position: relative;
-  padding-bottom: 9px; /* room for the leader line */
+  padding-bottom: 14px; /* room for the leader line */
   transform: translate(calc(-50% + var(--fx-dx, 0px)), calc(-100% + var(--fx-dy, 0px)));
   transition: opacity 0.2s ease;
 }
 
-/* The leader line: from the label down to the module it names. */
+/*
+ * The leader line: bright and thick, from the label down to a dot on the module it names, so a
+ * label that floats over a module behind it is not read as that one's name (#103).
+ */
 .fx-anchor::after {
   content: '';
   position: absolute;
-  left: calc(50% - var(--fx-dx, 0px));
+  left: calc(50% + var(--fx-tail, 0px) - 1px);
   bottom: 0;
-  width: 1px;
-  height: 9px;
-  background: rgba(244, 246, 248, 0.6);
+  width: 2px;
+  height: 14px;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgba(16, 18, 22, 0.55);
+  pointer-events: none;
+}
+
+/* The dot at the foot of the line sits right on the module's top. */
+.fx-anchor::before {
+  content: '';
+  position: absolute;
+  left: calc(50% + var(--fx-tail, 0px) - 4px);
+  bottom: -4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 1.5px rgba(16, 18, 22, 0.7);
   pointer-events: none;
 }
 
 /* Behind another module from here: faint, so it is not read as that module's label. */
+.fx-anchor.fx-lowered::before,
 .fx-anchor.fx-lowered::after {
   display: none;
 }
