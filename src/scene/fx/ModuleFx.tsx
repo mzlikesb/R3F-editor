@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { effectsFor } from '../../feedback';
 import { selectBlackout, selectModuleFault, selectOthersHolding, selectReady, useStore } from '../../store';
-import { floorRingRange, LAYOUT, MODEL_BOUNDS } from '../layout';
+import { floorRingRange, LAYOUT, MODEL_BOUNDS, TOP_AT } from '../layout';
 import type { ModuleFxProps } from '../moduleTypes';
 import { Glow } from './Glow';
 import { FaultBadge, FaultDot, NameTag } from './Labels';
@@ -64,7 +64,16 @@ export function ModuleFx({ id, handle }: ModuleFxProps) {
 
   const height = handle?.height ?? 1;
   const radius = handle?.radius ?? 0.6;
-  const label = plan.badge === id ? 'badge' : plan.dots.includes(id) ? 'dot' : plan.tag === id ? 'tag' : null;
+  const label =
+    plan.badge === id
+      ? 'badge'
+      : plan.dots.includes(id)
+        ? 'dot'
+        : plan.tag === id
+          ? 'tag'
+          : plan.intro.includes(id)
+            ? 'intro'
+            : null;
   // The model's parent is the module group, the only scaled ancestor (`scene/Module.tsx`).
   const unit = 1 / (handle?.model.parent?.scale.x || LAYOUT[id].scale);
   // Labels do not wait for the model: they mount from the layout's known bounds as soon as the base
@@ -79,12 +88,14 @@ export function ModuleFx({ id, handle }: ModuleFxProps) {
       ) : label === 'dot' ? (
         <FaultDot id={id} height={labelHeight} unit={unit} />
       ) : label === 'tag' ? (
-        <NameTag id={id} height={labelHeight} unit={unit} />
+        <NameTag id={id} height={labelHeight} unit={unit} broken={faulted} />
+      ) : label === 'intro' ? (
+        <NameTag id={id} height={labelHeight} unit={unit} faint />
       ) : null}
       {handle ? (
         <>
           <FloorRing range={floorRingRange(id)} fault={faulted} />
-          {faulted || !ready ? null : <StatusLight height={height} />}
+          {faulted || !ready ? null : <StatusLight height={height} at={TOP_AT[id]} />}
           {othersHolding ? <HoldingRing height={height} radius={radius} /> : null}
           <SweepRing radius={radius} height={height} token={tokens.sweep} />
           <RingPing radius={radius} token={tokens.ping} />

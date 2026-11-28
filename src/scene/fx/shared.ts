@@ -6,6 +6,7 @@ import { registerFx } from './fxGain';
 /** Colors of the fault (red), healthy (green) and selected (cyan) states. */
 export const FAULT_COLOR = new Color(PALETTE.fault);
 export const OK_COLOR = new Color(PALETTE.repaired);
+export const REPAIR_FLASH_COLOR = new Color(PALETTE.repairFlash);
 export const SELECT_COLOR = new Color(PALETTE.select);
 
 /** Durations (seconds) of the one-shot effects. */

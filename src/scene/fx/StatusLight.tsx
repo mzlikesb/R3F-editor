@@ -59,7 +59,7 @@ const worldScale = new Vector3();
  * The green dot of a healthy module, a little above its top, with a soft additive glow. Its group
  * undoes the module's own scale, so every module's dot looks the same size on screen.
  */
-export function StatusLight({ height }: { height: number }) {
+export function StatusLight({ height, at }: { height: number; at: { x: number; z: number } }) {
   const group = useRef<Group>(null);
 
   useLayoutEffect(() => {
@@ -70,8 +70,8 @@ export function StatusLight({ height }: { height: number }) {
     parent.getWorldScale(worldScale);
     const s = worldScale.x || 1;
     g.scale.setScalar(1 / s);
-    g.position.y = height + LIFT / s;
-  }, [height]);
+    g.position.set(at.x, height + LIFT / s, at.z);
+  }, [height, at]);
 
   return (
     <group ref={group}>

@@ -13,7 +13,7 @@ import {
   type Group,
 } from 'three';
 import { PART_Y, partSlot, partSpot } from '../../shared/parts';
-import { blinkOn, pieceShown, vanishReason } from '../parts';
+import { blinkOn, partTagVisible, pieceShown, vanishReason } from '../parts';
 import { selectReady, useStore } from '../store';
 import { serverNow } from '../sync';
 import { RingPing } from './fx/Rings';
@@ -152,6 +152,12 @@ export function PartPiece() {
   const ping = useStore((s) => s.partPing);
   const [pingX, pingZ] = ping.seq > 0 ? partSpot(ping.slot) : [0, 0];
 
+  const setTag = (on: boolean) => {
+    if (!tag.current || on === tagShown.current) return;
+    tagShown.current = on;
+    tag.current.style.visibility = on ? 'visible' : 'hidden';
+  };
+
   useFrame(({ clock, camera }, delta) => {
     const g = group.current;
     const b = body.current;
@@ -182,15 +188,10 @@ export function PartPiece() {
     pieceTrack.camera = camera;
     a.shown = shown;
     t.raycast = shown ? meshRaycast : noRaycast;
-    // The tag goes with the piece; written to the DOM only when that changes.
-    if (tag.current && shown !== tagShown.current) {
-      tagShown.current = shown;
-      tag.current.style.visibility = shown ? 'visible' : 'hidden';
-    }
-
     const sucking = a.suckAt >= 0 && time - a.suckAt < SUCK_S;
     if (!shown && !sucking) {
       g.visible = false;
+      setTag(false);
       return;
     }
     const [x, z] = partSpot(slot);
@@ -211,6 +212,8 @@ export function PartPiece() {
     pieceTrack.z = z;
     b.position.y = y;
     b.visible = sucking || blinkOn(now);
+    // The tag goes with the nut, blink included; written to the DOM only when that changes.
+    setTag(partTagVisible(shown, b.visible));
     b.scale.setScalar(scale);
     b.rotation.y += delta * SPIN;
     // The mark stays on the ground; it is there once the piece has landed.

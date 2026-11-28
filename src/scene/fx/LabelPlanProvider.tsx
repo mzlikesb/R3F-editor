@@ -1,7 +1,7 @@
-import { useMemo, type ReactNode } from 'react';
-import { selectActivity, selectBlackout, selectBaseIn, selectFaults, useStore } from '../../store';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { selectActivity, selectBlackout, selectBaseIn, selectFaults, selectReady, useStore } from '../../store';
 import { LabelPlanContext } from './labelPlanContext';
-import { holdingModules, labelPlan } from './labelRules';
+import { holdingModules, INTRO_MS, labelPlan } from './labelRules';
 
 /** Computes the label plan once for the whole base; every module reads it with `useLabelPlan`. */
 export function LabelPlanProvider({ children }: { children: ReactNode }) {
@@ -10,10 +10,27 @@ export function LabelPlanProvider({ children }: { children: ReactNode }) {
   const blackout = useStore(selectBlackout);
   const activity = useStore(selectActivity);
   // Mounted as soon as the base is in; `Anchored` keeps the label hidden until `selectReady` (#61).
-  const ready = useStore(selectBaseIn);
+  const baseIn = useStore(selectBaseIn);
+  const shown = useStore(selectReady);
+  // The faint names of the first screen run from the moment the labels become visible, once.
+  const [intro, setIntro] = useState(true);
+  useEffect(() => {
+    if (!shown) return;
+    const timer = setTimeout(() => setIntro(false), INTRO_MS);
+    return () => clearTimeout(timer);
+  }, [shown]);
+  // The faint names mount only once visible: their CSS fade-out runs from mount, and labels mount early.
   const plan = useMemo(
-    () => labelPlan({ ready, faults, selected, blackout, holding: holdingModules(faults, activity) }),
-    [ready, faults, selected, blackout, activity],
+    () =>
+      labelPlan({
+        ready: baseIn,
+        faults,
+        selected,
+        blackout,
+        holding: holdingModules(faults, activity),
+        intro: intro && shown,
+      }),
+    [baseIn, faults, selected, blackout, activity, intro, shown],
   );
   return <LabelPlanContext.Provider value={plan}>{children}</LabelPlanContext.Provider>;
 }

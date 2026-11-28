@@ -8,6 +8,12 @@ export const PALETTE = {
   fault: '#ff2a1a',
   /** A repair: sweep ring, emissive blend. */
   repaired: '#3ddc84',
+  /**
+   * The body's flash right after a repair: pale green-white that settles to `repaired`. It does not
+   * start from the fault red, because red to green passes through orange and the body read as
+   * still broken for a moment (neon, #103).
+   */
+  repairFlash: '#e2ffee',
   /** A healthy module's status light. */
   statusLight: '#4ade80',
   /**
@@ -97,4 +103,11 @@ function hue(hex: string): number {
 export function hueDistance(a: string, b: string): number {
   const d = Math.abs(hue(a) - hue(b));
   return Math.min(d, 360 - d);
+}
+
+/** `a` blended toward `b` by `t` (0..1) in linear light, as three.js blends `Color.lerp`. */
+export function mixHex(a: string, b: string, t: number): string {
+  const ca = rgb(a).map(toLinear);
+  const cb = rgb(b).map(toLinear);
+  return linearToHex(ca.map((v, i) => v + ((cb[i] ?? 0) - v) * t) as unknown as Rgb);
 }

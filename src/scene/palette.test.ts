@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PALETTE, contrastRatio, hueDistance, linearToHex, luminance, scaleHex } from './palette';
+import { PALETTE, contrastRatio, hueDistance, linearToHex, luminance, mixHex, scaleHex } from './palette';
 
 /**
  * The palette (plan 008 A.1): the selection colour must not be read as a fault, a repair, the
@@ -152,5 +152,28 @@ describe('part colour (plan 009 B.1)', () => {
     expect(contrastRatio(PALETTE.part, scaleHex(PALETTE.fog, PALETTE.skyBlackout))).toBeGreaterThanOrEqual(
       MIN_CONTRAST,
     );
+  });
+});
+
+describe('repair flash (#103)', () => {
+  it('never passes through orange: every step from the flash to the repair green stays green-white', () => {
+    for (let i = 0; i <= 10; i++) {
+      const c = mixHex(PALETTE.repairFlash, PALETTE.repaired, i / 10);
+      // Far from the fault red and the hold amber in hue, or too pale to have a hue.
+      const r = parseInt(c.slice(1, 3), 16);
+      const g = parseInt(c.slice(3, 5), 16);
+      expect(g).toBeGreaterThanOrEqual(r);
+      expect(hueDistance(c, PALETTE.repaired)).toBeLessThan(60);
+    }
+  });
+
+  it('the red to green blend it replaces did', () => {
+    const mid = mixHex(PALETTE.fault, PALETTE.repaired, 0.4);
+    expect(parseInt(mid.slice(1, 3), 16)).toBeGreaterThan(parseInt(mid.slice(3, 5), 16) * 0.7);
+  });
+
+  it('mixHex hits its ends', () => {
+    expect(mixHex('#000000', '#ffffff', 0)).toBe('#000000');
+    expect(mixHex('#000000', '#ffffff', 1)).toBe('#ffffff');
   });
 });

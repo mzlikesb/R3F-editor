@@ -44,6 +44,15 @@ export function blinkOn(serverNow: number): boolean {
   return left > BLINK_MS || Math.floor(left / BLINK_HALF_MS) % 2 === 0;
 }
 
+/**
+ * Whether the `부품` tag shows: only while the nut itself is drawn. The nut blinks in the last
+ * seconds of its slot; the tag used to stay on through the off half, a label on bare ground with no
+ * nut or ring under it (neon on #124). `bodyVisible` is the nut's own visibility this frame.
+ */
+export function partTagVisible(shown: boolean, bodyVisible: boolean): boolean {
+  return shown && bodyVisible;
+}
+
 export type PickupEvent =
   /** The piece of `slot` was tapped; `allowed` when the socket is open and the protocol readable. */
   | { type: 'tap'; slot: number; now: number; allowed: boolean }

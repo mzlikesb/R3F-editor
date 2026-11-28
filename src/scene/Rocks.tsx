@@ -5,6 +5,8 @@ import { SceneErrorBoundary } from './ErrorBoundary';
 import { PROPS, type Prop } from './layout';
 
 const DRACO = '/draco/';
+/** Multiplies the crater texture: pulls its rim and wall toward the ground colour, lowering their contrast. */
+const CRATER_TINT = '#838a87';
 
 function PropModel({ prop }: { prop: Prop }) {
   const { scene } = useGLTF(`/models/${prop.model}.glb`, DRACO);
@@ -18,6 +20,9 @@ function PropModel({ prop }: { prop: Prop }) {
       const m = o.material as MeshStandardMaterial;
       m.metalness = 0.1;
       m.roughness = 1;
+      // A crater is floor, not something to tap: its texture is pale pink and read as a structure
+      // against the dark ground (neon, phone-casual, #103). Multiplied down toward the ground tone.
+      if (prop.model === 'crater') m.color.set(CRATER_TINT);
     });
     return clone;
   }, [scene, prop.model]);

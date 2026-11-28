@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MODULE_IDS, type Fault, type ModuleId } from '../../../shared/protocol';
-import { badgeText, dotText, holdingModules, labelPlan, type LabelInput } from './labelRules';
+import { badgeText, dotText, holdingModules, INTRO_MS, labelPlan, type LabelInput } from './labelRules';
 
 const T = 1_800_000_000_000;
 const f = (moduleId: ModuleId, age: number): Fault => ({ id: `f-${moduleId}`, moduleId, createdAt: T - age });
@@ -10,16 +10,33 @@ function plan(overrides: Partial<LabelInput>) {
 }
 
 describe('labelPlan: nothing broken (005 rule)', () => {
-  it('tags the generator in the overview, or the selected module', () => {
-    expect(plan({})).toEqual({ badge: null, dots: [], tag: 'generator' });
-    expect(plan({ selected: 'habitat' })).toEqual({ badge: null, dots: [], tag: 'habitat' });
-    expect(plan({ selected: 'generator' })).toEqual({ badge: null, dots: [], tag: 'generator' });
+  it('tags only the selected module; a healthy overview is bare (the generator no longer stands out alone)', () => {
+    expect(plan({})).toEqual({ badge: null, dots: [], tag: null, intro: [] });
+    expect(plan({ selected: 'habitat' })).toEqual({ badge: null, dots: [], tag: 'habitat', intro: [] });
+    expect(plan({ selected: 'generator' })).toEqual({ badge: null, dots: [], tag: 'generator', intro: [] });
+  });
+
+  it('intro: the first seconds list all five modules as faint names, none for the selected one', () => {
+    expect(plan({ intro: true })).toEqual({ badge: null, dots: [], tag: null, intro: [...MODULE_IDS] });
+    const p = plan({ intro: true, selected: 'comms' });
+    expect(p.tag).toBe('comms');
+    expect(p.intro).toEqual(MODULE_IDS.filter((id) => id !== 'comms'));
+    expect(p.intro).toHaveLength(4);
+  });
+
+  it('intro never shows with a fault or before the base is in (it is for the quiet first screen)', () => {
+    expect(plan({ intro: true, ready: false }).intro).toEqual([]);
+    expect(plan({ intro: true, faults: [f('oxygen', 1)] }).intro).toEqual([]);
+  });
+
+  it('INTRO_MS is a few seconds, long enough to read five names', () => {
+    expect(INTRO_MS).toBe(6000);
   });
 });
 
 describe('labelPlan: loading (playtest #47)', () => {
   it('shows no label until the scene and the base are in, so no tag sits on the loading badge', () => {
-    const none = { badge: null, dots: [], tag: null };
+    const none = { badge: null, dots: [], tag: null, intro: [] };
     expect(plan({ ready: false })).toEqual(none);
     expect(plan({ ready: false, selected: 'habitat' })).toEqual(none);
     expect(plan({ ready: false, faults: [f('oxygen', 1)] })).toEqual(none);
@@ -32,8 +49,8 @@ describe('labelPlan: one or more faults', () => {
   const gen = f('generator', 10_000);
 
   it('one fault: its badge, no dots, no tag', () => {
-    expect(plan({ faults: [oxy] })).toEqual({ badge: 'oxygen', dots: [], tag: null });
-    expect(plan({ faults: [oxy], selected: 'habitat' })).toEqual({ badge: 'oxygen', dots: [], tag: null });
+    expect(plan({ faults: [oxy] })).toEqual({ badge: 'oxygen', dots: [], tag: null, intro: [] });
+    expect(plan({ faults: [oxy], selected: 'habitat' })).toEqual({ badge: 'oxygen', dots: [], tag: null, intro: [] });
   });
 
   it('several: one big badge, the rest are dots in fault order', () => {
@@ -43,17 +60,18 @@ describe('labelPlan: one or more faults', () => {
   });
 
   it('a selected broken module shows only its name tag: the panel says what is wrong (008 A.5)', () => {
-    expect(plan({ faults: [oxy], selected: 'oxygen' })).toEqual({ badge: null, dots: [], tag: 'oxygen' });
+    expect(plan({ faults: [oxy], selected: 'oxygen' })).toEqual({ badge: null, dots: [], tag: 'oxygen', intro: [] });
     // The others stay as they were with that module selected: small dots.
     expect(plan({ faults: [oxy, gen, comms], selected: 'comms' })).toEqual({
       badge: null,
       dots: ['oxygen', 'generator'],
       tag: 'comms',
+      intro: [],
     });
   });
 
   it('an unselected broken module keeps its badge while another module is selected', () => {
-    expect(plan({ faults: [oxy], selected: 'habitat' })).toEqual({ badge: 'oxygen', dots: [], tag: null });
+    expect(plan({ faults: [oxy], selected: 'habitat' })).toEqual({ badge: 'oxygen', dots: [], tag: null, intro: [] });
     expect(plan({ faults: [oxy, gen], selected: 'habitat' }).badge).toBe('generator');
   });
 
@@ -75,6 +93,7 @@ describe('labelPlan: one or more faults', () => {
       badge: 'comms',
       dots: [],
       tag: 'oxygen',
+      intro: [],
     });
   });
 
@@ -87,6 +106,7 @@ describe('labelPlan: one or more faults', () => {
       badge: null,
       dots: ['oxygen'],
       tag: 'generator',
+      intro: [],
     });
   });
 

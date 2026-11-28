@@ -6,7 +6,7 @@ import type { Fault } from '../../../shared/protocol';
 import { moduleName, type BaseModuleId } from '../../modules';
 import { selectReady, selectServerNow, useStore } from '../../store';
 import { isLabelOccluded } from './labelOcclusion';
-import { badgeText, dotText, LABEL_WRAPPER_STYLE } from './labelRules';
+import { badgeText, dotText, LABEL_WRAPPER_STYLE, tagLift } from './labelRules';
 import { labelShift, tailOffset } from './labelClamp';
 import { STATUS_LIGHT_TOP } from './StatusLight';
 import './fx.css';
@@ -17,7 +17,6 @@ import './fx.css';
  * (playtest #47: the name tag covered the green light, the badge covered the module's top).
  * A healthy module's tag clears the status light; a broken one has no light, so its badge sits lower.
  */
-const TAG_LIFT = STATUS_LIGHT_TOP + 0.15;
 const BADGE_LIFT = 0.45;
 /** The badge's sensor reading is rewritten this often (ms), straight into the DOM. */
 const SENSOR_TICK_MS = 500;
@@ -115,11 +114,27 @@ function AnchorBox({ anchor, children }: { anchor: RefObject<HTMLDivElement | nu
   );
 }
 
-/** Always-visible tag for the generator, shown for others only while selected. `pointer-events: none`. */
-export function NameTag({ id, height, unit }: { id: BaseModuleId; height: number; unit: number }) {
+/**
+ * The selected module's name. `faint`: the small grey name every module wears for a few seconds on the
+ * first screen (`INTRO_MS`) and then loses. `pointer-events: none`.
+ */
+export function NameTag({
+  id,
+  height,
+  unit,
+  faint = false,
+  broken = false,
+}: {
+  id: BaseModuleId;
+  height: number;
+  unit: number;
+  faint?: boolean;
+  /** The module is broken: no status light, so the pin comes down to its roof. */
+  broken?: boolean;
+}) {
   return (
-    <Anchored id={id} height={height} unit={unit} lift={TAG_LIFT}>
-      <div className="fx-tag">{moduleName(id)}</div>
+    <Anchored id={id} height={height} unit={unit} lift={tagLift(broken, STATUS_LIGHT_TOP)}>
+      <div className={faint ? 'fx-tag fx-tag-faint' : 'fx-tag'}>{moduleName(id)}</div>
     </Anchored>
   );
 }

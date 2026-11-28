@@ -4,6 +4,7 @@ import {
   BLINK_MS,
   PICKUP_TIMEOUT_MS,
   blinkOn,
+  partTagVisible,
   vanishReason,
   idlePickup,
   initialPing,
@@ -155,5 +156,19 @@ describe('vanishReason (who made the piece go)', () => {
   it('its slot ended, or the store filled up, otherwise', () => {
     expect(vanishReason(idlePickup, SLOT, { parts: 1, lastPartSlot: SLOT - 1 })).toBe('slot');
     expect(vanishReason(idlePickup, SLOT, { parts: 5, lastPartSlot: SLOT - 3 })).toBe('slot');
+  });
+});
+
+describe('partTagVisible: the tag never outlives the nut', () => {
+  it('is on only while the piece is out and its nut is drawn', () => {
+    expect(partTagVisible(true, true)).toBe(true);
+    expect(partTagVisible(true, false)).toBe(false);
+    expect(partTagVisible(false, true)).toBe(false);
+    expect(partTagVisible(false, false)).toBe(false);
+  });
+
+  it('follows the blink through the last seconds of a slot', () => {
+    const times = Array.from({ length: 24 }, (_, i) => START + PART_SLOT_MS - BLINK_MS + i * 125);
+    for (const t of times) expect(partTagVisible(true, blinkOn(t))).toBe(blinkOn(t));
   });
 });

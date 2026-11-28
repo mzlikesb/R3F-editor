@@ -36,6 +36,28 @@
   pointer-events: none;
 }
 
+/* The first-screen names are quiet, so their leader is a thin grey tick, not the bright selected-label line. */
+.fx-anchor:has(.fx-tag-faint)::after {
+  width: 1px;
+  height: 10px;
+  left: calc(50% + var(--fx-tail, 0px) - 0.5px);
+  background: rgba(180, 186, 195, 0.7);
+  box-shadow: none;
+}
+
+.fx-anchor:has(.fx-tag-faint)::before {
+  width: 4px;
+  height: 4px;
+  left: calc(50% + var(--fx-tail, 0px) - 2px);
+  bottom: -2px;
+  background: rgba(180, 186, 195, 0.8);
+  box-shadow: none;
+}
+
+.fx-anchor:has(.fx-tag-faint) {
+  padding-bottom: 10px;
+}
+
 /* Behind another module from here: faint, so it is not read as that module's label. */
 .fx-anchor.fx-lowered::before,
 .fx-anchor.fx-lowered::after {
@@ -63,6 +85,25 @@
 .fx-tag {
   border: 1px solid rgba(255, 255, 255, 0.22);
   font-weight: 600;
+}
+
+.fx-tag-faint {
+  padding: 1px 6px;
+  border-color: transparent;
+  border-radius: 4px;
+  background: rgba(16, 18, 22, 0.55);
+  color: #b4bac3;
+  font-size: 11px;
+  font-weight: 500;
+  animation:
+    fx-fade-in 0.4s ease-out,
+    fx-fade-out 0.8s ease-in 5.2s forwards;
+}
+
+@keyframes fx-fade-out {
+  to {
+    opacity: 0;
+  }
 }
 
 .fx-badge {

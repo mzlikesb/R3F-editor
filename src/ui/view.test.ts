@@ -25,6 +25,7 @@ import {
   segments,
   togetherLine,
   uptimeLine,
+  formatUptime,
   updateBanner,
 } from './view';
 
@@ -55,6 +56,24 @@ describe('agoText', () => {
     expect(agoText(MIN)).toBe('1분 전');
     expect(agoText(2 * HOUR + 5 * MIN)).toBe('2시간 전');
     expect(agoText(4 * 24 * HOUR)).toBe('4일 전');
+  });
+});
+
+describe('formatUptime: seconds below an hour', () => {
+  it('counts seconds under an hour, then goes coarse', () => {
+    expect(formatUptime(0)).toBe('0초');
+    expect(formatUptime(59_999)).toBe('59초');
+    expect(formatUptime(MIN)).toBe('1분 0초');
+    expect(formatUptime(12 * MIN + 34_000)).toBe('12분 34초');
+    expect(formatUptime(HOUR - 1)).toBe('59분 59초');
+    expect(formatUptime(HOUR)).toBe('1시간');
+    expect(formatUptime(3 * HOUR + 12 * MIN + 30_000)).toBe('3시간 12분');
+    expect(formatUptime(-5)).toBe('0초');
+  });
+
+  it('is what the HUD line shows while running', () => {
+    const base = { uptimeStartedAt: T - (12 * MIN + 34_000), longestUptimeMs: 0, blackout: null };
+    expect(uptimeLine(base, T)).toBe('가동 12분 34초');
   });
 });
 
