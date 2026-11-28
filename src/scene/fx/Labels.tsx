@@ -6,7 +6,7 @@ import type { Fault } from '../../../shared/protocol';
 import { moduleName, type BaseModuleId } from '../../modules';
 import { selectReady, selectServerNow, useStore } from '../../store';
 import { isLabelOccluded } from './labelOcclusion';
-import { badgeText, dotText } from './labelRules';
+import { badgeText, dotText, LABEL_WRAPPER_STYLE } from './labelRules';
 import { labelShift } from './labelClamp';
 import { STATUS_LIGHT_TOP } from './StatusLight';
 import './fx.css';
@@ -61,7 +61,7 @@ function Anchored({
     el.classList.toggle('fx-dim', next);
   });
   return (
-    <Html position={[0, height + lift * unit, 0]} pointerEvents="none" zIndexRange={[0, 0]}>
+    <Html position={[0, height + lift * unit, 0]} style={LABEL_WRAPPER_STYLE} zIndexRange={[0, 0]}>
       <AnchorBox anchor={anchor}>{children}</AnchorBox>
     </Html>
   );
