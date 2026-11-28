@@ -4,6 +4,7 @@ import { useStore } from '../store';
 import { MODULES } from '../modules';
 import { AsteroidBelt } from './AsteroidBelt';
 import { CameraRig } from './CameraRig';
+import { CameraShake } from './CameraShake';
 import { Ground } from './Ground';
 import { OVERVIEW_START } from './layout';
 import { LabelPlanProvider } from './fx/LabelPlanProvider';
@@ -19,6 +20,7 @@ import { SolarPanels } from './SolarPanels';
 import { SceneTone } from './SceneTone';
 import { Stars } from './Sky';
 import { isTap } from './tap';
+import { useReducedMotion } from './useReducedMotion';
 
 /**
  * The canvas and everything in it: sky and fog, asteroid belt, lights, HDRI, ground, rocks, solar panels,
@@ -28,6 +30,7 @@ export function BaseCanvas() {
   const down = useRef({ x: 0, y: 0 });
   // The prop, not `setDpr`: a re-render of `Canvas` resets dpr to whatever the prop says.
   const dpr = useQuality((s) => s.dpr);
+  const reducedMotion = useReducedMotion();
   return (
     <div className="sky-root">
       <Canvas
@@ -57,6 +60,7 @@ export function BaseCanvas() {
           ))}
         </LabelPlanProvider>
         <CameraRig />
+        {!reducedMotion && <CameraShake />}
         <QualityController />
         {PERF_ENABLED && <PerfHud />}
       </Canvas>
