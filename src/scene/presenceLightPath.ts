@@ -71,3 +71,16 @@ export function presenceBlink(i: number, t: number): number {
   const k = 0.5 + 0.5 * Math.sin((t / BLINK.periodS) * Math.PI * 2 + phase);
   return BLINK.min + (BLINK.max - BLINK.min) * k;
 }
+
+/** A drone's own hover on top of its drift: small and quicker, so it reads as floating (#108). */
+export const HOVER = { amplitude: 0.2, periodS: 1.8 } as const;
+
+/** Height offset (m) of drone `i` at `t` seconds, in [-amplitude, amplitude], each on its own phase. */
+export function presenceHover(i: number, t: number): number {
+  return HOVER.amplitude * Math.sin((t / HOVER.periodS) * Math.PI * 2 + frac(i, 8) * Math.PI * 2);
+}
+
+/** The drone halo's opacity at its centre (additive, drone colour): under the Bloom threshold. */
+export const HALO_PEAK = 0.4;
+/** Halo size (m, the quad's side) at full scale. */
+export const HALO_SIZE = 1.6;

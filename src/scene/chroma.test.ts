@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { CHROMA_PEAK, CHROMA_S, chromaAmount, chromaPulse } from './chroma';
+import { initialFeedback } from '../feedback';
+import { initialRepairUi } from '../hold';
+import { setClientSender, useStore } from '../store';
+import { initialSync } from '../sync';
+import {
+  CHROMA_PEAK,
+  CHROMA_S,
+  CHROMA_SLOW_S,
+  chromaAmount,
+  chromaDebug,
+  chromaOffsetAt,
+  chromaPulse,
+  triggerChromaDebug,
+} from './chroma';
 
 /** Chromatic aberration pulse (008 C.3, R6): only a blackout seen starting live. */
 describe('chromaPulse', () => {
@@ -54,5 +67,42 @@ describe('chromaAmount', () => {
   it('is 0 before a pulse ever happened (negative elapsed)', () => {
     expect(chromaAmount(-1)).toBe(0);
     expect(chromaAmount(Number.POSITIVE_INFINITY)).toBe(0);
+  });
+});
+
+describe('the ?perf "blackout effect" debug trigger (#108)', () => {
+  it('fires a pulse on this client only: no message to the server, the store untouched', () => {
+    useStore.setState({ sync: initialSync, repair: initialRepairUi, feedback: initialFeedback, blackoutLiveAt: null });
+    const sent: unknown[] = [];
+    setClientSender((m) => sent.push(m));
+    const before = useStore.getState();
+    chromaDebug.slow = false;
+    triggerChromaDebug(1000);
+    expect(chromaOffsetAt(1010, null)).toBeGreaterThan(0);
+    expect(sent).toEqual([]);
+    expect(useStore.getState()).toBe(before);
+    setClientSender(null);
+  });
+
+  it('"slow" stretches the pulse from 0.4 s to 2 s', () => {
+    expect(CHROMA_SLOW_S).toBe(2);
+    chromaDebug.slow = false;
+    triggerChromaDebug(0);
+    expect(chromaOffsetAt(1000, null)).toBe(0);
+    chromaDebug.slow = true;
+    expect(chromaOffsetAt(1000, null)).toBeGreaterThan(0);
+    expect(chromaOffsetAt(2000, null)).toBe(0);
+    chromaDebug.slow = false;
+  });
+
+  it('a live blackout start still pulses on its own, at 0.4 s', () => {
+    chromaDebug.at = null;
+    expect(chromaOffsetAt(5000, 5000)).toBe(CHROMA_PEAK);
+    expect(chromaOffsetAt(5000 + CHROMA_S * 1000, 5000)).toBe(0);
+  });
+
+  it('chromaAmount takes a duration', () => {
+    expect(chromaAmount(1, CHROMA_SLOW_S)).toBeGreaterThan(0);
+    expect(chromaAmount(1)).toBe(0);
   });
 });

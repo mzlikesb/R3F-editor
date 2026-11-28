@@ -1,7 +1,7 @@
 import { Color, MeshBasicMaterial } from 'three';
 import { afterEach, describe, expect, it } from 'vitest';
 import { PALETTE } from '../palette';
-import { BLINK } from '../presenceLightPath';
+import { BLINK, HALO_PEAK } from '../presenceLightPath';
 import {
   BLOOM_THRESHOLD,
   FX_SCALE,
@@ -88,6 +88,18 @@ describe('against the Bloom threshold', () => {
     // And after tone mapping they are still a near-white, not a green.
     const [r, g, b] = shown(PALETTE.presenceLight, 'drone');
     expect(Math.max(r, g, b) - Math.min(r, g, b)).toBeLessThan(0.15);
+  });
+
+  it('the drone halo (additive, its peak over the lit ground) does not bloom (#108)', () => {
+    const groundLit = 0.3;
+    const drone = lum(lin(composerColor(new Color(PALETTE.presenceLight), 'drone')));
+    expect(drone * HALO_PEAK + groundLit).toBeLessThan(BLOOM_THRESHOLD);
+  });
+
+  it('the status light halo sprite (its texture peak, over the lit ground) does not bloom', () => {
+    // Texture centre rgba(120, 255, 170, 0.9), additive, times the halo scale.
+    const peak = lum(lin(new Color(120 / 255, 1, 170 / 255).convertSRGBToLinear())) * 0.9;
+    expect(peak * FX_SCALE.halo + 0.3).toBeLessThan(BLOOM_THRESHOLD);
   });
 
   it('the panel lamps stay under it: the field must not outshine the modules (A.4)', () => {

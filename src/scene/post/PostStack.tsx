@@ -19,7 +19,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { Vector2, type Camera, type Scene, type WebGLRenderer, type WebGLRenderTarget } from 'three';
 import { useStore } from '../../store';
-import { chromaAmount } from '../chroma';
+import { chromaOffsetAt } from '../chroma';
 import { BLOOM_THRESHOLD, setComposerGain } from '../fx/fxGain';
 import { PERF_ENABLED, POST_INFO } from '../perf';
 import { usePost } from '../postStore';
@@ -54,8 +54,7 @@ function useChromaPulse() {
   useFrame(() => {
     const e = ref.current;
     if (!e) return;
-    const at = useStore.getState().blackoutLiveAt;
-    const a = reduced || at === null ? 0 : chromaAmount((performance.now() - at) / 1000);
+    const a = reduced ? 0 : chromaOffsetAt(performance.now(), useStore.getState().blackoutLiveAt);
     if (e.offset.x !== a) e.offset.set(a, a);
   });
   return ref;
