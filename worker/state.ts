@@ -89,9 +89,11 @@ export function withPartDefaults(stored: BaseState, now: number): BaseState {
   const raw: Partial<BaseState> = stored;
   const parts = clampParts(raw.parts) ?? 0;
   const slot = Number.isInteger(raw.lastPartSlot) && raw.lastPartSlot! >= -1 ? raw.lastPartSlot! : -1;
-  // A slot past the current one (a clock that jumped back, a bad write) would block every piece
-  // until then; read it as the current slot.
-  const lastPartSlot = Math.min(slot, partSlot(now));
+  // A slot past the next one (a clock that jumped back, a bad write) would block every piece until
+  // then; read it as the next slot. Not as the current one: in a slot's last second `collect`
+  // accepts the next slot, and the reload before the next message must keep that marker, or the
+  // same piece could be collected again (Codex P2, #113).
+  const lastPartSlot = Math.min(slot, partSlot(now) + 1);
   if (parts === raw.parts && lastPartSlot === raw.lastPartSlot) return stored;
   return { ...stored, parts, lastPartSlot };
 }

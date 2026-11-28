@@ -772,17 +772,33 @@ describe('withPartDefaults (plan 009 A.1, R3)', () => {
     }
   });
 
-  it('reads a lastPartSlot past the current slot as the current slot, without changing storage', () => {
+  it('reads a lastPartSlot past the next slot as the next slot, without changing storage', () => {
     const SLOT_T = partSlot(T);
     const ahead = { ...old, parts: 1, lastPartSlot: SLOT_T + 500 };
     const copy = structuredClone(ahead);
     const read = withPartDefaults(ahead, T);
-    expect(read.lastPartSlot).toBe(SLOT_T);
+    expect(read.lastPartSlot).toBe(SLOT_T + 1);
     expect(ahead).toEqual(copy);
-    // So the next slot can be collected again.
-    expect(collect(read, SLOT_T + 1, T + PART_SLOT_MS)?.lastPartSlot).toBe(SLOT_T + 1);
-    // A current or past slot is left as it is.
-    const now = { ...old, parts: 1, lastPartSlot: SLOT_T };
-    expect(withPartDefaults(now, T)).toBe(now);
+    // So the slot after that can be collected again.
+    expect(collect(read, SLOT_T + 2, (SLOT_T + 2) * PART_SLOT_MS)?.lastPartSlot).toBe(SLOT_T + 2);
+    // A next, current or past slot is left as it is.
+    for (const lastPartSlot of [SLOT_T + 1, SLOT_T, SLOT_T - 3]) {
+      const kept = { ...old, parts: 1, lastPartSlot };
+      expect(withPartDefaults(kept, T)).toBe(kept);
+    }
+  });
+
+  it('an early collect survives the reload before the next message: the same piece cannot be collected twice (Codex P2)', () => {
+    // The last second of slot S: collect accepts S + 1.
+    const S = 1;
+    const late = (S + 1) * PART_SLOT_MS - 1;
+    const start = { ...old, parts: 0, lastPartSlot: -1 };
+    const first = collect(withPartDefaults(start, late), S + 1, late)!;
+    expect(first.parts).toBe(1);
+    expect(first.lastPartSlot).toBe(S + 1);
+    // BaseRoom reloads storage for every message: the reload must keep the early marker.
+    const reloaded = withPartDefaults(structuredClone(first), late);
+    expect(reloaded.lastPartSlot).toBe(S + 1);
+    expect(collect(reloaded, S + 1, late)).toBeNull();
   });
 });
