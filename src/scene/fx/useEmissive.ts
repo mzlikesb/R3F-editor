@@ -6,7 +6,7 @@ import { AFTERGLOW_MS } from '../../feedback';
 import { relightDelayMs } from '../blackout';
 import { PALETTE } from '../palette';
 import type { ModuleHandle } from '../moduleTypes';
-import { FAULT_COLOR, OK_COLOR, step, SWEEP_S, useOneShot } from './shared';
+import { FAULT_COLOR, OK_COLOR, REPAIR_FLASH_COLOR, step, SWEEP_S, useOneShot } from './shared';
 
 const tmp = new Color();
 const RELIGHT_COLOR = new Color(PALETTE.relight);
@@ -110,7 +110,7 @@ export function useEmissive(
     } else if (sweepRef.current >= 0) {
       const p = step(sweepRef, delta, SWEEP_S);
       if (p >= 0 && p < 1) {
-        color = tmp.copy(FAULT_COLOR).lerp(OK_COLOR, Math.min(1, p * 2));
+        color = tmp.copy(REPAIR_FLASH_COLOR).lerp(OK_COLOR, Math.min(1, p * 2));
         // The sweep's green hands over to the afterglow without a dip.
         intensity = Math.max(1.1 * (1 - p * p), glowIntensity);
       }

@@ -28,6 +28,20 @@ export const MODEL_BOUNDS: Record<BaseModuleId, { halfX: number; halfZ: number; 
   habitat: { halfX: 1.636, halfZ: 1.416, height: 1.5 },
 };
 
+/**
+ * Where a module's highest point is horizontally, in model units from its ground center. The status
+ * light sits over it. Most tops are flat enough that the center reads right; the comms tower's dish
+ * peaks at its back edge, and a light over the center floated off the dish from some angles (#103).
+ * Measured from each GLB's highest vertex.
+ */
+export const TOP_AT: Record<BaseModuleId, { x: number; z: number }> = {
+  generator: { x: 0, z: 0 },
+  oxygen: { x: 0, z: 0 },
+  greenhouse: { x: 0, z: 0 },
+  comms: { x: 0, z: 0.368 },
+  habitat: { x: 0, z: 0 },
+};
+
 const RING = 8.5;
 const at = (deg: number) => [Math.sin((deg * Math.PI) / 180) * RING, Math.cos((deg * Math.PI) / 180) * RING] as const;
 

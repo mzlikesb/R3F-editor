@@ -13,6 +13,7 @@ import {
   FLOOR_RING_POINTS,
   floorRingRange,
   selectRingRadius,
+  TOP_AT,
   type ModuleLayout,
 } from './layout';
 import { pickTap, type TapHit } from './tapPick';
@@ -212,5 +213,18 @@ describe('selection ring (plan 008 B.1)', () => {
       expect(own.length).toBeGreaterThanOrEqual(8);
     }
     for (const p of FLOOR_RING_POINTS) expect(p.y).toBe(0);
+  });
+});
+
+describe('status light anchor (#103)', () => {
+  it('stays inside every model footprint', () => {
+    for (const id of MODULE_IDS) {
+      expect(Math.abs(TOP_AT[id].x)).toBeLessThanOrEqual(MODEL_BOUNDS[id].halfX);
+      expect(Math.abs(TOP_AT[id].z)).toBeLessThanOrEqual(MODEL_BOUNDS[id].halfZ);
+    }
+  });
+
+  it('puts the comms light over the dish peak, not the footprint center', () => {
+    expect(TOP_AT.comms.z).toBeGreaterThan(0.3);
   });
 });

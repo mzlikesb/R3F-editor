@@ -15,6 +15,8 @@ export interface LabelInput {
   blackout: boolean;
   /** Modules whose fault someone *else* is holding right now (`holdingModules`). */
   holding: readonly BaseModuleId[];
+  /** The first seconds after the base appears (`INTRO_MS`): every healthy module shows a faint name. */
+  intro?: boolean;
 }
 
 export interface LabelPlan {
@@ -24,7 +26,12 @@ export interface LabelPlan {
   dots: BaseModuleId[];
   /** A name tag: when nothing is broken (005 rule), or on the selected broken module (008 A.5). */
   tag: BaseModuleId | null;
+  /** Modules that show a small grey name for a moment on arrival (nothing broken, not selected). */
+  intro: BaseModuleId[];
 }
+
+/** How long (ms) the faint names stay on the first screen: long enough to read five, then they go. */
+export const INTRO_MS = 6000;
 
 /**
  * One big badge at most, so labels never pile up on a phone. Badge priority (first that applies):
@@ -33,17 +40,21 @@ export interface LabelPlan {
  *    being repaired by someone is promoted;
  * 3. the generator, if broken;
  * 4. the oldest fault.
- * `dots`: the other broken modules in `faults` order. `tag` (nothing broken): the selected module,
- * or the generator in the overview (005). Nothing at all until `ready`.
+ * `dots`: the other broken modules in `faults` order. Nothing broken: only the selected module has
+ * a name tag, and the others stay bare; except for the first `INTRO_MS` after arrival, when `intro`
+ * lists every module as a faint grey name, so the five names are told once (principle 3; #103).
+ * Nothing at all until `ready`.
  *
  * A selected broken module gets only its name tag: its panel already says what is wrong and shows
  * the sensor (008 A.5). The others keep what they had with it selected: the generator in a
  * blackout or a module someone else is repairing keeps the badge, the rest are dots.
  */
 export function labelPlan(input: LabelInput): LabelPlan {
-  const { ready, faults, selected, blackout, holding } = input;
-  if (!ready) return { badge: null, dots: [], tag: null };
-  if (faults.length === 0) return { badge: null, dots: [], tag: selected ?? GENERATOR };
+  const { ready, faults, selected, blackout, holding, intro = false } = input;
+  if (!ready) return { badge: null, dots: [], tag: null, intro: [] };
+  if (faults.length === 0) {
+    return { badge: null, dots: [], tag: selected, intro: intro ? MODULE_IDS.filter((id) => id !== selected) : [] };
+  }
 
   const broken = faults.map((f) => f.moduleId);
   const isBroken = (id: BaseModuleId | null): id is BaseModuleId => id !== null && broken.includes(id);
@@ -52,7 +63,7 @@ export function labelPlan(input: LabelInput): LabelPlan {
 
   if (isBroken(selected)) {
     const badge = blackout && selected !== GENERATOR && broken.includes(GENERATOR) ? GENERATOR : heldPick;
-    return { badge, dots: broken.filter((id) => id !== badge && id !== selected), tag: selected };
+    return { badge, dots: broken.filter((id) => id !== badge && id !== selected), tag: selected, intro: [] };
   }
 
   let badge: BaseModuleId;
@@ -61,7 +72,7 @@ export function labelPlan(input: LabelInput): LabelPlan {
   else if (broken.includes(GENERATOR)) badge = GENERATOR;
   else badge = broken[0] ?? GENERATOR;
 
-  return { badge, dots: broken.filter((id) => id !== badge), tag: null };
+  return { badge, dots: broken.filter((id) => id !== badge), tag: null, intro: [] };
 }
 
 /** Broken modules whose fault has `activity[fault.id] >= 1` (others holding), in `faults` order. */

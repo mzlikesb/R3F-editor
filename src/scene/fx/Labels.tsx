@@ -115,11 +115,24 @@ function AnchorBox({ anchor, children }: { anchor: RefObject<HTMLDivElement | nu
   );
 }
 
-/** Always-visible tag for the generator, shown for others only while selected. `pointer-events: none`. */
-export function NameTag({ id, height, unit }: { id: BaseModuleId; height: number; unit: number }) {
+/**
+ * The selected module's name. `faint`: the small grey name every module wears for a few seconds on the
+ * first screen (`INTRO_MS`) and then loses. `pointer-events: none`.
+ */
+export function NameTag({
+  id,
+  height,
+  unit,
+  faint = false,
+}: {
+  id: BaseModuleId;
+  height: number;
+  unit: number;
+  faint?: boolean;
+}) {
   return (
     <Anchored id={id} height={height} unit={unit} lift={TAG_LIFT}>
-      <div className="fx-tag">{moduleName(id)}</div>
+      <div className={faint ? 'fx-tag fx-tag-faint' : 'fx-tag'}>{moduleName(id)}</div>
     </Anchored>
   );
 }

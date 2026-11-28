@@ -24,6 +24,17 @@ export function formatDuration(ms: number): string {
   return `${total}초`;
 }
 
+/**
+ * The running uptime in the HUD: seconds stay in below an hour (`45초`, `1분 5초`, `12분 34초`) so the
+ * count visibly climbs, then it is `formatDuration` (`3시간 12분`). A whole minute reads `2분 0초`.
+ */
+export function formatUptime(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  if (total < 60) return `${total}초`;
+  if (total < 3600) return `${Math.floor(total / 60)}분 ${total % 60}초`;
+  return formatDuration(ms);
+}
+
 /** How long ago: `방금` (< 5 s), `12초 전`, `3분 전`, `2시간 전`, `4일 전`. Negative counts as `방금`. */
 export function agoText(ms: number): string {
   if (ms < 5000) return '방금';
@@ -45,14 +56,14 @@ export function bestUptimeMs(base: UptimeView, serverNow: number): number {
 }
 
 /**
- * HUD top line (plan 006 C.19): `가동 3시간 12분`; in a blackout `가동 기록 끊김 · 최장 5시간`
+ * HUD top line (plan 006 C.19): `가동 12분 34초` / `가동 3시간 12분`; in a blackout `가동 기록 끊김 · 최장 5시간`
  * (longest from `bestUptimeMs`).
  */
 export function uptimeLine(base: UptimeView, serverNow: number): string {
   if (base.blackout !== null || base.uptimeStartedAt === null) {
     return `가동 기록 끊김 · 최장 ${formatDuration(bestUptimeMs(base, serverNow))}`;
   }
-  return `가동 ${formatDuration(serverNow - base.uptimeStartedAt)}`;
+  return `가동 ${formatUptime(serverNow - base.uptimeStartedAt)}`;
 }
 
 /**

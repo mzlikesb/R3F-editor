@@ -82,21 +82,35 @@ body {
   flex: none;
 }
 
-/* `기록` with a list mark: the HUD opens the record panel. */
+/*
+ * `기록` with a list mark: the HUD opens the record panel. The box is 40 px tall for a thumb (neon
+ * #103); the pill you see is the 24 px `::before` inside it, and the negative margin keeps the line
+ * as tall as before.
+ */
 .hud-cue {
   display: inline-flex;
   align-items: center;
   gap: 3px;
   position: relative;
-  margin-left: 8px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.1);
+  isolation: isolate;
+  box-sizing: border-box;
+  min-height: 40px;
+  margin: -8px 0 -8px 8px;
+  padding: 0 10px;
   color: #c9ced6;
   font-size: 13px;
   font-weight: 500;
   white-space: nowrap;
   vertical-align: 1px;
+}
+
+.hud-cue::before {
+  content: '';
+  position: absolute;
+  inset: 8px 0;
+  z-index: -1;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
 }
 
 /* The shared parts store (plan 009 R4), in the piece's violet: `부품 3/5`, `부품 가득` filled at the cap. */
@@ -255,16 +269,9 @@ body {
   }
 
   .hud-cue {
-    padding: 4px 7px;
+    padding: 0 7px;
     font-size: 12px;
   }
-}
-
-/* The pill is small, the touch target is not: 44 px tall. */
-.hud-cue::before {
-  content: '';
-  position: absolute;
-  inset: -8px -6px;
 }
 
 .hud-cue-icon {
