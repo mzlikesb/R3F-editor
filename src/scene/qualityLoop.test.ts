@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { DOWN_HOLD_MS, FpsMeter, SAMPLE_MS, WARMUP_MS } from './quality';
+import { DOWN_HOLD_MS, FpsMeter, POST_FULL, POST_NO_AO, POST_OFF, SAMPLE_MS, WARMUP_MS } from './quality';
 import { FORCED_FPS, createQualityLoop } from './qualityLoop';
 import { resetQualityStoreForTest, useQuality } from './qualityStore';
 
@@ -38,6 +38,23 @@ describe('createQualityLoop', () => {
     runTo(WARMUP_MS - SAMPLE_MS, 10);
     expect(useQuality.getState().stage).toBe(0);
     runTo(WARMUP_MS + DOWN_HOLD_MS + 2 * SAMPLE_MS, 10);
+    expect(useQuality.getState().stage).toBeGreaterThan(0);
+  });
+
+  it('a composer session (post axis open at load) drops N8AO before any stage (008 R3)', () => {
+    useQuality.getState().setPost(POST_FULL);
+    const { runTo } = setup();
+    runTo(WARMUP_MS + DOWN_HOLD_MS + 2 * SAMPLE_MS, 10);
+    expect(useQuality.getState()).toMatchObject({ stage: 0, post: POST_NO_AO });
+  });
+
+  it('the composer failing later (store post set to off) is taken up by the loop and stays', () => {
+    useQuality.getState().setPost(POST_FULL);
+    const { runTo } = setup();
+    runTo(WARMUP_MS, 60);
+    useQuality.getState().setPost(POST_OFF);
+    runTo(WARMUP_MS + DOWN_HOLD_MS + 3000, 10);
+    expect(useQuality.getState().post).toBe(POST_OFF);
     expect(useQuality.getState().stage).toBeGreaterThan(0);
   });
 

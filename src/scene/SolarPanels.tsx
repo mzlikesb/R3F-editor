@@ -1,5 +1,5 @@
 import { useFrame } from '@react-three/fiber';
-import { useLayoutEffect, useMemo, useRef } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import {
   BoxGeometry,
   type BufferGeometry,
@@ -18,6 +18,7 @@ import { selectBlackout, selectReady, useStore } from '../store';
 import { LAYOUT } from './layout';
 import { PALETTE } from './palette';
 import { PANELS, createPanelLights, relightDelays, stepPanelLights, type PanelLights } from './panels';
+import { registerFx } from './fx/fxGain';
 
 /**
  * A wide, low board tilted 30 degrees toward +z (the default overview camera), so its face reads
@@ -98,6 +99,8 @@ export function SolarPanels() {
       lightMaterial: new MeshBasicMaterial({ toneMapped: false, fog: false }),
     };
   }, []);
+  // Under the composer the lamps take the panel gain, still under the Bloom threshold (plan 008 B.4).
+  useEffect(() => registerFx(res.lightMaterial, 'panel'), [res]);
 
   useLayoutEffect(() => {
     const p = panels.current;

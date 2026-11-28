@@ -38,6 +38,7 @@ export function createQualityLoop({ meter, startedAt, isHidden, now }: QualityLo
     const q = useQuality.getState();
     state = stepQuality(state, e, q.ladder, th);
     if (state.stage !== q.stage) q.setStage(state.stage);
+    if (state.post !== q.post) q.setPost(state.post);
   };
 
   return {
@@ -46,9 +47,12 @@ export function createQualityLoop({ meter, startedAt, isHidden, now }: QualityLo
       if (t0 === null) return;
       const t = now();
       if (!state) {
-        state = initialQuality(t0);
+        state = initialQuality(t0, useQuality.getState().post);
         if (isHidden()) apply({ type: 'hidden', t });
       }
+      // The composer failed after the start: the session went plain, the axis is spent.
+      const post = useQuality.getState().post;
+      if (post > state.post) apply({ type: 'post', level: post });
       const force = useQuality.getState().forceLow;
       if (force !== forced) {
         forced = force;

@@ -5,6 +5,7 @@
  */
 import { create } from 'zustand';
 import type { ClientMessage, Fault, ModuleId, ServerMessage, SnapshotMessage } from '../shared/protocol';
+import { chromaPulse } from './scene/chroma';
 import { classifyRepaired, initialFeedback, reduceFeedback, type FeedbackEvent, type FeedbackState } from './feedback';
 import { initialRepairUi, reduceHold, type HoldEvent, type RepairUi } from './hold';
 import type { BaseModuleId } from './modules';
@@ -29,6 +30,11 @@ export interface Store {
   feedback: FeedbackState;
   /** The scene finished its first load (models and HDRI, or their fallbacks). Latches. */
   loaded: boolean;
+  /**
+   * `now` of the last blackout this tab saw start live (`chromaPulse`), null before one. A snapshot
+   * that is already dark (join, reconnect) leaves it alone (008 C.3).
+   */
+  blackoutLiveAt: number | null;
   /**
    * Handles one parsed WS message. `now` is `performance.now()`, `dateNow` is `Date.now()`.
    * 1. `applyServerMessage(sync, msg, dateNow)`;
@@ -80,6 +86,7 @@ export const useStore = create<Store>((set, get) => ({
   repair: initialRepairUi,
   feedback: initialFeedback,
   loaded: false,
+  blackoutLiveAt: null,
   receive: (msg, now, dateNow) => {
     const prev = get();
     const sync = applyServerMessage(prev.sync, msg, dateNow);
@@ -103,7 +110,10 @@ export const useStore = create<Store>((set, get) => ({
     if (msg.type === 'snapshot' || msg.type === 'fault' || msg.type === 'repaired') {
       feed({ type: 'faults', ids: (sync.base?.faults ?? []).map((f) => f.id), now });
     }
-    set({ sync, repair, feedback });
+    const wasDark = (prev.sync.base?.blackout ?? null) !== null;
+    const isDark = (sync.base?.blackout ?? null) !== null;
+    const pulse = chromaPulse(wasDark, isDark, msg.type === 'snapshot' ? 'snapshot' : 'live');
+    set(pulse ? { sync, repair, feedback, blackoutLiveAt: now } : { sync, repair, feedback });
     for (const m of outbox) sendToServer(m);
   },
   applyRest: (snap, dateNow) => {

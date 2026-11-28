@@ -1,5 +1,14 @@
 import { create, type StoreApi, type UseBoundStore } from 'zustand';
-import { buildLadder, detectTier, levelOf, sanitizeDpr, type Ladder, type QualityLevel, type Tier } from './quality';
+import {
+  POST_OFF,
+  buildLadder,
+  detectTier,
+  levelOf,
+  sanitizeDpr,
+  type Ladder,
+  type QualityLevel,
+  type Tier,
+} from './quality';
 
 /** The slice of `MediaQueryList` used here (this file is also type-checked without the DOM lib). */
 export interface MediaQueryLike {
@@ -65,6 +74,12 @@ export interface QualityStore extends QualityLevel {
   setStage: (stage: number) => void;
   /** The device's pixel ratio changed: the ladder's dpr caps follow, the stage stays. */
   setDeviceDpr: (dpr: number) => void;
+  /**
+   * Post-processing axis (008 R3), `POST_FULL`..`POST_OFF`. `POST_OFF` until the session picks the
+   * composer; then only `QualityController` (one way down) and a composer failure move it.
+   */
+  post: number;
+  setPost: (post: number) => void;
 }
 
 function createQualityStore(): UseBoundStore<StoreApi<QualityStore>> {
@@ -75,6 +90,8 @@ function createQualityStore(): UseBoundStore<StoreApi<QualityStore>> {
     tier: t,
     ladder,
     forceLow: false,
+    post: POST_OFF,
+    setPost: (post) => set({ post }),
     setForceLow: (forceLow) => set({ forceLow }),
     setStage: (stage) => set(levelOf(get().ladder, stage)),
     setDeviceDpr: (dpr) => {
