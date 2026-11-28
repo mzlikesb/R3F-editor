@@ -13,8 +13,11 @@ import {
   healthyLine,
   historyView,
   hudReady,
+  NO_PARTS_NOTICE,
   lastRepairLine,
   panelView,
+  partsChip,
+  repairButton,
   peopleLine,
   presenceMarkVisible,
   segments,
@@ -269,5 +272,46 @@ describe('presenceMarkVisible (#108)', () => {
     const css = readFileSync(new URL('../index.css', import.meta.url), 'utf8');
     const rule = /\.presence-mark\s*\{([^}]*)\}/.exec(css)?.[1] ?? '';
     expect(rule).toMatch(new RegExp(`background:\\s*${PALETTE.presenceLight}`, 'i'));
+  });
+});
+
+describe('partsChip (plan 009 B.3, R4)', () => {
+  it('shows the count out of the cap, 0 included', () => {
+    expect(partsChip(0)).toEqual({ text: '부품 0/5', full: false });
+    expect(partsChip(3)).toEqual({ text: '부품 3/5', full: false });
+  });
+
+  it('says full at the cap', () => {
+    expect(partsChip(5)).toEqual({ text: '부품 가득', full: true });
+  });
+});
+
+describe('repairButton (plan 009 B.4)', () => {
+  const ctx = { hold: 'idle' as const, parts: 1, out: true, msToNext: 4200 };
+
+  it('with a part in the store: hold to repair, one part', () => {
+    expect(repairButton(ctx)).toEqual({ mode: 'repair', label: '꾹 눌러 수리 (1초 · 부품 1)' });
+    expect(repairButton({ ...ctx, out: false })).toEqual({ mode: 'repair', label: '꾹 눌러 수리 (1초 · 부품 1)' });
+  });
+
+  it('keeps the hold labels while holding or waiting', () => {
+    expect(repairButton({ ...ctx, hold: 'holding' }).label).toBe('계속 누르세요…');
+    expect(repairButton({ ...ctx, hold: 'pending' }).label).toBe('수리 중…');
+  });
+
+  it('with an empty store and a piece out: go and pick it up', () => {
+    expect(repairButton({ ...ctx, parts: 0 })).toEqual({ mode: 'fetch', label: '부품을 먼저 주워요' });
+  });
+
+  it('with an empty store and this slot taken: seconds to the next piece, rounded up', () => {
+    expect(repairButton({ ...ctx, parts: 0, out: false })).toEqual({ mode: 'fetch', label: '다음 조각 5초' });
+    expect(repairButton({ ...ctx, parts: 0, out: false, msToNext: 10_000 }).label).toBe('다음 조각 10초');
+    expect(repairButton({ ...ctx, parts: 0, out: false, msToNext: 1 }).label).toBe('다음 조각 1초');
+  });
+});
+
+describe('NO_PARTS_NOTICE (plan 009 B.5)', () => {
+  it('is one line for every way of running out', () => {
+    expect(NO_PARTS_NOTICE).toBe('부품이 없어요 — 조각을 주워요');
   });
 });

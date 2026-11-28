@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { BlackoutStart, ClientMessage, FaultMessage, RepairedMessage, SnapshotMessage } from '../shared/protocol';
+import type {
+  BlackoutStart,
+  ClientMessage,
+  FaultMessage,
+  PartsMessage,
+  RepairedMessage,
+  SnapshotMessage,
+} from '../shared/protocol';
 import { initialFeedback } from './feedback';
 import { HOLD_MS, initialRepairUi } from './hold';
 import {
@@ -17,6 +24,8 @@ import {
   useStore,
 } from './store';
 import { initialSync } from './sync';
+import { PICKUP_TIMEOUT_MS, idlePickup, initialPing } from './parts';
+import { PARTS_CAP, PART_SLOT_MS, partSlot } from '../shared/parts';
 import { shouldShake } from './scene/shake';
 
 const T = 1_800_000_000_000;
@@ -26,7 +35,7 @@ const gen = { id: 'g1', moduleId: 'generator', createdAt: T - 8000 } as const;
 function snapshot(overrides: Partial<SnapshotMessage> = {}): SnapshotMessage {
   return {
     type: 'snapshot',
-    protocol: 2,
+    protocol: 3,
     version: 5,
     faults: [oxy],
     repairs: 2,
@@ -38,7 +47,7 @@ function snapshot(overrides: Partial<SnapshotMessage> = {}): SnapshotMessage {
     presence: 2,
     instanceId: 'inst',
     serverNow: T,
-    parts: 0,
+    parts: 2,
     lastPartSlot: -1,
     ...overrides,
   };
@@ -81,6 +90,9 @@ beforeEach(() => {
     historyOpen: false,
     repair: initialRepairUi,
     feedback: initialFeedback,
+    pickup: idlePickup,
+    partPing: initialPing,
+    partsNotice: false,
   });
   sent = [];
   setClientSender((msg) => sent.push(msg));
@@ -347,5 +359,153 @@ describe('selectBaseIn (#61: labels mount before the scene finishes loading)', (
     expect(selectReady(s())).toBe(false);
     s().setLoaded();
     expect(selectReady(s())).toBe(true);
+  });
+});
+
+describe('parts: picking up a piece (plan 009 B.2, R5)', () => {
+  /** The server clock is 1 s ahead of this tab's. */
+  const AHEAD = 1000;
+  const slotAt = (dateNow: number) => partSlot(dateNow + AHEAD);
+  const join = (overrides: Partial<SnapshotMessage> = {}) =>
+    s().receive(snapshot({ serverNow: T + AHEAD, parts: 0, ...overrides }), 0, T);
+  const partsMsg = (overrides: Partial<PartsMessage> = {}): PartsMessage => ({
+    type: 'parts',
+    version: 6,
+    count: 1,
+    slot: slotAt(T),
+    mine: true,
+    serverNow: T + AHEAD,
+    ...overrides,
+  });
+
+  it('a tap sends collect for the slot of server time and hides the piece until the answer', () => {
+    join();
+    s().collectPiece(10, T);
+    expect(sent).toEqual([{ type: 'collect', slot: slotAt(T) }]);
+    expect(s().pickup).toMatchObject({ kind: 'pending', slot: slotAt(T) });
+    s().collectPiece(20, T);
+    expect(sent).toHaveLength(1);
+  });
+
+  it('my parts arrives: the store count goes up and the pick-up ends', () => {
+    join();
+    s().collectPiece(10, T);
+    s().receive(partsMsg(), 50, T);
+    expect(s().sync.base?.parts).toBe(1);
+    expect(s().pickup).toEqual(idlePickup);
+  });
+
+  it('someone else got my piece first: the pick-up ends at once', () => {
+    join();
+    s().collectPiece(10, T);
+    s().receive(partsMsg({ mine: false }), 50, T);
+    expect(s().pickup).toEqual(idlePickup);
+  });
+
+  it('the store reaching the cap ends it at once', () => {
+    join();
+    s().collectPiece(10, T);
+    s().receive(partsMsg({ slot: slotAt(T) - 1, count: PARTS_CAP, mine: false }), 50, T);
+    expect(s().pickup).toEqual(idlePickup);
+  });
+
+  it('a reconnect snapshot ends it at once', () => {
+    join();
+    s().collectPiece(10, T);
+    join({ version: 6 });
+    expect(s().pickup).toEqual(idlePickup);
+  });
+
+  it(`no answer within ${PICKUP_TIMEOUT_MS} ms gives the piece back`, () => {
+    join();
+    s().collectPiece(10, T);
+    s().dispatchPickup({ type: 'tick', now: 10 + PICKUP_TIMEOUT_MS });
+    expect(s().pickup).toEqual(idlePickup);
+  });
+
+  it('takes no taps while disconnected, nor on a piece already collected or at the cap', () => {
+    join();
+    s().setConnection('reconnecting');
+    s().collectPiece(10, T);
+    s().setConnection('open');
+    join({ version: 6, lastPartSlot: slotAt(T) });
+    s().collectPiece(10, T);
+    join({ version: 7, parts: PARTS_CAP });
+    s().collectPiece(10, T);
+    expect(sent).toEqual([]);
+  });
+});
+
+describe('parts: repairing with the store (plan 009 B.4, B.5)', () => {
+  it('a hold stops when the store runs dry under it, with the notice', () => {
+    s().receive(snapshot({ faults: [oxy, gen], parts: 1 }), 0, T);
+    s().select('oxygen');
+    s().dispatchHold({ type: 'press', faultId: 'f1', now: 0 });
+    s().receive(repaired(false, { faultId: 'g1', moduleId: 'generator', parts: 0 }), 300, T);
+    expect(s().repair.hold.kind).toBe('idle');
+    expect(sent).toContainEqual({ type: 'release', faultId: 'f1' });
+    expect(s().partsNotice).toBe(true);
+  });
+
+  it('repairRejected ends the wait with the same notice', () => {
+    s().receive(snapshot({ parts: 1 }), 0, T);
+    s().select('oxygen');
+    s().dispatchHold({ type: 'press', faultId: 'f1', now: 0 });
+    s().dispatchHold({ type: 'tick', now: HOLD_MS });
+    s().receive({ type: 'repairRejected', faultId: 'f1', reason: 'noParts' }, HOLD_MS + 50, T);
+    expect(s().repair.hold.kind).toBe('idle');
+    expect(s().partsNotice).toBe(true);
+  });
+
+  it('the notice goes once the store has a part again, or the selection moves', () => {
+    useStore.setState({ partsNotice: true });
+    s().receive(snapshot({ parts: 0 }), 0, T);
+    expect(s().partsNotice).toBe(true);
+    s().receive({ type: 'parts', version: 6, count: 1, slot: partSlot(T), mine: false, serverNow: T }, 10, T);
+    expect(s().partsNotice).toBe(false);
+    useStore.setState({ partsNotice: true });
+    s().select('comms');
+    expect(s().partsNotice).toBe(false);
+  });
+});
+
+describe('parts: "pick one up first" and the ring ping (plan 009 B.4, R5)', () => {
+  /** A slot boundary, so the next piece is a whole slot away. */
+  const START = (partSlot(T) + 1) * PART_SLOT_MS;
+  const slot = partSlot(START);
+
+  it('clears the selection and pings the piece that is out', () => {
+    s().receive(snapshot({ parts: 0, serverNow: START }), 0, START);
+    s().select('oxygen');
+    s().fetchParts(START);
+    expect(s().selected).toBeNull();
+    expect(s().partPing).toEqual({ seq: 1, slot, waitFor: null });
+  });
+
+  it('with this slot taken, pings the next piece when it falls', () => {
+    s().receive(snapshot({ parts: 0, lastPartSlot: slot, serverNow: START }), 0, START);
+    s().select('oxygen');
+    s().fetchParts(START);
+    expect(s().partPing).toEqual({ ...initialPing, waitFor: slot + 1 });
+    s().checkPartPing(START + PART_SLOT_MS - 1);
+    expect(s().partPing.seq).toBe(0);
+    s().checkPartPing(START + PART_SLOT_MS);
+    expect(s().partPing).toEqual({ seq: 1, slot: slot + 1, waitFor: null });
+  });
+
+  it('selecting a module cancels the wait', () => {
+    s().receive(snapshot({ parts: 0, lastPartSlot: slot, serverNow: START }), 0, START);
+    s().fetchParts(START);
+    s().select('comms');
+    s().checkPartPing(START + PART_SLOT_MS);
+    expect(s().partPing).toEqual(initialPing);
+  });
+
+  it('the store getting a part cancels the wait', () => {
+    s().receive(snapshot({ parts: 0, lastPartSlot: slot, serverNow: START }), 0, START);
+    s().fetchParts(START);
+    s().receive({ type: 'parts', version: 6, count: 1, slot, mine: false, serverNow: START + 10 }, 10, START + 10);
+    s().checkPartPing(START + PART_SLOT_MS);
+    expect(s().partPing).toEqual(initialPing);
   });
 });

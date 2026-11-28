@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { FaultMessage, RepairedMessage, ServerMessage, SnapshotMessage } from '../shared/protocol';
+import type { FaultMessage, PartsMessage, RepairedMessage, ServerMessage, SnapshotMessage } from '../shared/protocol';
 import {
   applyRestSnapshot,
   applyServerMessage,
@@ -18,7 +18,7 @@ const comms = { id: 'c1', moduleId: 'comms', createdAt: T - 7000 } as const;
 function snapshot(overrides: Partial<SnapshotMessage> = {}): SnapshotMessage {
   return {
     type: 'snapshot',
-    protocol: 2,
+    protocol: 3,
     version: 5,
     faults: [oxy],
     repairs: 2,
@@ -228,7 +228,7 @@ describe('applyRestSnapshot', () => {
 });
 
 describe('canRepair', () => {
-  const synced = run([snapshot()]);
+  const synced = run([snapshot({ parts: 2 })]);
 
   it('needs an open socket, a WS snapshot and that fault', () => {
     expect(canRepair(synced, 'open', 'f1')).toBe(true);
@@ -237,10 +237,62 @@ describe('canRepair', () => {
     expect(canRepair(applyRestSnapshot(initialSync, snapshot(), T), 'open', 'f1')).toBe(false);
   });
 
+  it('needs a part in the store (plan 009 A.4)', () => {
+    expect(canRepair(run([snapshot({ parts: 0 })]), 'open', 'f1')).toBe(false);
+    expect(canRepair(run([snapshot({ parts: 1 })]), 'open', 'f1')).toBe(true);
+  });
+
   it('locks when the protocol is incompatible (update banner)', () => {
     const locked = markIncompatible(synced);
     expect(locked.incompatible).toBe(true);
     expect(canRepair(locked, 'open', 'f1')).toBe(false);
     expect(markIncompatible(locked)).toBe(locked);
+  });
+});
+
+describe('the parts store (plan 009 B)', () => {
+  const parts = (overrides: Partial<PartsMessage> = {}): PartsMessage => ({
+    type: 'parts',
+    version: 6,
+    count: 1,
+    slot: 180_000_000,
+    mine: false,
+    serverNow: T + 5000,
+    ...overrides,
+  });
+
+  it('a snapshot brings the store and the last slot collected', () => {
+    const s = run([snapshot({ parts: 3, lastPartSlot: 179_999_999 })]);
+    expect(s.base).toMatchObject({ parts: 3, lastPartSlot: 179_999_999 });
+  });
+
+  it('parts sets the count, the slot, the version and the clock offset (R5)', () => {
+    const s0 = run([snapshot()]);
+    const s = applyServerMessage(s0, parts(), T + 4000);
+    expect(s.base).toMatchObject({ parts: 1, lastPartSlot: 180_000_000, version: 6 });
+    expect(s.clockOffsetMs).toBe(1000);
+  });
+
+  it('a stale parts changes nothing', () => {
+    const s0 = run([snapshot({ version: 9 })]);
+    expect(applyServerMessage(s0, parts({ version: 8 }), T)).toBe(s0);
+  });
+
+  it('repaired takes the store count and the server clock when it carries them (R5)', () => {
+    const s = applyServerMessage(run([snapshot({ parts: 2 })]), repaired({ parts: 1, serverNow: T + 900 }), T + 1000);
+    expect(s.base?.parts).toBe(1);
+    expect(s.clockOffsetMs).toBe(-100);
+  });
+
+  it('repaired without them (a server from before 009) keeps the store and the offset', () => {
+    const s0 = run([snapshot({ parts: 2 })]);
+    const s = applyServerMessage(s0, repaired(), T + 1000);
+    expect(s.base?.parts).toBe(2);
+    expect(s.clockOffsetMs).toBe(s0.clockOffsetMs);
+  });
+
+  it('repairRejected leaves the mirrored base alone (009-1 QA suggestion 4)', () => {
+    const s0 = run([snapshot()]);
+    expect(applyServerMessage(s0, { type: 'repairRejected', faultId: 'f1', reason: 'noParts' }, T)).toBe(s0);
   });
 });

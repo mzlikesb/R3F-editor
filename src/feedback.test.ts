@@ -8,6 +8,7 @@ import {
   hintVisible,
   initialFeedback,
   reduceFeedback,
+  toastNote,
   toastText,
   type FeedbackEvent,
   type FeedbackState,
@@ -31,6 +32,13 @@ describe('toastText', () => {
     expect(toastText({ kind: 'other', moduleId: 'greenhouse' })).toBe('누군가 온실을 고쳤어요');
     expect(toastText({ kind: 'fault', moduleId: 'oxygen' })).toBe('산소 탱크가 고장 났어요');
     expect(toastText({ kind: 'fault', moduleId: 'comms' })).toBe('통신탑이 고장 났어요');
+  });
+});
+
+describe('toastNote (plan 009 B.6)', () => {
+  it('my repair says it took a part; nothing else does', () => {
+    expect(toastNote('mine')).toBe('부품 1개 사용');
+    for (const kind of ['helped', 'beaten', 'other', 'fault'] as const) expect(toastNote(kind)).toBeNull();
   });
 });
 
