@@ -11,6 +11,8 @@
 set -euo pipefail
 
 cd "$(dirname "$0")"
+# shellcheck source=scripts/pr-tokens-lib.sh
+. ./pr-tokens-lib.sh
 repo=$(gh repo view --json nameWithOwner -q .nameWithOwner)
 root="${CLAUDE_PROJECTS_DIR:-$HOME/.claude/projects}"
 
@@ -23,7 +25,9 @@ slim='[ .[] | select(.type == "assistant" and .message.id != null and .message.u
 
 rows=$(mktemp)
 trap 'rm -f "$rows"' EXIT
-for dir in "$root"/-Users-*-money-working* "$root"/-Users-*-money-outpost-*; do
+main=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")
+dirs=$(pr_tokens_project_dirs "$root" "$main" "${repo##*/}")
+for dir in $dirs; do
   [ -d "$dir" ] || continue
   for f in "$dir"/*.jsonl "$dir"/*/subagents/agent-*.jsonl; do
     [ -f "$f" ] || continue

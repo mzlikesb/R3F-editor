@@ -10,7 +10,13 @@ plan=${2:?usage: scripts/neon-review.sh <pr-number> <plan-file>}
 agent=chillingdaisy-worker1
 repo=$(gh repo view --json nameWithOwner -q .nameWithOwner)
 cd "$(git rev-parse --show-toplevel)"
-sha=$(git rev-parse --short HEAD)
+# shellcheck source=scripts/neon-lib.sh
+. "$(dirname "$0")/neon-lib.sh"
+# Review the PR head's plan, not whatever the current checkout holds.
+head=$(gh pr view "$pr" --repo "$repo" --json headRefOid -q .headRefOid)
+git cat-file -e "$head^{commit}" 2>/dev/null || git fetch -q origin "pull/$pr/head"
+sha=${head:0:7}
+plan_text=$(git show "$head:$plan") || { echo "neon-review: PR #$pr head $sha에 '$plan'이 없다" >&2; exit 1; }
 
 who=$(gh api user -q .login 2>/dev/null || echo "?")
 if [ "$who" != "$agent" ]; then
@@ -26,7 +32,7 @@ prompt=$(
   cat .claude/prompts/neon-plan-review.md
   echo
   echo "--- 리뷰 대상 플랜 (커밋 $sha) ---"
-  cat "$plan"
+  printf '%s\n' "$plan_text"
 )
 
 if agy -p "$prompt" --mode plan --print-timeout 300s >"$out" 2>&1 && [ -s "$out" ] && ! grep -q '^jetski: no output produced' "$out"; then
@@ -39,8 +45,7 @@ fi
 
 # Mentions in the model's text must not ping anyone: `@codex review` in a review once
 # triggered Codex for real. A zero-width joiner after `@` keeps the text readable.
-zwj=$'\xe2\x80\x8d'
-text=${text//@/@$zwj}
+text=$(neon_neutralize_mentions <<<"$text")
 
 if [ "$verdict" = done ]; then
   body=$(printf '## neon review · `%s`\n\n%s' "$sha" "$text")

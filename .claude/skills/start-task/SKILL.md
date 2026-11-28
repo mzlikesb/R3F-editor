@@ -40,7 +40,8 @@ git push -u origin <브랜치>
 1. 플랜·tasks·QA 리포트는 생략한다. 변경 이유와 검증 결과를 PR 본문에 쓴다.
 2. 구현·검증 뒤 **ready로** 연다: 라벨 `size:small` + `stage:code-review`, 마일스톤, 본문 `관련 이슈`.
 3. 연 직후 `gh pr merge <번호> --auto --squash`로 auto-merge를 예약한다.
-4. 최종 SHA에 `@codex review`를 요청한다.
+4. `src/scene/`·`src/ui/`·`src/index.css`를 바꿨으면 Preview 배포 뒤 `scripts/snapshot-critique.sh <번호>`를 실행한다(배포 봇 코멘트의 배포 SHA가 head와 같을 때만 촬영하고, 다르면 최대 10분 기다린다). 지적은 반영하거나 `art-ux` 이슈로 올린다.
+5. 최종 SHA에 `@codex review`를 요청한다.
 
 ## 4. PR 열기
 
