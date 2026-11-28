@@ -4,6 +4,7 @@ import {
   BLINK_MS,
   PICKUP_TIMEOUT_MS,
   blinkOn,
+  vanishReason,
   idlePickup,
   initialPing,
   msToNextSlot,
@@ -139,5 +140,20 @@ describe('reducePing (B.4, R5)', () => {
     const waiting = reducePing(fired, { type: 'request', slot: SLOT + 1, out: false });
     expect(reducePing(waiting, { type: 'cancel' })).toEqual(fired);
     expect(reducePing(fired, { type: 'cancel' })).toBe(fired);
+  });
+});
+
+describe('vanishReason (who made the piece go)', () => {
+  it('mine while my pick-up of that slot waits', () => {
+    expect(vanishReason({ kind: 'pending', slot: SLOT, sentAt: 0 }, SLOT, { parts: 1, lastPartSlot: -1 })).toBe('mine');
+  });
+
+  it('someone else when the store says that slot was collected and I was not picking it up', () => {
+    expect(vanishReason(idlePickup, SLOT, { parts: 1, lastPartSlot: SLOT })).toBe('other');
+  });
+
+  it('its slot ended, or the store filled up, otherwise', () => {
+    expect(vanishReason(idlePickup, SLOT, { parts: 1, lastPartSlot: SLOT - 1 })).toBe('slot');
+    expect(vanishReason(idlePickup, SLOT, { parts: 5, lastPartSlot: SLOT - 3 })).toBe('slot');
   });
 });

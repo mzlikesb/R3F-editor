@@ -7,7 +7,7 @@ import { canRepair } from '../sync';
 import { subscribeClock } from './clock';
 import { GOTO_LOCK_MS, NO_LOCK, goToLocked, stepGoToLock, type GoToLock } from './goToLock';
 import { PANEL_TICK_MS, sensorLine, trendBaselineY, trendOutsidePath, trendPoints, trendSamples } from './sensorView';
-import { NO_PARTS_NOTICE, panelView, repairButton as repairAction } from './view';
+import { NO_PARTS_NOTICE, PARTS_NEEDED_LINE, panelView, repairButton as repairAction } from './view';
 
 /** The trend's drawing box; the SVG scales it to the panel width. */
 const TREND_W = 100;
@@ -168,6 +168,7 @@ export function Panel() {
         <polyline ref={trendLine} className="trend-line" />
         <path ref={trendOutside} className="trend-outside" />
       </svg>
+      {fetch && <p className="parts-needed">{PARTS_NEEDED_LINE}</p>}
       {/* One fixed-height slot for the action, so the card never changes size (the ✕ stays put). */}
       <div className="panel-action">
         {view.goTo && (

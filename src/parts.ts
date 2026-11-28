@@ -141,3 +141,14 @@ export interface Flight {
 }
 
 export const initialFlight: Flight = { seq: 0, x: 0, y: 0 };
+
+/**
+ * Why the piece of `slot` stopped being out: `mine` (my pick-up of it is on its way), `other`
+ * (the store says that slot was collected, not by this tab), else `slot` (its slot ended or the
+ * store filled).
+ */
+export function vanishReason(pickup: Pickup, slot: number, base: PartsView | null): 'mine' | 'other' | 'slot' {
+  if (pickup.kind === 'pending' && pickup.slot === slot) return 'mine';
+  if (base !== null && base.lastPartSlot >= slot) return 'other';
+  return 'slot';
+}

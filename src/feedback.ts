@@ -21,11 +21,12 @@ export const TOAST_MS = 3000;
 export type RepairOutcome = 'mine' | 'helped' | 'beaten' | 'other';
 
 /** `fault`: a module broke while this tab was open (every `fault` message is live; arrival faults come in the snapshot). */
-export type ToastKind = RepairOutcome | 'fault';
+export type ToastKind = RepairOutcome | 'fault' | 'taken';
 
 export interface Toast {
   kind: ToastKind;
-  moduleId: ModuleId;
+  /** null on `taken` (no module). */
+  moduleId: ModuleId | null;
   /** Hidden from this time (ms, `performance.now()`). */
   until: number;
   /** The combo this repair made (`nextCombo`), shown as `x2` and up; 0 on toasts that are not my repair. */
@@ -78,6 +79,8 @@ export type FeedbackEvent =
   | { type: 'fault'; moduleId: ModuleId; now: number }
   /** Any module (or a badge) was tapped. */
   | { type: 'moduleTapped' }
+  /** A tap where someone else had just taken the piece (009-2 playtest 3). */
+  | { type: 'taken'; now: number }
   /** Timer tick; hides an expired toast. */
   | { type: 'tick'; now: number };
 
@@ -85,10 +88,12 @@ export type FeedbackEvent =
  * - mine: `내가 고쳤어요 +1`
  * - helped: `함께 고쳤어요 +1`
  * - beaten: `같이 눌렀는데 다른 사람이 한발 먼저 고쳤어요`
- * - other: `누군가 산소 탱크를 고쳤어요` (module name + 을/를); with `part` `누군가 부품 1개로 산소 탱크를 고쳤어요`
+ * - other: `누군가 산소 탱크를 고쳤어요` (module name + 을/를); with `part` `누군가 기지 창고의 부품 1개로 산소 탱크를 고쳤어요`
+ * - taken: `다른 사람이 먼저 주웠어요`
  * - fault: `온실이 고장 났어요` (module name + 이/가)
  */
 export function toastText(toast: Pick<Toast, 'kind' | 'moduleId'> & { part?: boolean }): string {
+  if (toast.kind === 'taken' || toast.moduleId === null) return '다른 사람이 먼저 주웠어요';
   const name = moduleName(toast.moduleId);
   switch (toast.kind) {
     case 'mine':
@@ -99,7 +104,7 @@ export function toastText(toast: Pick<Toast, 'kind' | 'moduleId'> & { part?: boo
       return '같이 눌렀는데 다른 사람이 한발 먼저 고쳤어요';
     case 'other':
       return toast.part
-        ? `누군가 부품 1개로 ${withObjectParticle(name)} 고쳤어요`
+        ? `누군가 기지 창고의 부품 1개로 ${withObjectParticle(name)} 고쳤어요`
         : `누군가 ${withObjectParticle(name)} 고쳤어요`;
     case 'fault':
       return `${withSubjectParticle(name)} 고장 났어요`;
@@ -167,6 +172,8 @@ export function reduceFeedback(state: FeedbackState, event: FeedbackEvent): Feed
       };
     case 'moduleTapped':
       return state.hintDismissed ? state : { ...state, hintDismissed: true };
+    case 'taken':
+      return { ...state, toast: { kind: 'taken', moduleId: null, until: event.now + TOAST_MS, combo: 0, part: false } };
     case 'tick':
       return state.toast && event.now >= state.toast.until ? { ...state, toast: null } : state;
   }

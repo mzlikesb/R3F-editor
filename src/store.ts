@@ -107,6 +107,8 @@ export interface Store {
   collectPiece: (now: number, dateNow: number, at?: { x: number; y: number }) => void;
   /** `부품을 먼저 주워요` / `다음 조각 N초`: back to the overview and ping the piece, now or when the next one falls. */
   fetchParts: (dateNow: number) => void;
+  /** A tap where someone else had just taken the piece: `다른 사람이 먼저 주웠어요`. */
+  pieceTaken: (now: number) => void;
   /** A tap where a piece just vanished: ping the piece out now, or the next one, keeping the selection. */
   pingNextPiece: (dateNow: number) => void;
   /** The timer of a waiting ping: pings the piece once its slot has come. */
@@ -264,6 +266,7 @@ export const useStore = create<Store>((set, get) => ({
     get().select(null);
     get().pingNextPiece(dateNow);
   },
+  pieceTaken: (now) => get().dispatchFeedback({ type: 'taken', now }),
   pingNextPiece: (dateNow) => {
     const { sync, partPing } = get();
     const slot = partSlot(serverNow(sync, dateNow));

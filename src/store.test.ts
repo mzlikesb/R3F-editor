@@ -596,3 +596,16 @@ describe('pingNextPiece (a tap where a piece just was)', () => {
     expect(s().partPing.waitFor).toBe(partSlot(START) + 1);
   });
 });
+
+describe('pieceTaken (009-2 playtest 3)', () => {
+  it('toasts 다른 사람이 먼저 주웠어요; a pick-up given back after its timeout toasts nothing', () => {
+    s().receive(snapshot({ parts: 0 }), 0, T);
+    s().pieceTaken(20);
+    expect(s().feedback.toast).toMatchObject({ kind: 'taken' });
+    useStore.setState({ feedback: initialFeedback });
+    s().collectPiece(10, T);
+    s().dispatchPickup({ type: 'tick', now: 10 + PICKUP_TIMEOUT_MS });
+    expect(s().pickup).toEqual(idlePickup);
+    expect(s().feedback.toast).toBeNull();
+  });
+});

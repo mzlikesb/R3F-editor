@@ -157,17 +157,20 @@ export function togetherLine(othersHolding: number): string | null {
 export function partsChip(parts: number): { text: string; short: string; full: boolean } {
   const short = `⬢ ${Math.min(parts, PARTS_CAP)}/${PARTS_CAP}`;
   return parts >= PARTS_CAP
-    ? { text: '부품 가득', short, full: true }
-    : { text: `부품 ${parts}/${PARTS_CAP}`, short, full: false };
+    ? { text: '기지 창고 가득', short, full: true }
+    : { text: `기지 창고 ${parts}/${PARTS_CAP}`, short, full: false };
 }
+
+/** Above the `fetch` button: why it is not a repair button (009-2 playtest 3). */
+export const PARTS_NEEDED_LINE = '수리에 부품 1개가 필요해요';
 
 /** Every way of running out of parts at the repair says this (plan 009 B.5). */
 export const NO_PARTS_NOTICE = '부품이 없어요 — 조각을 주워요';
 
 /**
  * The repair button (plan 009 B.4). `repair`: hold to repair, `꾹 눌러 수리 (1초 · 부품 1)` (and the
- * hold labels). `fetch` with an empty store: `부품을 먼저 주워요` while a piece is out, else
- * `다음 조각 7초` (whole seconds, rounded up); pressing it goes back to the overview and pings the piece.
+ * hold labels). `fetch` with an empty store: `부품 있는 곳 보기` while a piece is out, else
+ * `다음 부품 7초` (whole seconds, rounded up); pressing it goes back to the overview and pings the piece.
  */
 export function repairButton(ctx: { hold: HoldState['kind']; parts: number; out: boolean; msToNext: number }): {
   mode: 'repair' | 'fetch';
@@ -176,8 +179,8 @@ export function repairButton(ctx: { hold: HoldState['kind']; parts: number; out:
   if (ctx.hold === 'holding') return { mode: 'repair', label: '계속 누르세요…' };
   if (ctx.hold === 'pending') return { mode: 'repair', label: '수리 중…' };
   if (ctx.parts >= 1) return { mode: 'repair', label: '꾹 눌러 수리 (1초 · 부품 1)' };
-  if (ctx.out) return { mode: 'fetch', label: '보라색 부품을 눌러 주워요' };
-  return { mode: 'fetch', label: `다음 조각 ${Math.max(1, Math.ceil(ctx.msToNext / 1000))}초` };
+  if (ctx.out) return { mode: 'fetch', label: '부품 있는 곳 보기' };
+  return { mode: 'fetch', label: `다음 부품 ${Math.max(1, Math.ceil(ctx.msToNext / 1000))}초` };
 }
 
 export interface PanelView {

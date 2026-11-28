@@ -451,6 +451,13 @@ body {
   cursor: pointer;
 }
 
+/* Above that button: why it is not a repair button (009-2 playtest 3). */
+.parts-needed {
+  margin: 0 0 6px;
+  color: #cfc2ff;
+  font-size: 13px;
+}
+
 /* An empty store: the button sends the player to the piece instead (plan 009 B.4). */
 .repair-fetch {
   border: 1.5px solid #b39dff;

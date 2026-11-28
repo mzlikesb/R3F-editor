@@ -13,7 +13,7 @@ import {
   type Group,
 } from 'three';
 import { PART_Y, partSlot, partSpot } from '../../shared/parts';
-import { blinkOn, pieceShown } from '../parts';
+import { blinkOn, pieceShown, vanishReason } from '../parts';
 import { selectReady, useStore } from '../store';
 import { serverNow } from '../sync';
 import { RingPing } from './fx/Rings';
@@ -174,7 +174,10 @@ export function PartPiece() {
     const mine = pickup.kind === 'pending' && pickup.slot === slot;
     if (a.shown && !shown && mine) a.suckAt = time;
     if (shown) a.suckAt = -1;
-    if (pieceTrack.live && !shown) pieceTrack.goneAt = performance.now();
+    if (pieceTrack.live && !shown) {
+      pieceTrack.goneAt = performance.now();
+      pieceTrack.goneBy = vanishReason(pickup, pieceTrack.slot, sync.base);
+    }
     pieceTrack.live = shown;
     pieceTrack.camera = camera;
     a.shown = shown;
@@ -204,6 +207,7 @@ export function PartPiece() {
     pieceTrack.x = x;
     pieceTrack.y = REST_Y;
     pieceTrack.tagY = TAG_LIFT + TAG_CENTRE;
+    if (shown) pieceTrack.slot = slot;
     pieceTrack.z = z;
     b.position.y = y;
     b.visible = sucking || blinkOn(now);

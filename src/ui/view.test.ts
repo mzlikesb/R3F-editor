@@ -14,6 +14,7 @@ import {
   historyView,
   hudReady,
   NO_PARTS_NOTICE,
+  PARTS_NEEDED_LINE,
   lastRepairLine,
   panelView,
   partsChip,
@@ -292,12 +293,13 @@ describe('presenceMarkVisible (#108)', () => {
 
 describe('partsChip (plan 009 B.3, R4)', () => {
   it('shows the count out of the cap, 0 included', () => {
-    expect(partsChip(0)).toEqual({ text: '부품 0/5', short: '⬢ 0/5', full: false });
-    expect(partsChip(3)).toEqual({ text: '부품 3/5', short: '⬢ 3/5', full: false });
+    // 009-2 playtest 3: the store is the base's, not mine.
+    expect(partsChip(0)).toEqual({ text: '기지 창고 0/5', short: '⬢ 0/5', full: false });
+    expect(partsChip(3)).toEqual({ text: '기지 창고 3/5', short: '⬢ 3/5', full: false });
   });
 
   it('says full at the cap', () => {
-    expect(partsChip(5)).toEqual({ text: '부품 가득', short: '⬢ 5/5', full: true });
+    expect(partsChip(5)).toEqual({ text: '기지 창고 가득', short: '⬢ 5/5', full: true });
   });
 });
 
@@ -315,14 +317,18 @@ describe('repairButton (plan 009 B.4)', () => {
   });
 
   it('with an empty store and a piece out: go and pick it up', () => {
-    // 009-2 playtest: `부품을 먼저 주워요` read as a button that picks one up.
-    expect(repairButton({ ...ctx, parts: 0 })).toEqual({ mode: 'fetch', label: '보라색 부품을 눌러 주워요' });
+    // 009-2 playtests: the label says what the button does (shows where the part is), not what to do.
+    expect(repairButton({ ...ctx, parts: 0 })).toEqual({ mode: 'fetch', label: '부품 있는 곳 보기' });
   });
 
   it('with an empty store and this slot taken: seconds to the next piece, rounded up', () => {
-    expect(repairButton({ ...ctx, parts: 0, out: false })).toEqual({ mode: 'fetch', label: '다음 조각 5초' });
-    expect(repairButton({ ...ctx, parts: 0, out: false, msToNext: 10_000 }).label).toBe('다음 조각 10초');
-    expect(repairButton({ ...ctx, parts: 0, out: false, msToNext: 1 }).label).toBe('다음 조각 1초');
+    expect(repairButton({ ...ctx, parts: 0, out: false })).toEqual({ mode: 'fetch', label: '다음 부품 5초' });
+    expect(repairButton({ ...ctx, parts: 0, out: false, msToNext: 10_000 }).label).toBe('다음 부품 10초');
+    expect(repairButton({ ...ctx, parts: 0, out: false, msToNext: 1 }).label).toBe('다음 부품 1초');
+  });
+
+  it('says why above the button when the store is empty', () => {
+    expect(PARTS_NEEDED_LINE).toBe('수리에 부품 1개가 필요해요');
   });
 });
 

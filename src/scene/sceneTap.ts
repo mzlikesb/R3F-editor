@@ -13,10 +13,13 @@ export const pieceTrack: {
   z: number;
   /** Height of the `부품` tag's centre. */
   tagY: number;
+  /** The slot of the piece last drawn, and why it went (`vanishReason`). */
+  slot: number;
+  goneBy: 'mine' | 'other' | 'slot';
   live: boolean;
   goneAt: number;
   camera: Camera | null;
-} = { x: 0, y: 0, z: 0, tagY: 0, live: false, goneAt: -Infinity, camera: null };
+} = { x: 0, y: 0, z: 0, tagY: 0, slot: -1, goneBy: 'slot', live: false, goneAt: -Infinity, camera: null };
 
 const v = new Vector3();
 
@@ -41,8 +44,11 @@ export function pieceOnScreen(clientX: number, clientY: number, el: Element, now
 export function actOnTap(target: ReturnType<typeof tapTarget>, clientX: number, clientY: number): void {
   const store = useStore.getState();
   if (target === 'piece') store.collectPiece(performance.now(), Date.now(), { x: clientX, y: clientY });
-  else if (target === 'gone') store.pingNextPiece(Date.now());
-  else if (target) store.select(target);
+  else if (target === 'gone') {
+    // Someone else's pick-up says so; a slot that ended or my own pick-up stays quiet.
+    if (pieceTrack.goneBy === 'other') store.pieceTaken(performance.now());
+    store.pingNextPiece(Date.now());
+  } else if (target) store.select(target);
 }
 
 /**
