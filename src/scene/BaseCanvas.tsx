@@ -10,6 +10,7 @@ import { OVERVIEW_START } from './layout';
 import { LabelPlanProvider } from './fx/LabelPlanProvider';
 import { Lighting } from './Lighting';
 import { Module } from './Module';
+import { PartPiece } from './PartPiece';
 import { PresenceLights } from './PresenceLights';
 import { PERF_ENABLED } from './perf';
 import { PerfHud } from './PerfHud';
@@ -26,7 +27,7 @@ import { useReducedMotion } from './useReducedMotion';
 
 /**
  * The canvas and everything in it: sky and fog, asteroid belt, lights, HDRI, ground, rocks, solar panels,
- * modules, camera, tap-vs-drag, `?perf` HUD (plan 005 A, E), adaptive quality (plan 007 C), and the
+ * modules, the parts piece, camera, tap-vs-drag, `?perf` HUD (plan 005 A, E), adaptive quality (plan 007 C), and the
  * post-processing composer when the session has one (plan 008 B.3, `PostLayer`).
  */
 export function BaseCanvas() {
@@ -65,6 +66,7 @@ export function BaseCanvas() {
           ))}
         </LabelPlanProvider>
         <PresenceLights />
+        <PartPiece />
         <CameraRig />
         {!reducedMotion && <CameraShake />}
         <QualityController />

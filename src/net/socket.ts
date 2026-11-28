@@ -46,6 +46,7 @@ export function startSocket(): () => void {
     if (stopped) return;
     store().setConnection('reconnecting');
     store().dispatchHold({ type: 'disconnect', now: performance.now() });
+    store().dispatchPickup({ type: 'disconnect' });
     retryTimer = setTimeout(connect, reconnectDelayMs(attempt++));
   }
 

@@ -36,6 +36,8 @@ export type HoldEvent =
   | { type: 'snapshot'; now: number }
   /** After any versioned message: the faults that exist now. The button of a missing fault is gone. */
   | { type: 'faults'; ids: readonly string[]; now: number }
+  /** The store ran dry while holding, or the server turned the repair away (`repairRejected`, plan 009 B.5). */
+  | { type: 'noParts'; now: number }
   /** Animation-frame tick: completes a hold, times out a pending repair. */
   | { type: 'tick'; now: number };
 
@@ -51,6 +53,7 @@ export interface HoldResult {
  * - `tick` (holding, `HOLD_MS` passed): pending, send `repair{faultId}`. (pending, `PENDING_TIMEOUT_MS` passed): idle.
  * - `repaired` of the held or pending fault: idle, nothing (the server already cleared every hold on it).
  * - `snapshot` (pending): idle.
+ * - `noParts`: holding → idle, send `release`; pending → idle.
  * - `faults` without the held fault: idle, send `release`; without the pending fault: idle.
  * Everything else keeps `ui` itself (same reference) and sends nothing.
  */
@@ -75,6 +78,9 @@ export function reduceHold(ui: RepairUi, event: HoldEvent): HoldResult {
       return hold.kind !== 'idle' && hold.faultId === event.faultId ? { ui: idle, send: null } : keep;
     case 'snapshot':
       return hold.kind === 'pending' ? { ui: idle, send: null } : keep;
+    case 'noParts':
+      if (hold.kind === 'idle') return keep;
+      return { ui: idle, send: hold.kind === 'holding' ? { type: 'release', faultId: hold.faultId } : null };
     case 'faults':
       if (hold.kind === 'idle' || event.ids.includes(hold.faultId)) return keep;
       return { ui: idle, send: hold.kind === 'holding' ? { type: 'release', faultId: hold.faultId } : null };

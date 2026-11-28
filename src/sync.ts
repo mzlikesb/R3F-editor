@@ -38,6 +38,10 @@ export interface BaseView {
   /** Newest first, at most `SNAPSHOT_BLACKOUTS`. */
   blackouts: BlackoutRecord[];
   lastRepair: LastRepairView | null;
+  /** Parts in the shared store, 0..`PARTS_CAP` (plan 009). */
+  parts: number;
+  /** Slot of the last piece collected; -1 for none. */
+  lastPartSlot: number;
 }
 
 export interface SyncState {
@@ -47,7 +51,7 @@ export interface SyncState {
   presence: number;
   /** True once any WS snapshot was applied; REST snapshots are ignored from then on. */
   wsSynced: boolean;
-  /** `serverNow - Date.now()` at the last snapshot; add it to `Date.now()` for server time. */
+  /** `serverNow - Date.now()` at the last snapshot, `parts` or `repaired` (R5); add it to `Date.now()` for server time. */
   clockOffsetMs: number;
   /** faultId → other people holding it (the server already left this tab out). Not versioned. */
   activity: Record<string, number>;
@@ -72,11 +76,13 @@ export const initialSync: SyncState = {
  * - `fault` (version not lower, base known): adds the fault (replacing one with the same id); with
  *   `blackoutStart`: `blackout`, `uptimeStartedAt` null, `longestUptimeMs`, and the record at the
  *   front of `blackouts` (cut to `SNAPSHOT_BLACKOUTS`).
- * - `repaired` (same check): removes that fault, `repairs`, `lastRepair` (`mine`, `helpers` from the message);
+ * - `repaired` (same check): removes that fault, `repairs`, `lastRepair` (`mine`, `helpers` from the message),
+ *   `parts` and the clock offset when it carries them;
  *   with `blackoutEnd`: `blackout` null, `uptimeStartedAt`, `longestUptimeMs`, that record's
  *   `endedAt`. Drops the fault from `activity`.
  * - `activity`: replaces `activity`. `presence`: replaces the count.
- * - `parts`, `repairRejected`: ignored until the parts store gets a screen (plan 009-2).
+ * - `parts` (same check): the store count, `lastPartSlot`, `version`, the clock offset (R5).
+ * - `repairRejected`: nothing here (the store's hold machine handles it).
  * Returns `state` itself when nothing changes (a stale versioned message).
  */
 export function applyServerMessage(state: SyncState, msg: ServerMessage, dateNow: number): SyncState {
@@ -119,6 +125,7 @@ export function applyServerMessage(state: SyncState, msg: ServerMessage, dateNow
         repairs: msg.repairs,
         version: msg.version,
         lastRepair: { moduleId: msg.moduleId, at: msg.at, mine: msg.mine, helpers: msg.helpers },
+        parts: msg.parts ?? base.parts,
       };
       const end = msg.blackoutEnd;
       if (end) {
@@ -128,15 +135,23 @@ export function applyServerMessage(state: SyncState, msg: ServerMessage, dateNow
         next.blackouts = base.blackouts.map((r) => (r.id === end.blackoutId ? { ...r, endedAt: end.endedAt } : r));
       }
       const activity = Object.fromEntries(Object.entries(state.activity).filter(([id]) => id !== msg.faultId));
-      return { ...state, base: next, activity };
+      const clockOffsetMs = msg.serverNow === null ? state.clockOffsetMs : msg.serverNow - dateNow;
+      return { ...state, base: next, activity, clockOffsetMs };
     }
     case 'activity':
       return { ...state, activity: msg.holds };
     case 'presence':
       return state.presence === msg.count ? state : { ...state, presence: msg.count };
-    case 'parts':
+    case 'parts': {
+      const base = state.base;
+      if (!base || msg.version < base.version) return state;
+      return {
+        ...state,
+        base: { ...base, parts: msg.count, lastPartSlot: Math.max(base.lastPartSlot, msg.slot), version: msg.version },
+        clockOffsetMs: msg.serverNow - dateNow,
+      };
+    }
     case 'repairRejected':
-      // The parts store has no screen yet (plan 009-2).
       return state;
   }
 }
@@ -152,6 +167,8 @@ function baseFromSnapshot(msg: SnapshotMessage): BaseView {
     blackout: msg.blackout,
     blackouts: msg.blackouts,
     lastRepair: msg.lastRepair ? { ...msg.lastRepair, mine: null, helpers: 0 } : null,
+    parts: msg.parts,
+    lastPartSlot: msg.lastPartSlot,
   };
 }
 
@@ -174,13 +191,15 @@ export function serverNow(state: SyncState, dateNow: number): number {
 
 /**
  * The repair button works only when the socket is `open` (set after that connection's snapshot is
- * applied), a WS snapshot was applied, the protocol is compatible, and `faultId` is a current fault.
+ * applied), a WS snapshot was applied, the protocol is compatible, `faultId` is a current fault and
+ * the store has a part (plan 009 A.4).
  */
 export function canRepair(state: SyncState, connection: ConnectionStatus, faultId: string): boolean {
   return (
     connection === 'open' &&
     state.wsSynced &&
     !state.incompatible &&
+    (state.base?.parts ?? 0) >= 1 &&
     (state.base?.faults.some((f) => f.id === faultId) ?? false)
   );
 }

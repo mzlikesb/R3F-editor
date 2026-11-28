@@ -102,6 +102,11 @@ export function toastText(toast: Pick<Toast, 'kind' | 'moduleId'>): string {
   }
 }
 
+/** The small second part of a toast: my repair took a part from the store (plan 009 B.6). */
+export function toastNote(kind: ToastKind): string | null {
+  return kind === 'mine' ? '부품 1개 사용' : null;
+}
+
 /** Classifies a `repaired` from the hold state *before* `reduceHold` handles it. */
 export function classifyRepaired(
   hold: HoldState,

@@ -7,6 +7,7 @@ import {
   faultCountLine,
   healthyLine,
   lastRepairLine,
+  partsChip,
   peopleLine,
   presenceMarkVisible,
   segments,
@@ -54,6 +55,7 @@ export function Hud() {
         >
           <span className="hud-line hud-top">
             <UptimeLine />
+            <PartsChip />
             <span className="hud-cue" aria-hidden="true">
               <RecordIcon />
               기록
@@ -154,6 +156,17 @@ function LastRepair() {
   }, [last]);
   if (!last) return null;
   return <span ref={line} className="hud-line hud-last" />;
+}
+
+/** `부품 3/5` between the uptime and `기록` (plan 009 R4); `부품 가득`, accented, at the cap. */
+function PartsChip() {
+  const parts = useStore((s) => s.sync.base?.parts ?? 0);
+  const chip = partsChip(parts);
+  return (
+    <span key={parts} className={chip.full ? 'hud-parts hud-parts-full bump' : 'hud-parts bump'}>
+      {chip.text}
+    </span>
+  );
 }
 
 /** A small list mark next to `기록`: the HUD opens the record panel. */

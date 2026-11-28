@@ -75,6 +75,8 @@ describe('snapshot', () => {
       blackout: null,
       blackouts: [],
       lastRepair: null,
+      parts: 0,
+      lastPartSlot: -1,
     });
     expect(s.presence).toBe(2);
     expect(s.wsSynced).toBe(true);

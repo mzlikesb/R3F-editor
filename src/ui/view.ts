@@ -2,7 +2,9 @@
  * Text and layout decisions for the HUD, panels and banners (plans 005, 006 C). Pure; the
  * components render what these return. Track `client` implements the TODO bodies.
  */
+import { PARTS_CAP } from '../../shared/parts';
 import { MAX_FAULTS, type Blackout, type Fault, type ModuleId } from '../../shared/protocol';
+import type { HoldState } from '../hold';
 import { moduleName } from '../modules';
 import type { BaseView, ConnectionStatus, LastRepairView } from '../sync';
 
@@ -130,6 +132,30 @@ export function lastRepairLine(last: LastRepairView | null, serverNow: number): 
 /** In the panel of a fault someone else is holding: `지금 1명이 같이 누르는 중`; null for 0. */
 export function togetherLine(othersHolding: number): string | null {
   return othersHolding >= 1 ? `지금 ${othersHolding}명이 같이 누르는 중` : null;
+}
+
+/** The HUD's store chip (plan 009 B.3, R4): `부품 3/5`, `부품 0/5`; at the cap `부품 가득`, accented. */
+export function partsChip(parts: number): { text: string; full: boolean } {
+  return parts >= PARTS_CAP ? { text: '부품 가득', full: true } : { text: `부품 ${parts}/${PARTS_CAP}`, full: false };
+}
+
+/** Every way of running out of parts at the repair says this (plan 009 B.5). */
+export const NO_PARTS_NOTICE = '부품이 없어요 — 조각을 주워요';
+
+/**
+ * The repair button (plan 009 B.4). `repair`: hold to repair, `꾹 눌러 수리 (1초 · 부품 1)` (and the
+ * hold labels). `fetch` with an empty store: `부품을 먼저 주워요` while a piece is out, else
+ * `다음 조각 7초` (whole seconds, rounded up); pressing it goes back to the overview and pings the piece.
+ */
+export function repairButton(ctx: { hold: HoldState['kind']; parts: number; out: boolean; msToNext: number }): {
+  mode: 'repair' | 'fetch';
+  label: string;
+} {
+  if (ctx.hold === 'holding') return { mode: 'repair', label: '계속 누르세요…' };
+  if (ctx.hold === 'pending') return { mode: 'repair', label: '수리 중…' };
+  if (ctx.parts >= 1) return { mode: 'repair', label: '꾹 눌러 수리 (1초 · 부품 1)' };
+  if (ctx.out) return { mode: 'fetch', label: '부품을 먼저 주워요' };
+  return { mode: 'fetch', label: `다음 조각 ${Math.max(1, Math.ceil(ctx.msToNext / 1000))}초` };
 }
 
 export interface PanelView {

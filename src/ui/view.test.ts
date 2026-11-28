@@ -234,6 +234,8 @@ describe('historyView', () => {
       { id: 'b1', startedAt: T - 3 * HOUR, endedAt: T - 3 * HOUR + 90_000 },
     ],
     lastRepair: null,
+    parts: 0,
+    lastPartSlot: -1,
   };
 
   it('shows the current and longest uptime and the recent blackouts', () => {

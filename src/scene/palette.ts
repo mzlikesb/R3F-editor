@@ -26,6 +26,12 @@ export const PALETTE = {
    * pale lime it replaced read as one more green status light (#108 playtest, neon).
    */
   presenceLight: '#f4efe6',
+  /**
+   * The parts piece on the ground (plan 009 B.1), the HUD's store chip and the ring that points at
+   * a piece. Violet: between the selection cyan and the ping lilac, clear of the red, green and amber
+   * states, and saturated where the drones are white.
+   */
+  part: '#b39dff',
   spark: '#ffd27a',
   relight: '#ffe2a8',
   afterglow: '#5cf2a0',

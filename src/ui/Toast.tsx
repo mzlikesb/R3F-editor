@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { comboLabel, comboSpoken } from '../combo';
-import { toastText, type Toast as ToastState } from '../feedback';
+import { toastNote, toastText, type Toast as ToastState } from '../feedback';
 import { useStore } from '../store';
 import './combo.css';
 
@@ -11,6 +11,7 @@ import './combo.css';
 export function Toast({ toast }: { toast: ToastState }) {
   const { until } = toast;
   const combo = comboLabel(toast.combo);
+  const note = toastNote(toast.kind);
   useEffect(() => {
     const id = setTimeout(
       () => useStore.getState().dispatchFeedback({ type: 'tick', now: performance.now() }),
@@ -30,6 +31,7 @@ export function Toast({ toast }: { toast: ToastState }) {
           <span className="sr-only"> {comboSpoken(toast.combo)}</span>
         </>
       )}
+      {note && <span className="toast-note"> · {note}</span>}
     </p>
   );
 }

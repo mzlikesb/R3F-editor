@@ -70,7 +70,12 @@ function hash(n: number): number {
  * pieces in a row are always far apart; the spot within the group is a hash of the slot.
  */
 export function partPosition(slot: number): { x: number; y: number; z: number } {
-  const group = slot % 2 === 0 ? SPOTS_LEFT : SPOTS_FRONT;
-  const [x, z] = group[hash(slot) % group.length]!;
+  const [x, z] = partSpot(slot);
   return { x, y: PART_Y, z };
+}
+
+/** `partPosition` as the (x, z) spot itself, without making an object (the scene reads it per frame). */
+export function partSpot(slot: number): readonly [number, number] {
+  const group = slot % 2 === 0 ? SPOTS_LEFT : SPOTS_FRONT;
+  return group[hash(slot) % group.length]!;
 }
