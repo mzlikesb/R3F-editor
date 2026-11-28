@@ -7,8 +7,8 @@ import { Color } from 'three';
  * The composer tone maps the whole frame once at the end (ACES), these included, which pales them
  * (a green status light came out white-mint, a red ring orange). Scaling them up only made that
  * worse. So while the composer is on they get a colour chosen to come out of ACES as their plain
- * colour (`untoneMap`), as close as ACES allows: rings, status lights and the visitors' lights look
- * the same on both paths. Sparks go past the Bloom threshold on top of that (they are what
+ * colour (`untoneMap`), as close as ACES allows: rings and status lights look the same on both
+ * paths. Sparks go past the Bloom threshold on top of that (they are what
  * flashes). Additive sprites with a coloured texture under a white material colour can only take a
  * plain scale. The plain path (fallback, last quality step) keeps the old colours.
  */
@@ -27,10 +27,12 @@ export const FX_SCALE = {
   burst: 2.5,
   /** Solar panel lamps (instance colours times this): under the threshold (A.4). */
   panel: 1.4,
+  /** The visitors' drones (#108): a little, still under the threshold at full blink, so they never bloom like a status light. */
+  drone: 1.15,
 } as const;
 
 /**
- * `tone`: comes out of ACES as its plain colour (rings, status light, visitors' lights).
+ * `tone`: comes out of ACES as its plain colour (rings, status light).
  * `flash`: the same, times `FLASH_GAIN` (sparks). The rest scale by `FX_SCALE`.
  */
 export type FxKind = 'tone' | 'flash' | keyof typeof FX_SCALE;
@@ -87,7 +89,7 @@ const listeners = new Set<() => void>();
 
 /**
  * A colour with its plain and composer versions worked out once. `get()` returns the current one
- * without allocating, for code that copies a colour every frame (`PresenceLights`).
+ * without allocating, for code that reads a colour every frame (`PresenceLights`).
  */
 export interface FxColor {
   readonly plain: Color;

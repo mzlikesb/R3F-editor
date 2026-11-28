@@ -61,3 +61,13 @@ export function stepLightScale(scale: number, present: boolean, delta: number): 
   const next = scale + ((present ? 1 : 0) - scale) * Math.min(1, delta * 2.5);
   return !present && next < 0.01 ? 0 : next;
 }
+
+/** A drone's slow blink: brightness between these, one cycle every few seconds. */
+export const BLINK = { min: 0.6, max: 1, periodS: 2.6 } as const;
+
+/** Brightness of drone `i` at `t` seconds: a slow sine in `BLINK`, each drone on its own phase. */
+export function presenceBlink(i: number, t: number): number {
+  const phase = frac(i, 7) * Math.PI * 2;
+  const k = 0.5 + 0.5 * Math.sin((t / BLINK.periodS) * Math.PI * 2 + phase);
+  return BLINK.min + (BLINK.max - BLINK.min) * k;
+}

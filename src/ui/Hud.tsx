@@ -8,6 +8,7 @@ import {
   healthyLine,
   lastRepairLine,
   peopleLine,
+  presenceMarkVisible,
   segments,
   updateBanner,
   uptimeLine,
@@ -59,7 +60,7 @@ export function Hud() {
             </span>
           </span>
           <span className="hud-line hud-people">
-            <Segments line={peopleLine(repairs, presence)} bumpKey={presence} />
+            <Segments line={peopleLine(repairs, presence)} bumpKey={presence} mark={presenceMarkVisible(presence)} />
             {label && (
               <>
                 {' · '}
@@ -80,8 +81,11 @@ export function Hud() {
   );
 }
 
-/** A line as unbroken parts joined by ` · `. The last part (people) bumps when `bumpKey` changes. */
-function Segments({ line, bumpKey }: { line: string; bumpKey: number }) {
+/**
+ * A line as unbroken parts joined by ` · `. The last part (people) bumps when `bumpKey` changes and,
+ * with `mark`, starts with the drones' diamond.
+ */
+function Segments({ line, bumpKey, mark }: { line: string; bumpKey: number; mark: boolean }) {
   const parts = segments(line);
   return (
     <>
@@ -90,6 +94,7 @@ function Segments({ line, bumpKey }: { line: string; bumpKey: number }) {
           {i > 0 && ' · '}
           {i === parts.length - 1 ? (
             <span key={bumpKey} className="seg bump">
+              {mark && <span className="presence-mark" aria-hidden="true" />}
               {part}
             </span>
           ) : (

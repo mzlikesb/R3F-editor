@@ -125,6 +125,17 @@ body {
   color: #e1e5ea;
 }
 
+/* The drones' colour (`PALETTE.presenceLight`): ties the head count to the drones over the base (#108). */
+.presence-mark {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  vertical-align: 1px;
+  background: #f4efe6;
+  transform: rotate(45deg);
+}
+
 /* Plays again whenever the element's key changes: a short grow-and-return, no count-up. */
 .bump {
   display: inline-block;

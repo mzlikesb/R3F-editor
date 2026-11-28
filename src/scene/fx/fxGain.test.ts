@@ -1,6 +1,7 @@
 import { Color, MeshBasicMaterial } from 'three';
 import { afterEach, describe, expect, it } from 'vitest';
 import { PALETTE } from '../palette';
+import { BLINK } from '../presenceLightPath';
 import {
   BLOOM_THRESHOLD,
   FX_SCALE,
@@ -50,12 +51,6 @@ describe('tone-matched colours (rings, status light, visitors)', () => {
     expect(g0 - Math.max(r0, b0)).toBeLessThan(0.4);
   });
 
-  it('the visitors’ lights stay yellow-green', () => {
-    const [r, g, b] = shown(PALETTE.presenceLight, 'tone');
-    expect(g).toBeGreaterThan(r);
-    expect(g - b).toBeGreaterThan(0.4);
-  });
-
   it('untoneMap hits a colour inside what ACES can make', () => {
     const t: Rgb = [0.4, 0.3, 0.25];
     const got = acesFilmic(untoneMap(t));
@@ -84,6 +79,15 @@ describe('against the Bloom threshold', () => {
     expect(lum(lin(composerColor(new Color(PALETTE.spark), 'flash')))).toBeGreaterThan(BLOOM_THRESHOLD);
     const [r, , b] = shown(PALETTE.spark, 'flash');
     expect(r - b).toBeGreaterThan(0.25);
+  });
+
+  it('the visitors’ drones stay under it at full blink: no bloom, unlike the status light (#108)', () => {
+    expect(lum(lin(composerColor(new Color(PALETTE.presenceLight), 'drone'))) * BLINK.max).toBeLessThan(
+      BLOOM_THRESHOLD,
+    );
+    // And after tone mapping they are still a near-white, not a green.
+    const [r, g, b] = shown(PALETTE.presenceLight, 'drone');
+    expect(Math.max(r, g, b) - Math.min(r, g, b)).toBeLessThan(0.15);
   });
 
   it('the panel lamps stay under it: the field must not outshine the modules (A.4)', () => {

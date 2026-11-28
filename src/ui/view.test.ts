@@ -1,4 +1,6 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { PALETTE } from '../scene/palette';
 import type { Fault } from '../../shared/protocol';
 import type { BaseView } from '../sync';
 import {
@@ -14,6 +16,7 @@ import {
   lastRepairLine,
   panelView,
   peopleLine,
+  presenceMarkVisible,
   segments,
   togetherLine,
   uptimeLine,
@@ -252,5 +255,19 @@ describe('historyView', () => {
 
   it('(neon round 2) the longest is the current run when that is longer', () => {
     expect(historyView({ ...base, longestUptimeMs: 0 }, T).longest).toBe('2시간 5분');
+  });
+});
+
+describe('presenceMarkVisible (#108)', () => {
+  it('shows the drone mark only with someone else here', () => {
+    expect(presenceMarkVisible(0)).toBe(false);
+    expect(presenceMarkVisible(1)).toBe(false);
+    expect(presenceMarkVisible(2)).toBe(true);
+  });
+
+  it('the mark is the drones’ colour', () => {
+    const css = readFileSync(new URL('../index.css', import.meta.url), 'utf8');
+    const rule = /\.presence-mark\s*\{([^}]*)\}/.exec(css)?.[1] ?? '';
+    expect(rule).toMatch(new RegExp(`background:\\s*${PALETTE.presenceLight}`, 'i'));
   });
 });

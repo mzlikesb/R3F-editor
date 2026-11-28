@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BLINK,
   LIGHT_HEIGHT,
   LIGHT_RADIUS,
   MAX_PRESENCE_LIGHTS,
+  presenceBlink,
   presenceLightAt,
   presenceLightCount,
   presenceLights,
@@ -93,5 +95,26 @@ describe('stepLightScale', () => {
     expect(s).toBe(0);
     for (let i = 0; i < 600; i++) s = stepLightScale(s, true, 1 / 60);
     expect(s).toBeCloseTo(1, 3);
+  });
+});
+
+describe('presenceBlink (#108)', () => {
+  it('stays between 0.6 and 1 and reaches both ends', () => {
+    let lo = 1;
+    let hi = 0;
+    for (let t = 0; t < BLINK.periodS; t += 0.01) {
+      const b = presenceBlink(0, t);
+      expect(b).toBeGreaterThanOrEqual(BLINK.min);
+      expect(b).toBeLessThanOrEqual(BLINK.max);
+      lo = Math.min(lo, b);
+      hi = Math.max(hi, b);
+    }
+    expect(lo).toBeCloseTo(BLINK.min, 2);
+    expect(hi).toBeCloseTo(BLINK.max, 2);
+  });
+
+  it('is slow (a cycle of seconds) and drones are not in step', () => {
+    expect(BLINK.periodS).toBeGreaterThanOrEqual(2);
+    expect(presenceBlink(0, 1)).not.toBeCloseTo(presenceBlink(1, 1), 2);
   });
 });
