@@ -76,6 +76,7 @@ export const initialSync: SyncState = {
  *   with `blackoutEnd`: `blackout` null, `uptimeStartedAt`, `longestUptimeMs`, that record's
  *   `endedAt`. Drops the fault from `activity`.
  * - `activity`: replaces `activity`. `presence`: replaces the count.
+ * - `parts`, `repairRejected`: ignored until the parts store gets a screen (plan 009-2).
  * Returns `state` itself when nothing changes (a stale versioned message).
  */
 export function applyServerMessage(state: SyncState, msg: ServerMessage, dateNow: number): SyncState {
@@ -133,6 +134,10 @@ export function applyServerMessage(state: SyncState, msg: ServerMessage, dateNow
       return { ...state, activity: msg.holds };
     case 'presence':
       return state.presence === msg.count ? state : { ...state, presence: msg.count };
+    case 'parts':
+    case 'repairRejected':
+      // The parts store has no screen yet (plan 009-2).
+      return state;
   }
 }
 

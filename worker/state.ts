@@ -24,6 +24,7 @@ import {
   type ModuleId,
   type SnapshotMessage,
 } from '../shared/protocol';
+import { PARTS_CAP, PART_EARLY_MS, PART_SLOT_MS, partSlot } from '../shared/parts';
 
 /** Next-fault delay is drawn from [REFAULT_MIN_MS, REFAULT_MAX_MS]. */
 export const REFAULT_MIN_MS = 20_000;
@@ -59,7 +60,7 @@ export interface BaseState {
   /** Oldest first. At most one per module, at most `MAX_FAULTS`. */
   faults: Fault[];
   repairs: number;
-  /** +1 on every change a client can see (faults, repairs, uptime, blackout, history, lastRepair). */
+  /** +1 on every change a client can see (faults, repairs, uptime, blackout, history, lastRepair, parts). */
   version: number;
   instanceId: string;
   /** Start of the current uptime record; null during a blackout. */
@@ -73,6 +74,23 @@ export interface BaseState {
   /** Last save, including the 1→0 save. The unattended span starts here. */
   lastSavedAt: number;
   lastRepair: LastRepair | null;
+  /** Parts in the shared store, 0..`PARTS_CAP` (plan 009 A.1). */
+  parts: number;
+  /** Slot of the last piece collected; -1 before the first. A slot is collected at most once. */
+  lastPartSlot: number;
+}
+
+/**
+ * A stored `base:v2` from before plan 009 has no `parts` or `lastPartSlot`: read them as 0 and -1
+ * (plan 009 A.1). Only fills in on read; whoever saves next writes the full shape. Returns `stored`
+ * itself when nothing is missing.
+ */
+export function withPartDefaults(stored: BaseState): BaseState {
+  const raw: Partial<BaseState> = stored;
+  const parts = Number.isInteger(raw.parts) && raw.parts! >= 0 ? Math.min(raw.parts!, PARTS_CAP) : 0;
+  const lastPartSlot = Number.isInteger(raw.lastPartSlot) && raw.lastPartSlot! >= -1 ? raw.lastPartSlot! : -1;
+  if (parts === raw.parts && lastPartSlot === raw.lastPartSlot) return stored;
+  return { ...stored, parts, lastPartSlot };
 }
 
 /** What plans 003-005 stored under the old key `base`. Read once for migration, never written. */
@@ -112,6 +130,8 @@ export function initialState(instanceId: string, now: number, rng: Rng): BaseSta
     nextFaultAt: now + nextFaultDelayMs(rng.rand),
     lastSavedAt: now,
     lastRepair: null,
+    parts: 0,
+    lastPartSlot: -1,
   };
 }
 
@@ -135,6 +155,8 @@ export function migrateLegacy(legacy: LegacyState, now: number, rng: Rng): BaseS
     nextFaultAt: now + nextFaultDelayMs(rng.rand),
     lastSavedAt: now,
     lastRepair: null,
+    parts: 0,
+    lastPartSlot: -1,
   };
 }
 
@@ -196,18 +218,49 @@ export interface RepairResult {
   blackoutEnd: BlackoutEnd | null;
 }
 
+/** How repairs treat the parts store (plan 009 A.9). `BaseRoom` passes its code constant `PARTS_REQUIRED`. */
+export interface RepairOptions {
+  /** True: a repair takes one part and is turned away at 0. False: parts are left alone. */
+  partsRequired: boolean;
+}
+
 /**
- * Repairs `faultId` (plan 006 A.5, A.6). Null unless it is in `faults` now, so a repeat or stale
- * repair changes nothing. Otherwise: removes that fault only, `repairs + 1`, `version + 1`,
- * `lastRepair = { moduleId, at: now }`, `nextFaultAt = now + delay`.
+ * Repairs `faultId` (plan 006 A.5, A.6; plan 009 A.4). Null unless it is in `faults` now, so a
+ * repeat or stale repair changes nothing; this is checked first (plan 009 R5), so a second repair
+ * of the same fault is null even when the store is empty. Then, with `partsRequired` and no part
+ * in the store: `'noParts'`, nothing changes. Otherwise: removes that fault only, `repairs + 1`,
+ * `version + 1`, `lastRepair = { moduleId, at: now }`, `nextFaultAt = now + delay`, and with
+ * `partsRequired` `parts - 1`.
  * Generator during a blackout: the blackout ends (`blackout` null, the record's `endedAt = now`),
  * `uptimeStartedAt = now`; `blackoutEnd` carries those and `longestUptimeMs`.
  */
-export function repair(state: BaseState, faultId: string, now: number, rng: Rng): RepairResult | null {
+export function repair(
+  state: BaseState,
+  faultId: string,
+  now: number,
+  rng: Rng,
+  opts: { partsRequired: false },
+): RepairResult | null;
+export function repair(
+  state: BaseState,
+  faultId: string,
+  now: number,
+  rng: Rng,
+  opts: RepairOptions,
+): RepairResult | 'noParts' | null;
+export function repair(
+  state: BaseState,
+  faultId: string,
+  now: number,
+  rng: Rng,
+  opts: RepairOptions,
+): RepairResult | 'noParts' | null {
   const fault = state.faults.find((f) => f.id === faultId);
   if (!fault) return null;
+  if (opts.partsRequired && state.parts < 1) return 'noParts';
   const next: BaseState = {
     ...state,
+    parts: opts.partsRequired ? state.parts - 1 : state.parts,
     faults: state.faults.filter((f) => f.id !== faultId),
     repairs: state.repairs + 1,
     version: state.version + 1,
@@ -228,6 +281,34 @@ export function repair(state: BaseState, faultId: string, now: number, rng: Rng)
     state: ended,
     fault,
     blackoutEnd: { blackoutId, endedAt: now, uptimeStartedAt: now, longestUptimeMs: state.longestUptimeMs },
+  };
+}
+
+/**
+ * Whether the piece of `slot` may be collected at `now` (plan 009 A.3, R5): the current slot, the
+ * one before (a tap just before the turn), or the next one in the last `PART_EARLY_MS` of the
+ * current slot (a client clock a little ahead).
+ */
+export function slotOpen(slot: number, now: number): boolean {
+  const current = partSlot(now);
+  if (slot === current || slot === current - 1) return true;
+  return slot === current + 1 && (current + 1) * PART_SLOT_MS - now <= PART_EARLY_MS;
+}
+
+/**
+ * Collects the piece of `slot` (plan 009 A.3). Null (nothing changes) unless `slotOpen`, `slot` is
+ * past `lastPartSlot` (each piece once, and never an older one) and the store is below `PARTS_CAP`.
+ * Faults and blackouts do not matter. Otherwise `parts + 1`, `lastPartSlot = slot`, `version + 1`.
+ */
+export function collect(state: BaseState, slot: number, now: number): BaseState | null {
+  if (!Number.isInteger(slot) || !slotOpen(slot, now)) return null;
+  if (slot <= state.lastPartSlot || state.parts >= PARTS_CAP) return null;
+  return {
+    ...state,
+    parts: state.parts + 1,
+    lastPartSlot: slot,
+    version: state.version + 1,
+    lastSavedAt: now,
   };
 }
 
@@ -329,7 +410,7 @@ export function countPresence<T>(sockets: readonly T[], closing?: T): number {
   return closing === undefined ? sockets.length : sockets.filter((s) => s !== closing).length;
 }
 
-/** Protocol-2 snapshot: the `SNAPSHOT_BLACKOUTS` newest records, `protocol: 2`, `serverNow`. */
+/** Protocol-2 snapshot: the `SNAPSHOT_BLACKOUTS` newest records, `protocol: 2`, `serverNow`, the parts store. */
 export function toSnapshot(state: BaseState, presence: number, serverNow: number): SnapshotMessage {
   return {
     type: 'snapshot',
@@ -345,6 +426,8 @@ export function toSnapshot(state: BaseState, presence: number, serverNow: number
     presence,
     instanceId: state.instanceId,
     serverNow,
+    parts: state.parts,
+    lastPartSlot: state.lastPartSlot,
   };
 }
 

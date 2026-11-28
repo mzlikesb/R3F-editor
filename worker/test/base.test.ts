@@ -8,12 +8,16 @@ import {
   type Fault,
   type FaultMessage,
   type HistoryResponse,
+  type PartsMessage,
+  type RepairRejectedMessage,
   type RepairedMessage,
   type ServerMessage,
   type SnapshotMessage,
 } from '../../shared/protocol';
+import { PARTS_CAP, partSlot } from '../../shared/parts';
+import { PRE009_STORED } from '../../shared/testdata/pre009';
 import { v1ParseServerMessage, v1Replay, type V1ServerMessage } from '../../shared/testdata/v1';
-import { LEGACY_STATE_KEY, STATE_KEY } from '../BaseRoom';
+import { LEGACY_STATE_KEY, PARTS_REQUIRED, STATE_KEY } from '../BaseRoom';
 import { FIRST_FAULT_WAIT_MS, MIN_UNATTENDED_MS, type BaseState, type LegacyState } from '../state';
 
 const TIMEOUT_MS = 2000;
@@ -67,12 +71,12 @@ class Client {
     let faults: Fault[] = [];
     let version = -1;
     for (const m of this.messages) {
-      if (m.type === 'presence' || m.type === 'activity') continue;
+      if (m.type === 'presence' || m.type === 'activity' || m.type === 'repairRejected') continue;
       if (m.version < version) continue;
       version = m.version;
       if (m.type === 'snapshot') faults = m.faults;
       else if (m.type === 'fault') faults = [...faults.filter((f) => f.id !== m.fault.id), m.fault];
-      else faults = faults.filter((f) => f.id !== m.faultId);
+      else if (m.type === 'repaired') faults = faults.filter((f) => f.id !== m.faultId);
     }
     return faults;
   }
@@ -177,6 +181,8 @@ const isSnapshot = (m: ServerMessage): m is SnapshotMessage => m.type === 'snaps
 const isRepaired = (m: ServerMessage): m is RepairedMessage => m.type === 'repaired';
 const isFault = (m: ServerMessage): m is FaultMessage => m.type === 'fault';
 const isActivity = (m: ServerMessage): m is ActivityMessage => m.type === 'activity';
+const isParts = (m: ServerMessage): m is PartsMessage => m.type === 'parts';
+const isRejected = (m: ServerMessage): m is RepairRejectedMessage => m.type === 'repairRejected';
 const presenceIs = (n: number) => (m: ServerMessage) => m.type === 'presence' && m.count === n;
 const quiet = () => new Promise((r) => setTimeout(r, QUIET_MS));
 
@@ -848,6 +854,133 @@ describe('protocol 1 sockets (tabs from before the deploy)', () => {
     expect(repaired).toMatchObject({ faultId: `seed-${GENERATOR}`, mine: true });
     expect(old.view().base?.fault).toBeNull();
     expect(a.faults().map((f) => f.moduleId)).toEqual(['oxygen']);
+  });
+});
+
+describe('the parts store (plan 009 A)', () => {
+  /** The slot of the server clock now (the test and the room share the clock). */
+  const slotNow = () => partSlot(Date.now());
+
+  it('a new base starts with an empty store', async () => {
+    const a = await Client.connect();
+    expect(await a.waitFor(isSnapshot)).toMatchObject({ parts: 0, lastPartSlot: -1 });
+    expect(await readState()).toMatchObject({ parts: 0, lastPartSlot: -1 });
+  });
+
+  it('collecting the current piece tells everyone, mine on the collector only, and saves', async () => {
+    const a = await fresh();
+    const b = await fresh();
+    const slot = slotNow();
+    const before = Date.now();
+    a.send({ type: 'collect', slot });
+    const [pa, pb] = await Promise.all([a.waitFor(isParts), b.waitFor(isParts)]);
+    expect(pa).toMatchObject({ count: 1, slot, mine: true });
+    expect(pb).toMatchObject({ count: 1, slot, mine: false });
+    expect(pa.version).toBe(pb.version);
+    expect(pa.serverNow).toBeGreaterThanOrEqual(before - 1000);
+    expect(await readState()).toMatchObject({ parts: 1, lastPartSlot: slot, version: pa.version });
+    expect(await (await fresh()).waitFor(isSnapshot)).toMatchObject({ parts: 1, lastPartSlot: slot });
+  });
+
+  it('the same piece tapped by two people at once counts once', async () => {
+    const a = await fresh();
+    const b = await fresh();
+    const slot = slotNow();
+    a.send({ type: 'collect', slot });
+    b.send({ type: 'collect', slot });
+    await Promise.all([a.waitFor(isParts), b.waitFor(isParts)]);
+    await quiet();
+    const all = [...a.messages.filter(isParts), ...b.messages.filter(isParts)];
+    expect(all).toHaveLength(2);
+    expect(all.filter((m) => m.mine)).toHaveLength(1);
+    expect((await readState())!.parts).toBe(1);
+  });
+
+  it('ignores an old, a future or a malformed slot', async () => {
+    const a = await fresh();
+    const slot = slotNow();
+    a.send({ type: 'collect', slot: slot - 5 });
+    a.send({ type: 'collect', slot: slot + 5 });
+    a.send({ type: 'collect', slot: 'now' });
+    a.send({ type: 'collect' });
+    await quiet();
+    expect(a.messages.filter(isParts)).toEqual([]);
+    expect(a.closed).toBe(false);
+    expect((await readState())!.parts).toBe(0);
+  });
+
+  it('stops at the cap', async () => {
+    const a = await fresh();
+    await seed({ parts: PARTS_CAP, lastPartSlot: -1 });
+    a.send({ type: 'collect', slot: slotNow() });
+    await quiet();
+    expect(a.messages.filter(isParts)).toEqual([]);
+    expect((await readState())!.parts).toBe(PARTS_CAP);
+  });
+
+  it('collects during a blackout', async () => {
+    const a = await withFaults(fault('oxygen'), fault('comms'), fault(GENERATOR));
+    await seed({ blackout: { id: 'b1', startedAt: Date.now() - 1000 }, uptimeStartedAt: null, nextFaultAt: null });
+    a.send({ type: 'collect', slot: slotNow() });
+    expect(await a.waitFor(isParts)).toMatchObject({ count: 1, mine: true });
+  });
+
+  it('ignores collects beyond 5 per second from one socket', async () => {
+    const a = await fresh();
+    const slot = slotNow();
+    for (let i = 0; i < 5; i++) a.send({ type: 'collect', slot: slot - 5 });
+    a.send({ type: 'collect', slot });
+    await quiet();
+    expect(a.messages.filter(isParts)).toEqual([]);
+  });
+
+  it('PARTS_REQUIRED is off in 009-1: an empty store still repairs, and repaired carries the store and the time', async () => {
+    expect(PARTS_REQUIRED).toBe(false);
+    await withFaults(fault('oxygen'));
+    await seed({ parts: 0 });
+    const a = await fresh();
+    const before = Date.now();
+    a.send({ type: 'repair', faultId: 'seed-oxygen' });
+    const r = await a.waitFor(isRepaired);
+    expect(r).toMatchObject({ mine: true, parts: 0 });
+    expect(r.serverNow).toBeGreaterThanOrEqual(before - 1000);
+    expect(a.messages.filter(isRejected)).toEqual([]);
+    expect((await readState())!.parts).toBe(0);
+  });
+
+  it('a protocol-1 tab gets no parts fields and no parts messages', async () => {
+    const old = await LegacyClient.connect();
+    await old.waitFor(() => old.view().wsSynced);
+    const a = await fresh();
+    a.send({ type: 'collect', slot: slotNow() });
+    await a.waitFor(isParts);
+    old.send({ type: 'collect', slot: slotNow() });
+    await quiet();
+    for (const raw of old.frames) {
+      const m = JSON.parse(raw) as Record<string, unknown>;
+      expect(m.type).not.toBe('parts');
+      expect(m).not.toHaveProperty('parts');
+      expect(m).not.toHaveProperty('lastPartSlot');
+    }
+    for (const m of old.messages()) expect(m).not.toBeNull();
+  });
+
+  it('(R3) a stored base from before 009 reads with an empty store; a pure read writes nothing', async () => {
+    const old = JSON.parse(PRE009_STORED) as Record<string, unknown>;
+    await runInDurableObject(stub(), (_i, state) => state.storage.put(STATE_KEY, old));
+    const snap = await fetchBase();
+    expect(snap).toMatchObject({ parts: 0, lastPartSlot: -1, repairs: old.repairs, version: old.version });
+    expect(snap.faults).toEqual(old.faults);
+    expect(await readState()).toEqual(old);
+  });
+
+  it('(R3) after the first save a stored base from before 009 has the full shape, old fields kept', async () => {
+    const old = JSON.parse(PRE009_STORED) as Record<string, unknown>;
+    await runInDurableObject(stub(), (_i, state) => state.storage.put(STATE_KEY, old));
+    const a = await Client.connect();
+    expect(await a.waitFor(isSnapshot)).toMatchObject({ parts: 0, lastPartSlot: -1, instanceId: old.instanceId });
+    const saved = (await readState())!;
+    expect(saved).toMatchObject({ parts: 0, lastPartSlot: -1, repairs: old.repairs, instanceId: old.instanceId });
   });
 });
 

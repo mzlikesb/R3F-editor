@@ -9,9 +9,11 @@ import {
   parseServerMessage,
   socketProtocol,
   type FaultMessage,
+  type PartsMessage,
   type RepairedMessage,
   type SnapshotMessage,
 } from './protocol';
+import { PRE009_REPAIRED, PRE009_SNAPSHOT } from './testdata/pre009';
 
 const fault = { id: 'f1', moduleId: 'oxygen', createdAt: 1000 } as const;
 const gen = { id: 'g1', moduleId: 'generator', createdAt: 900 } as const;
@@ -30,6 +32,8 @@ const snapshot: SnapshotMessage = {
   presence: 1,
   instanceId: 'abc',
   serverNow: 2000,
+  parts: 3,
+  lastPartSlot: 199,
 };
 
 const json = (v: unknown) => JSON.stringify(v);
@@ -118,6 +122,8 @@ describe('parseServerMessage: events', () => {
       helpers: 0,
       at: 4000,
       blackoutEnd: null,
+      parts: 2,
+      serverNow: 4001,
     };
     expect(parseServerMessage(json(plain))).toEqual(plain);
 
@@ -183,6 +189,82 @@ describe('parseServerMessage: events', () => {
   });
 });
 
+describe('parseServerMessage: the parts store (plan 009)', () => {
+  it('reads parts and lastPartSlot on a snapshot; missing or malformed is 0 and -1, never a rejection', () => {
+    const { parts: _p, lastPartSlot: _l, ...old } = snapshot;
+    expect(parseServerMessage(json(old))).toEqual({ ...snapshot, parts: 0, lastPartSlot: -1 });
+    for (const parts of [null, -1, 1.5, '2', 6]) {
+      expect((parseServerMessage(json({ ...snapshot, parts })) as SnapshotMessage).parts).toBe(0);
+    }
+    for (const lastPartSlot of [null, -2, 1.5, '7']) {
+      expect((parseServerMessage(json({ ...snapshot, lastPartSlot })) as SnapshotMessage).lastPartSlot).toBe(-1);
+    }
+    expect((parseServerMessage(json({ ...snapshot, parts: 5 })) as SnapshotMessage).parts).toBe(5);
+  });
+
+  it('reads parts and serverNow on a repaired; missing or malformed is null', () => {
+    const base = { type: 'repaired', version: 6, faultId: 'f1', moduleId: 'oxygen', repairs: 3, at: 4000 };
+    expect(parseServerMessage(json(base))).toMatchObject({ parts: null, serverNow: null });
+    expect(parseServerMessage(json({ ...base, parts: 'x', serverNow: '1' }))).toMatchObject({
+      parts: null,
+      serverNow: null,
+    });
+    expect(parseServerMessage(json({ ...base, parts: 0, serverNow: 4000 }))).toMatchObject({
+      parts: 0,
+      serverNow: 4000,
+    });
+  });
+
+  it('parses parts, reading only the boolean true as mine', () => {
+    const msg: PartsMessage = { type: 'parts', version: 9, count: 2, slot: 180_000_001, mine: true, serverNow: 5000 };
+    expect(parseServerMessage(json({ ...msg, extra: 1 }))).toEqual(msg);
+    for (const mine of [undefined, 'true', 1]) {
+      expect((parseServerMessage(json({ ...msg, mine })) as PartsMessage).mine).toBe(false);
+    }
+    for (const bad of [
+      { count: 6 },
+      { count: -1 },
+      { slot: -1 },
+      { slot: 1.5 },
+      { version: 'x' },
+      { serverNow: null },
+    ]) {
+      expect(parseServerMessage(json({ ...msg, ...bad }))).toBeNull();
+    }
+  });
+
+  it('parses repairRejected with the noParts reason only', () => {
+    const msg = { type: 'repairRejected', faultId: 'f1', reason: 'noParts' };
+    expect(parseServerMessage(json(msg))).toEqual(msg);
+    expect(parseServerMessage(json({ ...msg, reason: 'other' }))).toBeNull();
+    expect(parseServerMessage(json({ ...msg, faultId: '' }))).toBeNull();
+  });
+});
+
+describe('fixed frames from before plan 009 (R3)', () => {
+  const oldSnapshot = JSON.parse(PRE009_SNAPSHOT) as Record<string, unknown>;
+  const oldRepaired = JSON.parse(PRE009_REPAIRED) as Record<string, unknown>;
+
+  it('an old snapshot still parses, every old field the same, with an empty store', () => {
+    expect(parseServerMessage(PRE009_SNAPSHOT)).toEqual({ ...oldSnapshot, parts: 0, lastPartSlot: -1 });
+    expect(isIncompatibleSnapshot(PRE009_SNAPSHOT)).toBe(false);
+  });
+
+  it('a 009 snapshot (old frame plus the new fields) keeps every old field the same', () => {
+    const now = { ...oldSnapshot, parts: 4, lastPartSlot: 179_500_004 };
+    expect(parseServerMessage(json(now))).toEqual(now);
+  });
+
+  it('an old repaired still parses, every old field the same', () => {
+    expect(parseServerMessage(PRE009_REPAIRED)).toEqual({ ...oldRepaired, parts: null, serverNow: null });
+  });
+
+  it('a 009 repaired (old frame plus the new fields) keeps every old field the same', () => {
+    const now = { ...oldRepaired, parts: 1, serverNow: 1_795_000_041_000 };
+    expect(parseServerMessage(json(now))).toEqual(now);
+  });
+});
+
 describe('isIncompatibleSnapshot', () => {
   it('is true for a snapshot this build cannot read', () => {
     expect(isIncompatibleSnapshot(json({ ...snapshot, protocol: 3 }))).toBe(true);
@@ -212,6 +294,22 @@ describe('parseClientMessage', () => {
     for (const type of ['repair', 'hold', 'release'] as const) {
       expect(parseClientMessage(json({ type, faultId: 'f1', extra: 1 }))).toEqual({ type, faultId: 'f1' });
     }
+  });
+
+  it('parses collect with a non-negative integer slot (plan 009 A.3)', () => {
+    expect(parseClientMessage(json({ type: 'collect', slot: 180_000_000, faultId: 'x' }))).toEqual({
+      type: 'collect',
+      slot: 180_000_000,
+    });
+    for (const slot of [undefined, null, -1, 1.5, '3', Infinity]) {
+      expect(parseClientMessage(json({ type: 'collect', slot }))).toBeNull();
+    }
+  });
+
+  it(`ignores a collect over ${MAX_CLIENT_MESSAGE_BYTES} bytes`, () => {
+    expect(
+      parseClientMessage(json({ type: 'collect', slot: 1, pad: 'x'.repeat(MAX_CLIENT_MESSAGE_BYTES) })),
+    ).toBeNull();
   });
 
   it('ignores malformed, unknown, and binary messages', () => {

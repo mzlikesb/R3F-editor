@@ -30,6 +30,8 @@ function snapshot(overrides: Partial<SnapshotMessage> = {}): SnapshotMessage {
     presence: 2,
     instanceId: 'inst',
     serverNow: T,
+    parts: 0,
+    lastPartSlot: -1,
     ...overrides,
   };
 }
@@ -50,6 +52,8 @@ function repaired(overrides: Partial<RepairedMessage> = {}): RepairedMessage {
     helpers: 0,
     at: T + 100,
     blackoutEnd: null,
+    parts: null,
+    serverNow: null,
     ...overrides,
   };
 }

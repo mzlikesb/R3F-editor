@@ -41,6 +41,14 @@ describe('admit (plan 006 A.10, neon (b))', () => {
     expect(admit('release', allow, 7)).toBe(true);
   });
 
+  it('limits collect too, sharing the budget with hold and repair (plan 009 A.6)', () => {
+    const allow = createRateLimiter();
+    for (let t = 0; t < 4; t++) expect(admit('collect', allow, t)).toBe(true);
+    expect(admit('repair', allow, 4)).toBe(true);
+    expect(admit('collect', allow, 5)).toBe(false);
+    expect(admit('collect', allow, 1000)).toBe(true);
+  });
+
   it('a release does not use up the budget', () => {
     const allow = createRateLimiter();
     for (let t = 0; t < 10; t++) expect(admit('release', allow, t)).toBe(true);

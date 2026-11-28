@@ -4,6 +4,8 @@ import { v1InitialSync, v1ParseServerMessage, v1Replay } from '../shared/testdat
 import { legacyUpdate, toLegacyRepaired, toLegacySnapshot } from './legacy';
 import { injectFault, migrateLegacy, repair, type BaseState, type Rng } from './state';
 
+/** Parts not required: repairs behave as before plan 009. */
+const OFF = { partsRequired: false } as const;
 const T = 1_800_000_000_000;
 const rng = (): Rng => {
   let n = 0;
@@ -25,6 +27,8 @@ function state(overrides: Partial<BaseState> = {}): BaseState {
     nextFaultAt: T + 20_000,
     lastSavedAt: T - 1000,
     lastRepair: null,
+    parts: 0,
+    lastPartSlot: -1,
     ...overrides,
   };
 }
@@ -56,13 +60,13 @@ describe('toLegacyRepaired', () => {
 describe('legacyUpdate', () => {
   it('sends repaired only for a generator repair', () => {
     const before = state();
-    const after = repair(before, 'g1', T, rng())!.state;
+    const after = repair(before, 'g1', T, rng(), OFF)!.state;
     expect(legacyUpdate(before, after, gen)).toBe('repaired');
   });
 
   it('sends a snapshot when the count or the generator fault changed', () => {
     const before = state();
-    const oxyFixed = repair(before, 'o1', T, rng())!.state;
+    const oxyFixed = repair(before, 'o1', T, rng(), OFF)!.state;
     expect(legacyUpdate(before, oxyFixed, oxy)).toBe('snapshot');
 
     // The third fault always lands on a healthy generator.
@@ -90,7 +94,7 @@ describe('an old tab through the deploy (deployed parser and reducer)', () => {
     const frames: string[] = [frame(toLegacySnapshot(s0, 2))];
 
     // Someone on the new build repairs the oxygen tank.
-    const s1 = repair(s0, 'o1', T + 1000, rng())!.state;
+    const s1 = repair(s0, 'o1', T + 1000, rng(), OFF)!.state;
     expect(legacyUpdate(s0, s1, oxy)).toBe('snapshot');
     frames.push(frame(toLegacySnapshot(s1, 2)));
     let view = v1Replay(frames, seen);
@@ -98,7 +102,7 @@ describe('an old tab through the deploy (deployed parser and reducer)', () => {
     expect(view.base?.repairs).toBe(42);
 
     // The old tab repairs the generator and wins.
-    const s2 = repair(s1, 'g1', T + 2000, rng())!.state;
+    const s2 = repair(s1, 'g1', T + 2000, rng(), OFF)!.state;
     expect(legacyUpdate(s1, s2, gen)).toBe('repaired');
     frames.push(frame(toLegacyRepaired(s2, 'g1', true)));
     view = v1Replay(frames, seen);
