@@ -57,6 +57,13 @@ const dummy = new Object3D();
 const pos: LightPosition = { x: 0, y: 0, z: 0 };
 const tint = new Color();
 
+/** Draws only the first `live` instances and marks the buffers dirty. */
+function flush(x: InstancedMesh, live: number): void {
+  x.count = live;
+  x.instanceMatrix.needsUpdate = true;
+  if (x.instanceColor) x.instanceColor.needsUpdate = true;
+}
+
 /**
  * One drone per other visitor, drifting over the base (#106): a warm-white octahedron that turns
  * and blinks slowly and never blooms, so it does not read as a module's green status light (#108).
@@ -128,11 +135,9 @@ export function PresenceLights() {
       h.setMatrixAt(i, dummy.matrix);
       h.setColorAt(i, tint.copy(base).multiplyScalar(blink * HALO_PEAK));
     }
-    for (const x of [m, h]) {
-      x.count = live;
-      x.instanceMatrix.needsUpdate = true;
-      if (x.instanceColor) x.instanceColor.needsUpdate = true;
-    }
+    // Two calls, not `for (const x of [m, h])`: no array literal per frame.
+    flush(m, live);
+    flush(h, live);
   });
 
   return (
