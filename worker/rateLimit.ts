@@ -21,7 +21,8 @@ export function createRateLimiter(
 
 /**
  * Whether a parsed message is handled (plan 006 A.10): `release` always, without using the
- * socket's budget, so a hold is never stuck by the limit; `hold` and `repair` only when `allow(now)`.
+ * socket's budget, so a hold is never stuck by the limit; `hold`, `repair` and `collect` (plan 009
+ * A.6) only when `allow(now)`.
  * A `hold` turned away here is not recorded as a hold (neon (b)).
  */
 export function admit(type: ClientMessage['type'], allow: (now: number) => boolean, now: number): boolean {

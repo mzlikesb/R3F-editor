@@ -6,7 +6,9 @@ import {
   socketProtocol,
   type ActivityMessage,
   type FaultMessage,
+  type PartsMessage,
   type PresenceMessage,
+  type RepairRejectedMessage,
   type RepairedMessage,
   type ServerMessage,
 } from '../shared/protocol';
@@ -17,6 +19,7 @@ import { admit, createRateLimiter } from './rateLimit';
 import { isMine, newAttachment, readAttachment, type SocketInfo } from './socketId';
 import {
   arrive,
+  collect,
   decideAlarm,
   decideOnAlarm,
   initialState,
@@ -27,6 +30,7 @@ import {
   repair,
   toHistory,
   toSnapshot,
+  withPartDefaults,
   type BaseState,
   type LegacyState,
   type Rng,
@@ -38,6 +42,12 @@ export const STATE_KEY = 'base:v2';
 export const LEGACY_STATE_KEY = 'base';
 /** Key written by plan 002; the `instanceId` of a base that never had `base`. Read only. */
 export const INSTANCE_ID_KEY = 'instanceId';
+/**
+ * Whether a repair takes a part from the store (plan 009 A.9). A code constant, not an env value:
+ * 009-2 turns it on in the same commit as `PROTOCOL_VERSION = 3`, so a deploy or a rollback always
+ * moves both together. Off, pieces are still collected and the store still fills.
+ */
+export const PARTS_REQUIRED: boolean = false;
 
 /**
  * The single shared base (plan 006). Rules live in `./state`, `./holds`, `./legacy`; this class does
@@ -57,6 +67,8 @@ export const INSTANCE_ID_KEY = 'instanceId';
  *   `helped` on the other sockets whose hold on it had not expired, `helpers` = how many; #56),
  *   `legacyUpdate` to protocol-1 sockets, `releaseHold` of that fault on every socket and an
  *   `activity` to protocol-2 sockets if any hold was cleared.
+ *   With `PARTS_REQUIRED` and an empty store: `repairRejected` to this socket only (protocol 2).
+ *   `collect`: `collect()`; on success save and `parts` to protocol-2 sockets (`mine` per socket).
  *   `hold` / `release`: update this socket's attachment (`startHold` / `releaseHold`); if it changed,
  *   send each protocol-2 socket `activityFor(all holds, its own hold)`.
  *   Then the alarm rule.
@@ -140,9 +152,30 @@ export class BaseRoom extends DurableObject<Env> {
     const me = peers.get(ws);
     if (!me) return;
 
-    if (msg.type === 'repair') {
-      const result = repair(state, msg.faultId, now, this.rng);
-      if (result) {
+    if (msg.type === 'collect') {
+      const next = collect(state, msg.slot, now);
+      if (next) {
+        state = next;
+        await this.save(state);
+        this.sendAll(peers, (info) =>
+          info.protocol === 2
+            ? ({
+                type: 'parts',
+                version: state.version,
+                count: state.parts,
+                slot: msg.slot,
+                mine: isMine(me.id, info.id),
+                serverNow: now,
+              } satisfies PartsMessage)
+            : null,
+        );
+      }
+    } else if (msg.type === 'repair') {
+      const result = repair(state, msg.faultId, now, this.rng, { partsRequired: PARTS_REQUIRED });
+      if (result === 'noParts') {
+        const rejected: RepairRejectedMessage = { type: 'repairRejected', faultId: msg.faultId, reason: 'noParts' };
+        if (me.protocol === 2) broadcastEach([ws], () => JSON.stringify(rejected));
+      } else if (result) {
         const before = state;
         state = result.state;
         await this.save(state);
@@ -162,6 +195,8 @@ export class BaseRoom extends DurableObject<Env> {
               helpers: helped.size,
               at: now,
               blackoutEnd: result.blackoutEnd,
+              parts: state.parts,
+              serverNow: now,
             } satisfies RepairedMessage;
           }
           if (generatorRepaired === 'repaired') {
@@ -324,12 +359,13 @@ export class BaseRoom extends DurableObject<Env> {
   }
 
   /**
-   * Reads `base:v2`; when it is missing, the migrated old key or a fresh base. Never writes
+   * Reads `base:v2` (one from before plan 009 gets `withPartDefaults`); when it is missing, the
+   * migrated old key or a fresh base. Never writes
    * (callers save when they decide to) and never touches the old key.
    */
   private async loadState(): Promise<{ state: BaseState; stored: boolean }> {
     const stored = await this.ctx.storage.get<BaseState>(STATE_KEY);
-    if (stored) return { state: stored, stored: true };
+    if (stored) return { state: withPartDefaults(stored, Date.now()), stored: true };
     const now = Date.now();
     const legacy = await this.ctx.storage.get<LegacyState>(LEGACY_STATE_KEY);
     if (legacy) return { state: migrateLegacy(legacy, now, this.rng), stored: false };

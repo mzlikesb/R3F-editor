@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { GENERATOR, HISTORY_BLACKOUTS, MAX_FAULTS, MODULE_IDS, type Fault, type ModuleId } from '../shared/protocol';
+import { PARTS_CAP, PART_SLOT_MS, clampParts, partSlot } from '../shared/parts';
+import { PRE009_STORED } from '../shared/testdata/pre009';
 import {
   FIRST_FAULT_WAIT_MS,
   MIN_UNATTENDED_MS,
@@ -7,6 +9,7 @@ import {
   REFAULT_MIN_MS,
   UNATTENDED_FAULT_CAP,
   arrive,
+  collect,
   countPresence,
   decideAlarm,
   decideOnAlarm,
@@ -17,12 +20,16 @@ import {
   nextFaultDelayMs,
   plannedAlarmAt,
   repair,
+  slotOpen,
   toHistory,
   toSnapshot,
+  withPartDefaults,
   type BaseState,
   type Rng,
 } from './state';
 
+/** Parts not required: repairs behave as before plan 009. */
+const OFF = { partsRequired: false } as const;
 const T = 1_800_000_000_000;
 
 /** `rand` cycles through `values`; ids are `id-1`, `id-2`, ... */
@@ -49,6 +56,8 @@ function state(overrides: Partial<BaseState> = {}): BaseState {
     nextFaultAt: T,
     lastSavedAt: T - 1000,
     lastRepair: null,
+    parts: 0,
+    lastPartSlot: -1,
     ...overrides,
   };
 }
@@ -108,6 +117,8 @@ describe('initialState', () => {
       blackouts: [],
       lastSavedAt: T,
       lastRepair: null,
+      parts: 0,
+      lastPartSlot: -1,
     });
     expectNextFaultWithinRange(s, T);
   });
@@ -139,6 +150,8 @@ describe('migrateLegacy', () => {
       blackout: null,
       blackouts: [],
       lastRepair: null,
+      parts: 0,
+      lastPartSlot: -1,
     });
     expectNextFaultWithinRange(s, T);
   });
@@ -282,7 +295,7 @@ describe('repair', () => {
   const two = state({ faults: [fault('oxygen'), fault('comms')], nextFaultAt: T + 5000 });
 
   it('removes only that fault, counts it, remembers it, and reschedules', () => {
-    const { state: s, fault: f, blackoutEnd } = repair(two, 'f-oxygen', T, rng())!;
+    const { state: s, fault: f, blackoutEnd } = repair(two, 'f-oxygen', T, rng(), OFF)!;
     expect(f).toEqual(fault('oxygen'));
     expect(s.faults).toEqual([fault('comms')]);
     expect(s.repairs).toBe(3);
@@ -294,39 +307,39 @@ describe('repair', () => {
   });
 
   it('is idempotent and ignores unknown ids', () => {
-    const once = repair(two, 'f-oxygen', T, rng())!.state;
-    expect(repair(once, 'f-oxygen', T + 1, rng())).toBeNull();
-    expect(repair(two, 'nope', T, rng())).toBeNull();
+    const once = repair(two, 'f-oxygen', T, rng(), OFF)!.state;
+    expect(repair(once, 'f-oxygen', T + 1, rng(), OFF)).toBeNull();
+    expect(repair(two, 'nope', T, rng(), OFF)).toBeNull();
   });
 
   it('does not change its input', () => {
     const copy = structuredClone(two);
-    repair(two, 'f-oxygen', T, rng());
+    repair(two, 'f-oxygen', T, rng(), OFF);
     expect(two).toEqual(copy);
   });
 
   it('reschedules the next fault when a repair brings the base below the cap (neon (c))', () => {
-    const { state: s } = repair(dark(), 'f-oxygen', T, rng())!;
+    const { state: s } = repair(dark(), 'f-oxygen', T, rng(), OFF)!;
     expect(s.faults).toHaveLength(2);
     expectNextFaultWithinRange(s, T);
   });
 
   it('no fault lands within 2.5 s of a repair', () => {
-    const { state: s } = repair(two, 'f-comms', T, rng([0]))!;
+    const { state: s } = repair(two, 'f-comms', T, rng([0]), OFF)!;
     expect(decideOnAlarm(s, 1, T + 2500)).toBe('none');
   });
 });
 
 describe('blackout end', () => {
   it('does not end when another module is repaired', () => {
-    const { state: s, blackoutEnd } = repair(dark(), 'f-comms', T, rng())!;
+    const { state: s, blackoutEnd } = repair(dark(), 'f-comms', T, rng(), OFF)!;
     expect(s.blackout).not.toBeNull();
     expect(s.uptimeStartedAt).toBeNull();
     expect(blackoutEnd).toBeNull();
   });
 
   it('ends when the generator is repaired: history filled, new uptime from now, other faults stay', () => {
-    const { state: s, blackoutEnd } = repair(dark(), `f-${GENERATOR}`, T, rng())!;
+    const { state: s, blackoutEnd } = repair(dark(), `f-${GENERATOR}`, T, rng(), OFF)!;
     expect(s.blackout).toBeNull();
     expect(s.blackouts[0]).toEqual({ id: 'b1', startedAt: T - 10_000, endedAt: T });
     expect(s.uptimeStartedAt).toBe(T);
@@ -336,14 +349,14 @@ describe('blackout end', () => {
   });
 
   it('reschedules the next fault so nothing lands within 2.5 s of the recovery', () => {
-    const { state: s } = repair(dark(), `f-${GENERATOR}`, T, rng([0]))!;
+    const { state: s } = repair(dark(), `f-${GENERATOR}`, T, rng([0]), OFF)!;
     expectNextFaultWithinRange(s, T);
     expect(decideOnAlarm(s, 1, T + 2500)).toBe('none');
   });
 
   it('a repeated generator repair does not end the blackout twice', () => {
-    const once = repair(dark(), `f-${GENERATOR}`, T, rng())!.state;
-    expect(repair(once, `f-${GENERATOR}`, T + 10, rng())).toBeNull();
+    const once = repair(dark(), `f-${GENERATOR}`, T, rng(), OFF)!.state;
+    expect(repair(once, `f-${GENERATOR}`, T + 10, rng(), OFF)).toBeNull();
     expect(once.blackouts.filter((b) => b.id === 'b1')).toHaveLength(1);
   });
 });
@@ -529,7 +542,7 @@ describe('decideAlarm (neon (c), plan A.9)', () => {
       at: T + 3000,
     });
     // The repair brings it to two faults: the next fault is planned again.
-    const { state: s } = repair(dark(), 'f-oxygen', T + 1000, rng())!;
+    const { state: s } = repair(dark(), 'f-oxygen', T + 1000, rng(), OFF)!;
     const planned = plannedAlarmAt(s, null);
     expect(planned).toBe(s.nextFaultAt);
     expect(decideAlarm({ connections: 1, planned, current: null })).toEqual({ kind: 'set', at: s.nextFaultAt });
@@ -556,6 +569,8 @@ describe('toSnapshot / toHistory', () => {
     faults: [fault('oxygen')],
     blackouts: many,
     lastRepair: { moduleId: 'comms', at: T - 50 },
+    parts: 3,
+    lastPartSlot: 179_999_999,
   });
 
   it('snapshot carries protocol 2, the state, the five newest blackouts and the server time', () => {
@@ -573,6 +588,8 @@ describe('toSnapshot / toHistory', () => {
       presence: 3,
       instanceId: 'inst',
       serverNow: T + 7,
+      parts: 3,
+      lastPartSlot: 179_999_999,
     });
   });
 
@@ -584,5 +601,204 @@ describe('toSnapshot / toHistory', () => {
       blackouts: many,
       serverNow: T,
     });
+  });
+});
+
+/** Parts required: a repair takes one part and is turned away at 0 (plan 009 A.4). */
+const ON = { partsRequired: true } as const;
+/** The slot `T` falls in; `T` is at its very start. */
+const SLOT = partSlot(T);
+
+describe('slotOpen (plan 009 A.3, R5)', () => {
+  it('takes the current slot and the one before, never two back', () => {
+    for (const at of [T, T + PART_SLOT_MS / 2, T + PART_SLOT_MS - 1]) {
+      expect(slotOpen(SLOT, at)).toBe(true);
+      expect(slotOpen(SLOT - 1, at)).toBe(true);
+      expect(slotOpen(SLOT - 2, at)).toBe(false);
+    }
+  });
+
+  it('takes the next slot only in the last second of the current one', () => {
+    expect(slotOpen(SLOT + 1, T)).toBe(false);
+    expect(slotOpen(SLOT + 1, T + PART_SLOT_MS - 1001)).toBe(false);
+    expect(slotOpen(SLOT + 1, T + PART_SLOT_MS - 1000)).toBe(true);
+    expect(slotOpen(SLOT + 1, T + PART_SLOT_MS - 1)).toBe(true);
+    expect(slotOpen(SLOT + 2, T + PART_SLOT_MS - 1)).toBe(false);
+  });
+});
+
+describe('collect (plan 009 A.3)', () => {
+  it('adds one part for the current slot and remembers the slot', () => {
+    const before = state();
+    const s = collect(before, SLOT, T + 10)!;
+    expect(s).toEqual({ ...before, parts: 1, lastPartSlot: SLOT, version: before.version + 1, lastSavedAt: T + 10 });
+  });
+
+  it('takes the slot just before and, in its last second, the next one', () => {
+    expect(collect(state(), SLOT - 1, T + 10)?.lastPartSlot).toBe(SLOT - 1);
+    expect(collect(state(), SLOT + 1, T + PART_SLOT_MS - 500)?.lastPartSlot).toBe(SLOT + 1);
+  });
+
+  it('ignores a slot two back or a future slot', () => {
+    expect(collect(state(), SLOT - 2, T + 10)).toBeNull();
+    expect(collect(state(), SLOT + 1, T + 10)).toBeNull();
+    expect(collect(state(), SLOT + 2, T + PART_SLOT_MS - 500)).toBeNull();
+  });
+
+  it('counts a slot once: the same slot twice gives +1 only', () => {
+    const once = collect(state(), SLOT, T + 10)!;
+    expect(collect(once, SLOT, T + 20)).toBeNull();
+    expect(once.parts).toBe(1);
+  });
+
+  it('never takes a slot at or before the last one collected', () => {
+    const s = state({ parts: 1, lastPartSlot: SLOT });
+    expect(collect(s, SLOT - 1, T + 10)).toBeNull();
+    const ahead = collect(state(), SLOT + 1, T + PART_SLOT_MS - 500)!;
+    expect(collect(ahead, SLOT, T + PART_SLOT_MS - 400)).toBeNull();
+  });
+
+  it('stops at PARTS_CAP', () => {
+    const full = state({ parts: PARTS_CAP, lastPartSlot: SLOT - 1 });
+    expect(collect(full, SLOT, T + 10)).toBeNull();
+    expect(collect(state({ parts: PARTS_CAP - 1 }), SLOT, T + 10)?.parts).toBe(PARTS_CAP);
+  });
+
+  it('works during faults and a blackout, and leaves them alone', () => {
+    const before = dark();
+    const s = collect(before, SLOT, T + 10)!;
+    expect(s.parts).toBe(1);
+    expect(s.faults).toEqual(before.faults);
+    expect(s.blackout).toEqual(before.blackout);
+    expect(s.nextFaultAt).toBe(before.nextFaultAt);
+  });
+
+  it('ignores a slot that is not an integer', () => {
+    expect(collect(state(), SLOT + 0.5, T + 10)).toBeNull();
+    expect(collect(state(), Number.NaN, T + 10)).toBeNull();
+  });
+
+  it('does not change the input', () => {
+    const before = state();
+    const copy = structuredClone(before);
+    collect(before, SLOT, T + 10);
+    expect(before).toEqual(copy);
+  });
+});
+
+describe('repair with parts required (plan 009 A.4, A.9)', () => {
+  const two = () => state({ faults: [fault('oxygen'), fault('comms')], parts: 1 });
+
+  it('takes one part', () => {
+    const r = repair(two(), 'f-oxygen', T, rng(), ON);
+    expect(r).not.toBe('noParts');
+    expect(r && r !== 'noParts' ? r.state.parts : null).toBe(0);
+  });
+
+  it('with an empty store: noParts, nothing changes', () => {
+    const s = state({ faults: [fault('oxygen')], parts: 0 });
+    const copy = structuredClone(s);
+    expect(repair(s, 'f-oxygen', T, rng(), ON)).toBe('noParts');
+    expect(s).toEqual(copy);
+  });
+
+  it('(R5) an unknown or already repaired fault is null before the parts check', () => {
+    expect(repair(state({ parts: 0 }), 'nope', T, rng(), ON)).toBeNull();
+    const last = state({ faults: [fault('oxygen')], parts: 1 });
+    const first = repair(last, 'f-oxygen', T, rng(), ON);
+    if (!first || first === 'noParts') throw new Error('first repair should count');
+    expect(first.state.parts).toBe(0);
+    expect(repair(first.state, 'f-oxygen', T + 1, rng(), ON)).toBeNull();
+  });
+
+  it('one part, two different faults repaired at once: only the first counts', () => {
+    const first = repair(two(), 'f-oxygen', T, rng(), ON);
+    if (!first || first === 'noParts') throw new Error('first repair should count');
+    expect(repair(first.state, 'f-comms', T + 1, rng(), ON)).toBe('noParts');
+    expect(first.state.faults.map((f) => f.moduleId)).toEqual(['comms']);
+    expect(first.state.repairs).toBe(3);
+  });
+
+  it('the generator with the last part still ends the blackout', () => {
+    const r = repair(dark({ parts: 1 }), `f-${GENERATOR}`, T, rng(), ON);
+    if (!r || r === 'noParts') throw new Error('should count');
+    expect(r.state.parts).toBe(0);
+    expect(r.blackoutEnd).not.toBeNull();
+  });
+});
+
+describe('repair with parts not required (plan 009 A.9)', () => {
+  it('repairs with an empty store and leaves the store alone', () => {
+    const r = repair(state({ faults: [fault('oxygen')], parts: 0 }), 'f-oxygen', T, rng(), OFF)!;
+    expect(r.state.parts).toBe(0);
+    expect(r.state.faults).toEqual([]);
+    const full = repair(state({ faults: [fault('oxygen')], parts: 3 }), 'f-oxygen', T, rng(), OFF)!;
+    expect(full.state.parts).toBe(3);
+  });
+
+  it('collecting still fills the store', () => {
+    expect(collect(state(), SLOT, T)!.parts).toBe(1);
+  });
+});
+
+describe('withPartDefaults (plan 009 A.1, R3)', () => {
+  const old = JSON.parse(PRE009_STORED) as BaseState;
+
+  it('reads a base:v2 from before 009 with an empty store, every old field the same', () => {
+    expect(withPartDefaults(old, T)).toEqual({ ...old, parts: 0, lastPartSlot: -1 });
+  });
+
+  it('does not change the stored object (the read writes nothing)', () => {
+    const copy = structuredClone(old);
+    withPartDefaults(old, T);
+    expect(old).toEqual(copy);
+  });
+
+  it('keeps a 009 store as it is', () => {
+    const now = { ...old, parts: 2, lastPartSlot: 179_500_004 };
+    expect(withPartDefaults(now, T)).toBe(now);
+  });
+
+  it('repairs broken values instead of trusting them', () => {
+    const broken = { ...old, parts: 9, lastPartSlot: 'x' } as unknown as BaseState;
+    expect(withPartDefaults(broken, T)).toMatchObject({ parts: PARTS_CAP, lastPartSlot: -1 });
+    expect(withPartDefaults({ ...old, parts: -1 } as BaseState, T).parts).toBe(0);
+    expect(withPartDefaults({ ...old, parts: 2.5 } as BaseState, T).parts).toBe(0);
+  });
+
+  it('cuts parts the same way as the client parser (clampParts)', () => {
+    for (const parts of [-3, 0, 3, 5, 6, 99]) {
+      expect(withPartDefaults({ ...old, parts, lastPartSlot: -1 }, T).parts).toBe(clampParts(parts));
+    }
+  });
+
+  it('reads a lastPartSlot past the next slot as the next slot, without changing storage', () => {
+    const SLOT_T = partSlot(T);
+    const ahead = { ...old, parts: 1, lastPartSlot: SLOT_T + 500 };
+    const copy = structuredClone(ahead);
+    const read = withPartDefaults(ahead, T);
+    expect(read.lastPartSlot).toBe(SLOT_T + 1);
+    expect(ahead).toEqual(copy);
+    // So the slot after that can be collected again.
+    expect(collect(read, SLOT_T + 2, (SLOT_T + 2) * PART_SLOT_MS)?.lastPartSlot).toBe(SLOT_T + 2);
+    // A next, current or past slot is left as it is.
+    for (const lastPartSlot of [SLOT_T + 1, SLOT_T, SLOT_T - 3]) {
+      const kept = { ...old, parts: 1, lastPartSlot };
+      expect(withPartDefaults(kept, T)).toBe(kept);
+    }
+  });
+
+  it('an early collect survives the reload before the next message: the same piece cannot be collected twice (Codex P2)', () => {
+    // The last second of slot S: collect accepts S + 1.
+    const S = 1;
+    const late = (S + 1) * PART_SLOT_MS - 1;
+    const start = { ...old, parts: 0, lastPartSlot: -1 };
+    const first = collect(withPartDefaults(start, late), S + 1, late)!;
+    expect(first.parts).toBe(1);
+    expect(first.lastPartSlot).toBe(S + 1);
+    // BaseRoom reloads storage for every message: the reload must keep the early marker.
+    const reloaded = withPartDefaults(structuredClone(first), late);
+    expect(reloaded.lastPartSlot).toBe(S + 1);
+    expect(collect(reloaded, S + 1, late)).toBeNull();
   });
 });

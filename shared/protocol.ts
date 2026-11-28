@@ -9,6 +9,8 @@
  * them, so there is no legacy parser here (the deployed one lives in `shared/testdata/v1.ts`).
  */
 
+import { clampParts } from './parts';
+
 /** The protocol this build speaks. Sent in every snapshot and in the WebSocket URL query. */
 export const PROTOCOL_VERSION = 2;
 /** Query parameter on `/ws` that carries the client's protocol (`/ws?protocol=2`). */
@@ -17,7 +19,7 @@ export const PROTOCOL_PARAM = 'protocol';
 /** Largest client message the server accepts, in UTF-8 bytes. */
 export const MAX_CLIENT_MESSAGE_BYTES = 256;
 
-/** `hold` and `repair` allowed per socket per second; the rest are ignored. `release` is never limited. */
+/** `hold`, `repair` and `collect` allowed per socket per second; the rest are ignored. `release` is never limited. */
 export const MAX_CLIENT_MESSAGES_PER_SECOND = 5;
 
 /**
@@ -39,6 +41,7 @@ export const MODULE_IDS: readonly ModuleId[] = ['generator', 'oxygen', 'greenhou
 
 /** Faults at once, base-wide. Reaching it starts a blackout (one of them is always the generator). */
 export const MAX_FAULTS = 3;
+
 /** Blackouts in a snapshot (the record panel). The server keeps more (`/api/history`). */
 export const SNAPSHOT_BLACKOUTS = 5;
 /** Blackouts kept in storage and returned by `/api/history`. */
@@ -107,6 +110,13 @@ export interface SnapshotMessage {
   instanceId: string;
   /** Server clock when the snapshot was made (epoch ms). The client derives its clock offset from it. */
   serverNow: number;
+  /**
+   * Parts in the shared store, 0..`PARTS_CAP` (`shared/parts.ts`, plan 009 A.5). A snapshot
+   * without it (a server from before 009) parses as 0.
+   */
+  parts: number;
+  /** Slot of the last piece collected (`shared/parts.ts` `partSlot`); -1 for none or when missing. */
+  lastPartSlot: number;
 }
 
 /** What a `fault` carries when that fault started a blackout (plan 006 A.4, B.11). */
@@ -160,6 +170,31 @@ export interface RepairedMessage {
   at: number;
   /** Set only when this repair ended the blackout. */
   blackoutEnd: BlackoutEnd | null;
+  /** Parts left in the store after this repair (plan 009 A.4). Null when the server did not say (before 009). */
+  parts: number | null;
+  /** Server clock when the repair counted, for the clock offset (plan 009 R5). Null when missing. */
+  serverNow: number | null;
+}
+
+/** Someone collected the piece of `slot` (plan 009 A.3). Versioned: `version` rose with it. */
+export interface PartsMessage {
+  type: 'parts';
+  version: number;
+  /** Parts in the store now. */
+  count: number;
+  /** The slot whose piece was collected (the new `lastPartSlot`). */
+  slot: number;
+  /** True only on the socket whose `collect` counted. A missing `mine` parses as false. */
+  mine: boolean;
+  /** Server clock when it counted, for the clock offset (plan 009 R5). */
+  serverNow: number;
+}
+
+/** Sent only to the socket whose repair was turned away; the base did not change (plan 009 A.4). */
+export interface RepairRejectedMessage {
+  type: 'repairRejected';
+  faultId: string;
+  reason: 'noParts';
 }
 
 /**
@@ -178,7 +213,14 @@ export interface PresenceMessage {
   count: number;
 }
 
-export type ServerMessage = SnapshotMessage | FaultMessage | RepairedMessage | ActivityMessage | PresenceMessage;
+export type ServerMessage =
+  | SnapshotMessage
+  | FaultMessage
+  | RepairedMessage
+  | ActivityMessage
+  | PresenceMessage
+  | PartsMessage
+  | RepairRejectedMessage;
 
 /** `GET /api/history`. Pure read. */
 export interface HistoryResponse {
@@ -211,7 +253,7 @@ export interface LegacyRepairedMessage {
   mine: boolean;
 }
 
-/** Everything a protocol-1 socket may receive. No `fault` or `activity` events go to it. */
+/** Everything a protocol-1 socket may receive. No `fault`, `activity`, `parts` or `repairRejected` go to it. */
 export type LegacyServerMessage = LegacySnapshotMessage | LegacyRepairedMessage | PresenceMessage;
 
 // ---- client -> server ----
@@ -233,7 +275,13 @@ export interface ReleaseRequest {
   faultId: string;
 }
 
-export type ClientMessage = RepairRequest | HoldRequest | ReleaseRequest;
+/** The piece of `slot` was tapped (plan 009 A.3). */
+export interface CollectRequest {
+  type: 'collect';
+  slot: number;
+}
+
+export type ClientMessage = RepairRequest | HoldRequest | ReleaseRequest | CollectRequest;
 
 // ---- parsing ----
 
@@ -356,14 +404,26 @@ function parseSnapshot(m: Record<string, unknown>): SnapshotMessage | null {
     presence,
     instanceId,
     serverNow,
+    parts: partsCount(m.parts) ?? 0,
+    lastPartSlot: isSlot(m.lastPartSlot) ? m.lastPartSlot : -1,
   };
+}
+
+/** A store count cut to 0..`PARTS_CAP` (`clampParts`), or null when it is not an integer. */
+const partsCount = clampParts;
+
+/** A slot number or -1 (none). */
+function isSlot(v: unknown): v is number {
+  return typeof v === 'number' && Number.isInteger(v) && v >= -1;
 }
 
 /**
  * Parses a protocol-2 message from the server (WS frame or `/api/base` body).
  * Returns null for invalid JSON, unknown `type`, missing or mistyped fields, or a snapshot whose
  * `protocol` is not `PROTOCOL_VERSION`. Unknown extra fields are dropped. A missing `blackoutStart`
- * or `blackoutEnd` reads as null; a present but malformed one rejects the message.
+ * or `blackoutEnd` reads as null; a present but malformed one rejects the message. The fields added
+ * by plan 009 (`parts`, `lastPartSlot`, `serverNow` on `repaired`) read as their "none" value when
+ * missing or malformed, so a server from before 009 (a rollback) still parses.
  */
 export function parseServerMessage(raw: string): ServerMessage | null {
   const m = parseJson(raw);
@@ -395,8 +455,19 @@ export function parseServerMessage(raw: string): ServerMessage | null {
         helpers: isCount(m.helpers) ? m.helpers : 0,
         at,
         blackoutEnd,
+        parts: partsCount(m.parts),
+        serverNow: isTime(m.serverNow) ? m.serverNow : null,
       };
     }
+    case 'parts': {
+      const { version, slot, serverNow } = m;
+      const count = partsCount(m.count);
+      if (!isCount(version) || count === null || !isCount(slot) || !isTime(serverNow)) return null;
+      return { type: 'parts', version, count, slot, mine: m.mine === true, serverNow };
+    }
+    case 'repairRejected':
+      if (!isId(m.faultId) || m.reason !== 'noParts') return null;
+      return { type: 'repairRejected', faultId: m.faultId, reason: 'noParts' };
     case 'activity': {
       const holds = parseHolds(m.holds);
       return holds ? { type: 'activity', holds } : null;
@@ -427,14 +498,17 @@ export function socketProtocol(url: URL): 1 | 2 {
 
 /**
  * Parses a message from a client. Returns null when the frame is binary, larger than
- * `MAX_CLIENT_MESSAGE_BYTES` (UTF-8 bytes), invalid JSON, an unknown `type`, or a message whose
- * `faultId` is not a non-empty string. Unknown extra fields are dropped.
+ * `MAX_CLIENT_MESSAGE_BYTES` (UTF-8 bytes), invalid JSON, an unknown `type`, a `repair`/`hold`/
+ * `release` whose `faultId` is not a non-empty string, or a `collect` whose `slot` is not a
+ * non-negative integer. Unknown extra fields are dropped.
  */
 export function parseClientMessage(raw: string | ArrayBuffer): ClientMessage | null {
   if (typeof raw !== 'string') return null;
   if (new TextEncoder().encode(raw).byteLength > MAX_CLIENT_MESSAGE_BYTES) return null;
   const m = parseJson(raw);
-  if (!isRecord(m) || !isId(m.faultId)) return null;
+  if (!isRecord(m)) return null;
+  if (m.type === 'collect') return isCount(m.slot) ? { type: 'collect', slot: m.slot } : null;
+  if (!isId(m.faultId)) return null;
   if (m.type !== 'repair' && m.type !== 'hold' && m.type !== 'release') return null;
   return { type: m.type, faultId: m.faultId };
 }
