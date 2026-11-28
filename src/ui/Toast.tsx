@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { comboLabel } from '../combo';
+import { comboLabel, comboSpoken } from '../combo';
 import { toastText, type Toast as ToastState } from '../feedback';
 import { useStore } from '../store';
 import './combo.css';
@@ -23,9 +23,12 @@ export function Toast({ toast }: { toast: ToastState }) {
     <p className={toast.kind === 'fault' ? 'toast toast-warn' : 'toast'} role="status">
       {toastText(toast)}
       {combo && (
-        <span key={until} className="toast-combo">
-          {combo}
-        </span>
+        <>
+          <span key={until} className="toast-combo" aria-hidden="true">
+            {combo}
+          </span>
+          <span className="sr-only"> {comboSpoken(toast.combo)}</span>
+        </>
       )}
     </p>
   );

@@ -3,13 +3,36 @@
  * drives `ShakeDriver` from two `useFrame` hooks and never renders by itself.
  */
 
+import { countsForMe } from '../combo';
+import type { RepairEffect } from '../feedback';
+
 /** How long one shake lasts (ms). */
 export const SHAKE_MS = 250;
-/**
- * Largest camera displacement (world units). The overview camera sits about 23 units away, so this
- * is a few pixels on a phone: felt, not seen as a camera move.
- */
+/** Largest camera displacement (world units) at `SHAKE_REF_DISTANCE`. */
 export const SHAKE_AMPLITUDE = 0.12;
+/**
+ * Camera-target distance the amplitude is tuned at (the overview camera, about 23 units out). The
+ * amplitude scales with the distance so the shake is the same few pixels on screen whether the
+ * camera is on the overview or focused close on one module.
+ */
+export const SHAKE_REF_DISTANCE = 23;
+/** The scale never goes past this, whatever distance comes in. */
+const MAX_SCALE = 2;
+
+/** Largest displacement for a camera `distance` units from its target. */
+export function shakeAmplitude(distance: number): number {
+  const scale = Number.isFinite(distance) && distance > 0 ? Math.min(distance / SHAKE_REF_DISTANCE, MAX_SCALE) : 1;
+  return SHAKE_AMPLITUDE * scale;
+}
+
+/**
+ * Whether the latest repair effect should start a shake: a new one (`seq` moved) for a repair I
+ * made or helped with. Someone else's repair, and a store update that left the effect alone (a
+ * snapshot, a fault, a tick), do not.
+ */
+export function shouldShake(prev: RepairEffect | null, next: RepairEffect | null): boolean {
+  return next !== null && next.seq !== prev?.seq && countsForMe(next.outcome);
+}
 
 export interface Vec3 {
   x: number;
@@ -21,15 +44,15 @@ export interface Vec3 {
 const RATE_X = 2 * Math.PI * 7;
 const RATE_Y = 2 * Math.PI * 11;
 const RATE_Z = 2 * Math.PI * 5;
-/** Each axis is at most `AXIS`, so the length is at most `SHAKE_AMPLITUDE`. */
-const AXIS = SHAKE_AMPLITUDE / Math.sqrt(3);
+const SQRT3 = Math.sqrt(3);
 
 /**
- * The offset `elapsedMs` into a shake, written into `out` (returned). 0 at the start (every axis is
- * a sine from 0), 0 from `SHAKE_MS` on (and before 0), never longer than `SHAKE_AMPLITUDE`. The
- * envelope falls off as (1 - t)^2, so the kick is up front.
+ * The offset `elapsedMs` into a shake, written into `out` (returned), for a camera `distance` units
+ * from its target (default `SHAKE_REF_DISTANCE`). 0 at the start (every axis is a sine from 0), 0
+ * from `SHAKE_MS` on (and before 0), never longer than `shakeAmplitude(distance)` (each axis is at
+ * most that / sqrt 3). The envelope falls off as (1 - t)^2, so the kick is up front.
  */
-export function shakeOffset(elapsedMs: number, out: Vec3): Vec3 {
+export function shakeOffset(elapsedMs: number, out: Vec3, distance = SHAKE_REF_DISTANCE): Vec3 {
   if (!(elapsedMs > 0 && elapsedMs < SHAKE_MS)) {
     out.x = 0;
     out.y = 0;
@@ -37,7 +60,7 @@ export function shakeOffset(elapsedMs: number, out: Vec3): Vec3 {
     return out;
   }
   const t = elapsedMs / SHAKE_MS;
-  const env = AXIS * (1 - t) * (1 - t);
+  const env = (shakeAmplitude(distance) / SQRT3) * (1 - t) * (1 - t);
   out.x = env * Math.sin(RATE_X * t);
   out.y = env * Math.sin(RATE_Y * t);
   out.z = env * Math.sin(RATE_Z * t);
@@ -69,14 +92,15 @@ export class ShakeDriver {
     this.applied.z = 0;
   }
 
-  apply(pos: Vec3, now: number): void {
+  /** `distance`: camera to its target this frame (after CameraControls), scales the amplitude. */
+  apply(pos: Vec3, now: number, distance = SHAKE_REF_DISTANCE): void {
     if (Number.isNaN(this.startedAt)) return;
     const elapsed = now - this.startedAt;
     if (elapsed >= SHAKE_MS) {
       this.startedAt = Number.NaN;
       return;
     }
-    shakeOffset(elapsed, this.applied);
+    shakeOffset(elapsed, this.applied, distance);
     pos.x += this.applied.x;
     pos.y += this.applied.y;
     pos.z += this.applied.z;

@@ -37,3 +37,8 @@ export function nextCombo(prev: Combo, event: { outcome: RepairOutcome; now: num
 export function comboLabel(count: number): string | null {
   return count >= 2 ? `x${count}` : null;
 }
+
+/** What a screen reader hears for the combo (the `x2` badge itself is hidden from it): `2연속`. */
+export function comboSpoken(count: number): string {
+  return `${count}연속`;
+}

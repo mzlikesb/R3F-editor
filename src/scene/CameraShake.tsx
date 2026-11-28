@@ -1,8 +1,8 @@
 import { useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useMemo } from 'react';
-import { countsForMe } from '../combo';
+import type { CameraControls as CameraControlsImpl } from '@react-three/drei';
 import { useStore } from '../store';
-import { ShakeDriver } from './shake';
+import { SHAKE_REF_DISTANCE, ShakeDriver, shouldShake } from './shake';
 
 /** CameraControls updates at -1 (drei `CameraControls`); the undo must run before it. */
 const UNDO_PRIORITY = -2;
@@ -16,13 +16,14 @@ const APPLY_PRIORITY = 0;
  */
 export function CameraShake() {
   const camera = useThree((s) => s.camera);
+  // `CameraRig` mounts CameraControls with `makeDefault`.
+  const controls = useThree((s) => s.controls) as CameraControlsImpl | null;
   const driver = useMemo(() => new ShakeDriver(), []);
 
   useEffect(
     () =>
       useStore.subscribe((s, prev) => {
-        const e = s.feedback.effect;
-        if (e && e !== prev.feedback.effect && countsForMe(e.outcome)) driver.start(performance.now());
+        if (shouldShake(prev.feedback.effect, s.feedback.effect)) driver.start(performance.now());
       }),
     [driver],
   );
@@ -30,6 +31,9 @@ export function CameraShake() {
   useEffect(() => () => driver.reset(camera.position), [driver, camera]);
 
   useFrame(() => driver.undo(camera.position), UNDO_PRIORITY);
-  useFrame(() => driver.apply(camera.position, performance.now()), APPLY_PRIORITY);
+  useFrame(
+    () => driver.apply(camera.position, performance.now(), controls?.distance ?? SHAKE_REF_DISTANCE),
+    APPLY_PRIORITY,
+  );
   return null;
 }

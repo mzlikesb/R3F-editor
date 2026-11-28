@@ -17,6 +17,7 @@ import {
   useStore,
 } from './store';
 import { initialSync } from './sync';
+import { shouldShake } from './scene/shake';
 
 const T = 1_800_000_000_000;
 const oxy = { id: 'f1', moduleId: 'oxygen', createdAt: T - 9000 } as const;
@@ -147,6 +148,14 @@ describe('store.receive', () => {
     expect(s().feedback.toast).toMatchObject({ kind: 'other', combo: 0 });
     s().receive(repaired(true, { faultId: 'd', version: 10 }), 12_000, T);
     expect(s().feedback.toast).toMatchObject({ kind: 'mine', combo: 3 });
+  });
+
+  it('a reconnect snapshot keeps the latest effect as is, so it starts no shake (008 C.1)', () => {
+    s().receive(snapshot(), 0, T);
+    s().receive(repaired(true), 100, T);
+    const effect = s().feedback.effect;
+    s().receive(snapshot({ version: 7, faults: [] }), 200, T);
+    expect(shouldShake(effect, s().feedback.effect)).toBe(false);
   });
 
   it('ignores a stale repaired: no toast, no effect, no hold change', () => {

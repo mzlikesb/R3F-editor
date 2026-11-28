@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { SHAKE_AMPLITUDE, SHAKE_MS, ShakeDriver, shakeOffset, type Vec3 } from './shake';
+import type { RepairEffect, RepairOutcome } from '../feedback';
+import {
+  SHAKE_AMPLITUDE,
+  SHAKE_MS,
+  SHAKE_REF_DISTANCE,
+  ShakeDriver,
+  shakeAmplitude,
+  shakeOffset,
+  shouldShake,
+  type Vec3,
+} from './shake';
 
 const v = (): Vec3 => ({ x: 0, y: 0, z: 0 });
 const len = (p: Vec3) => Math.hypot(p.x, p.y, p.z);
@@ -30,6 +40,64 @@ describe('shakeOffset', () => {
   it('writes into the vector it is given (no allocation per frame)', () => {
     const out = v();
     expect(shakeOffset(50, out)).toBe(out);
+  });
+});
+
+describe('shake amplitude follows the camera distance', () => {
+  const peakAt = (distance: number) => {
+    let peak = 0;
+    for (let t = 0; t <= SHAKE_MS; t += 1) peak = Math.max(peak, len(shakeOffset(t, v(), distance)));
+    return peak;
+  };
+
+  it('is SHAKE_AMPLITUDE (0.12) at the reference distance 23', () => {
+    expect(SHAKE_REF_DISTANCE).toBe(23);
+    expect(shakeAmplitude(23)).toBeCloseTo(0.12, 12);
+  });
+
+  it('shrinks in proportion when the camera is closer', () => {
+    expect(shakeAmplitude(11.5)).toBeCloseTo(0.06, 12);
+    expect(shakeAmplitude(4.6)).toBeCloseTo(0.024, 12);
+    expect(peakAt(11.5)).toBeLessThanOrEqual(shakeAmplitude(11.5));
+    expect(peakAt(11.5)).toBeLessThan(peakAt(23));
+    expect(peakAt(23) / peakAt(11.5)).toBeCloseTo(2, 6);
+  });
+
+  it('is capped far away and falls back to the reference on a bad distance', () => {
+    expect(shakeAmplitude(1000)).toBeCloseTo(SHAKE_AMPLITUDE * 2, 12);
+    expect(shakeAmplitude(0)).toBe(SHAKE_AMPLITUDE);
+    expect(shakeAmplitude(Number.NaN)).toBe(SHAKE_AMPLITUDE);
+  });
+
+  it('defaults to the reference distance', () => {
+    expect(shakeOffset(60, v())).toEqual(shakeOffset(60, v(), SHAKE_REF_DISTANCE));
+  });
+});
+
+describe('shouldShake', () => {
+  const fx = (outcome: RepairOutcome, seq: number): RepairEffect => ({
+    outcome,
+    moduleId: 'oxygen',
+    seq,
+    at: seq * 100,
+  });
+
+  it('a new repair I made or helped with shakes (008 R7)', () => {
+    expect(shouldShake(null, fx('mine', 1))).toBe(true);
+    expect(shouldShake(fx('other', 1), fx('mine', 2))).toBe(true);
+    expect(shouldShake(fx('mine', 1), fx('helped', 2))).toBe(true);
+  });
+
+  it('someone else’s repair alone does not', () => {
+    expect(shouldShake(null, fx('other', 1))).toBe(false);
+    expect(shouldShake(fx('mine', 1), fx('beaten', 2))).toBe(false);
+  });
+
+  it('an update that left the effect alone (snapshot, fault, tick) does not', () => {
+    const e = fx('mine', 3);
+    expect(shouldShake(e, e)).toBe(false);
+    expect(shouldShake(e, { ...e })).toBe(false);
+    expect(shouldShake(null, null)).toBe(false);
   });
 });
 
@@ -120,6 +188,19 @@ describe('ShakeDriver', () => {
     expect(pos.x).toBeCloseTo(1, 12);
     expect(pos.y).toBeCloseTo(2, 12);
     expect(pos.z).toBeCloseTo(3, 12);
+  });
+
+  it('apply passes the distance through: a close camera moves less', () => {
+    const far = { x: 0, y: 0, z: 0 };
+    const near = { x: 0, y: 0, z: 0 };
+    const a = new ShakeDriver();
+    const b = new ShakeDriver();
+    a.start(0);
+    b.start(0);
+    a.apply(far, 40, 23);
+    b.apply(near, 40, 11.5);
+    expect(len(near)).toBeGreaterThan(0);
+    expect(len(far) / len(near)).toBeCloseTo(2, 9);
   });
 
   it('a reset stops the shake: later frames add nothing', () => {

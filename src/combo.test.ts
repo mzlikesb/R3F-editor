@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { COMBO_WINDOW_MS, comboLabel, countsForMe, initialCombo, nextCombo, type Combo } from './combo';
+import { COMBO_WINDOW_MS, comboLabel, comboSpoken, countsForMe, initialCombo, nextCombo, type Combo } from './combo';
 import { classifyRepaired, type RepairOutcome } from './feedback';
 import type { HoldState } from './hold';
 
@@ -79,5 +79,12 @@ describe('comboLabel', () => {
     expect(comboLabel(1)).toBeNull();
     expect(comboLabel(2)).toBe('x2');
     expect(comboLabel(7)).toBe('x7');
+  });
+});
+
+describe('comboSpoken', () => {
+  it('reads as words, not glued to the +1', () => {
+    expect(comboSpoken(2)).toBe('2연속');
+    expect(comboSpoken(3)).toBe('3연속');
   });
 });
