@@ -54,26 +54,9 @@
   color: #000;
 }
 
-/* Sky: the page gradient sits on the root, the dark one fades in over it behind the transparent canvas. */
+/* The canvas root: the sky is drawn in the scene itself (`SceneTone`). */
 .sky-root {
   position: relative;
   width: 100%;
   height: 100%;
-}
-
-.sky-dark {
-  position: absolute;
-  inset: 0;
-  transition: opacity 1.2s ease;
-  pointer-events: none;
-}
-
-.sky-root > :not(.sky-dark) {
-  position: relative;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .sky-dark {
-    transition: none;
-  }
 }

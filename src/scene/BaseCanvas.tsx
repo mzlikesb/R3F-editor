@@ -1,6 +1,6 @@
 import { Canvas } from '@react-three/fiber';
 import { useRef } from 'react';
-import { selectBlackout, useStore } from '../store';
+import { useStore } from '../store';
 import { MODULES } from '../modules';
 import { AsteroidBelt } from './AsteroidBelt';
 import { CameraRig } from './CameraRig';
@@ -16,21 +16,20 @@ import { useQuality } from './qualityStore';
 import { RockField } from './RockField';
 import { Rocks } from './Rocks';
 import { SolarPanels } from './SolarPanels';
-import { SKY_GRADIENT, SKY_GRADIENT_DARK, Stars } from './Sky';
+import { SceneTone } from './SceneTone';
+import { Stars } from './Sky';
 import { isTap } from './tap';
 
 /**
- * The canvas and everything in it: sky, asteroid belt, lights, HDRI, ground, rocks, solar panels,
+ * The canvas and everything in it: sky and fog, asteroid belt, lights, HDRI, ground, rocks, solar panels,
  * modules, camera, tap-vs-drag, `?perf` HUD (plan 005 A, E), adaptive quality (plan 007 C).
  */
 export function BaseCanvas() {
   const down = useRef({ x: 0, y: 0 });
-  const blackout = useStore(selectBlackout);
   // The prop, not `setDpr`: a re-render of `Canvas` resets dpr to whatever the prop says.
   const dpr = useQuality((s) => s.dpr);
   return (
-    <div className="sky-root" style={{ background: SKY_GRADIENT }}>
-      <div className="sky-dark" style={{ background: SKY_GRADIENT_DARK, opacity: blackout ? 1 : 0 }} />
+    <div className="sky-root">
       <Canvas
         shadows
         dpr={dpr}
@@ -43,6 +42,8 @@ export function BaseCanvas() {
           if (isTap(down.current, { x: e.clientX, y: e.clientY })) useStore.getState().select(null);
         }}
       >
+        {/* First: it steps the blackout fade the lights read this frame. */}
+        <SceneTone />
         <Stars />
         <Lighting />
         <Ground />

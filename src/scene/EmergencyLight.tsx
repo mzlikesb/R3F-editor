@@ -2,8 +2,9 @@ import { useFrame } from '@react-three/fiber';
 import { useRef } from 'react';
 import type { PointLight } from 'three';
 import { selectBlackout, useStore } from '../store';
+import { PALETTE } from './palette';
 
-const COLOR = '#ff2a1a';
+const COLOR = PALETTE.emergency;
 const ON_INTENSITY = 90;
 /** Orbit around the base center, and its height. */
 const ORBIT_RADIUS = 11;

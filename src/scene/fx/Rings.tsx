@@ -2,6 +2,7 @@ import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
 import type { Mesh } from 'three';
 import { Color, RingGeometry } from 'three';
+import { PALETTE } from '../palette';
 import {
   createRingMaterial,
   FAULT_COLOR,
@@ -19,7 +20,7 @@ interface RingProps {
   height: number;
 }
 
-const PING_COLOR = new Color('#9fe3ff');
+const PING_COLOR = new Color(PALETTE.ping);
 /** Floor ring opacity range over one pulse. */
 const FLOOR_RING_MIN = 0.45;
 const FLOOR_RING_MAX = 0.95;
@@ -123,7 +124,7 @@ export function RingPing({ radius, token }: { radius: number; token: number }) {
 
 /** A three-quarter arc, so its spin reads as "in progress". Shared by every holding ring. */
 const HOLD_GEOMETRY = new RingGeometry(0.8, 1, 40, 1, 0, Math.PI * 1.5);
-const HOLD_MATERIAL = createRingMaterial(new Color('#ffd166'));
+const HOLD_MATERIAL = createRingMaterial(new Color(PALETTE.hold));
 HOLD_MATERIAL.opacity = 0.9;
 const HOLD_SPIN = 2.4;
 /**

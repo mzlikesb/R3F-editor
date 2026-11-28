@@ -4,11 +4,12 @@ import { Color } from 'three';
 import type { ModuleId } from '../../../shared/protocol';
 import { AFTERGLOW_MS } from '../../feedback';
 import { relightDelayMs } from '../blackout';
+import { PALETTE } from '../palette';
 import type { ModuleHandle } from '../moduleTypes';
 import { FAULT_COLOR, OK_COLOR, step, SWEEP_S, useOneShot } from './shared';
 
 const tmp = new Color();
-const RELIGHT_COLOR = new Color('#ffe2a8');
+const RELIGHT_COLOR = new Color(PALETTE.relight);
 
 /**
  * Fault pulse range. The floor is high enough that every frame reads red (playtest of PR #45: at the
@@ -29,7 +30,7 @@ const RELIGHT_FLASH = 0.7;
 /** Someone else's repair leaves the module softly green for `AFTERGLOW_MS` (principle 1). */
 const AFTERGLOW_S = AFTERGLOW_MS / 1000;
 const AFTERGLOW_PEAK = 0.8;
-const AFTERGLOW_COLOR = new Color('#5cf2a0');
+const AFTERGLOW_COLOR = new Color(PALETTE.afterglow);
 
 function write(handle: ModuleHandle, bases: readonly Color[], color: Color, intensity: number, dim: number): void {
   handle.materials.forEach((m, i) => {

@@ -5,29 +5,18 @@ import { useEffect, useMemo, useRef } from 'react';
 import { Box3, PerspectiveCamera, Vector3 } from 'three';
 import { useStore } from '../store';
 import {
+  focusPose,
   nearestAzimuth,
   outwardAzimuth,
-  overviewDirAt,
   MAX_POLAR,
   maxCameraDistance,
-  overviewDistanceAt,
+  overviewPose,
   polarPose,
 } from './cameraPath';
 import { overviewFov } from './framing';
-import { BOUNDS, LAYOUT, OVERVIEW_DIR, OVERVIEW_TARGET } from './layout';
+import { BOUNDS, LAYOUT, OVERVIEW_TARGET } from './layout';
 
 const PHONE = '(max-width: 600px)';
-/** A portrait phone sees a much narrower slice horizontally, so focus from further away. */
-const PHONE_FOCUS_SCALE = 1.7;
-/** Focused module's look-at height (world). Kept above the boundary floor so panning never snaps it. */
-const FOCUS_Y = 0.8;
-/**
- * Screen-space shift of the focused module, as a fraction of the camera distance (CameraControls
- * focal offset, camera-up axis; negative moves the module down the screen). Both push it a little
- * down so its badge or name tag clears the HUD; on a phone the steeper, farther camera already keeps
- * it above the bottom panel.
- */
-const FOCUS_OFFSET = { desktop: -0.06, phone: -0.08 } as const;
 
 /**
  * One CameraControls: orbit/zoom/pan by hand, smooth focus on the selected module, back to the whole
@@ -73,17 +62,17 @@ export function CameraRig() {
     const az = c.azimuthAngle;
     if (selected === null) {
       const t = OVERVIEW_TARGET;
-      const { polar } = polarPose(Math.hypot(OVERVIEW_DIR.x, OVERVIEW_DIR.z), OVERVIEW_DIR.y);
       // Fit for the azimuth we keep: the fit distance depends on the viewing direction.
-      const dist = overviewDistanceAt(az, fov, width, height);
-      void c.setFocalOffset(0, 0, 0, animate);
+      const { dir, distance: dist, lift } = overviewPose(az, fov, width, height);
+      const { polar } = polarPose(Math.hypot(dir.x, dir.z), dir.y);
+      // A portrait screen lifts the camera so the base rests just above the bottom UI (008 A.2).
+      void c.setFocalOffset(0, -lift * dist, 0, animate);
       if (animate) {
         void c.setTarget(t.x, t.y, t.z, true);
         void c.rotateTo(az, polar, true);
         void c.dollyTo(dist, true);
         return;
       }
-      const dir = overviewDirAt(az);
       const len = Math.hypot(dir.x, dir.y, dir.z);
       void c.setLookAt(
         t.x + (dir.x / len) * dist,
@@ -97,22 +86,27 @@ export function CameraRig() {
       return;
     }
     const l = LAYOUT[selected];
-    const fd = l.focusDistance * (phone ? PHONE_FOCUS_SCALE : 1);
-    const cy = phone ? fd * 1.15 : fd * 0.55;
-    const { polar, distance } = polarPose(fd, cy);
-    const offset = (phone ? FOCUS_OFFSET.phone : FOCUS_OFFSET.desktop) * distance;
-    void c.setFocalOffset(0, offset, 0, animate);
+    const f = focusPose(selected, phone);
+    void c.setFocalOffset(0, f.offset, 0, animate);
     if (animate) {
       const pref = outwardAzimuth(l.x, l.z, az);
-      void c.setTarget(l.x, FOCUS_Y, l.z, true);
-      void c.rotateTo(nearestAzimuth(az, pref), polar, true);
-      void c.dollyTo(distance, true);
+      void c.setTarget(f.target.x, f.target.y, f.target.z, true);
+      void c.rotateTo(nearestAzimuth(az, pref), f.polar, true);
+      void c.dollyTo(f.distance, true);
       return;
     }
     const len = Math.hypot(l.x, l.z);
     const dx = len > 0.01 ? l.x / len : 0;
     const dz = len > 0.01 ? l.z / len : 1;
-    void c.setLookAt(l.x + dx * fd, cy, l.z + dz * fd, l.x, FOCUS_Y, l.z, false);
+    void c.setLookAt(
+      l.x + dx * f.horizontal,
+      f.height,
+      l.z + dz * f.horizontal,
+      f.target.x,
+      f.target.y,
+      f.target.z,
+      false,
+    );
   }, [selected, width, height, fov]);
 
   return (

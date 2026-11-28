@@ -206,7 +206,9 @@ describe('selection ring (plan 008 B.1)', () => {
   it('floor ring points mark each fault ring at full size, for the overview framing', () => {
     for (const id of MODULE_IDS) {
       const l = LAYOUT[id];
-      const own = FLOOR_RING_POINTS.filter((p) => Math.hypot(p.x - l.x, p.z - l.z) < floorRingRange(id).to * l.scale + 0.01);
+      const own = FLOOR_RING_POINTS.filter(
+        (p) => Math.hypot(p.x - l.x, p.z - l.z) < floorRingRange(id).to * l.scale + 0.01,
+      );
       expect(own.length).toBeGreaterThanOrEqual(8);
     }
     for (const p of FLOOR_RING_POINTS) expect(p.y).toBe(0);

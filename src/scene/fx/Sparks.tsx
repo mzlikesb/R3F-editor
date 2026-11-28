@@ -1,6 +1,7 @@
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
 import { AdditiveBlending, InstancedMesh, MeshBasicMaterial, Object3D, SphereGeometry } from 'three';
+import { PALETTE } from '../palette';
 import { BURST_S, setOpacity, step, useOneShot } from './shared';
 
 const SPARK_GEOMETRY = new SphereGeometry(1, 6, 4);
@@ -64,11 +65,12 @@ export function Sparks({ radius, height, token, soft = false }: SparksProps) {
   const material = useMemo(
     () =>
       new MeshBasicMaterial({
-        color: '#ffd27a',
+        color: PALETTE.spark,
         transparent: true,
         depthWrite: false,
         blending: AdditiveBlending,
         toneMapped: false,
+        fog: false,
       }),
     [],
   );
