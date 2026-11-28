@@ -10,6 +10,7 @@ import { OVERVIEW_START } from './layout';
 import { LabelPlanProvider } from './fx/LabelPlanProvider';
 import { Lighting } from './Lighting';
 import { Module } from './Module';
+import { PresenceLights } from './PresenceLights';
 import { PERF_ENABLED } from './perf';
 import { PerfHud } from './PerfHud';
 import { PostLayer } from './PostLayer';
@@ -63,6 +64,7 @@ export function BaseCanvas() {
             <Module key={m.id} id={m.id} />
           ))}
         </LabelPlanProvider>
+        <PresenceLights />
         <CameraRig />
         {!reducedMotion && <CameraShake />}
         <QualityController />

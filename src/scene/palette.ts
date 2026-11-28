@@ -20,6 +20,12 @@ export const PALETTE = {
   hold: '#ffd166',
   /** Someone else's repair, rippling out on the floor. */
   ping: '#f0b8ff',
+  /**
+   * The lights drifting over the base, one per other visitor (#106): a pale lime, the one hue 45
+   * degrees or more clear of the red, green, amber, cyan and lilac above. Small points, so the gap
+   * is a little under the selection ring's 60.
+   */
+  presenceLight: '#9af25c',
   spark: '#ffd27a',
   relight: '#ffe2a8',
   afterglow: '#5cf2a0',

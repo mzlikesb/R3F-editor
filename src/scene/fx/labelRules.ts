@@ -84,3 +84,11 @@ export function badgeText(id: BaseModuleId, state: { othersHolding: boolean; pan
 export function dotText(id: BaseModuleId): string {
   return `⚠ ${moduleName(id)}`;
 }
+
+/**
+ * `Html` in its non-transform mode sizes this wrapper to the label's untransformed box (below and to
+ * the right of the anchor point, since the centering `translate` is on the child), and ignores its
+ * `pointerEvents` prop. Left at `auto` it was an invisible 155 x 49 px plate over the module's body,
+ * and a tap on the body hit it instead of the tap box (#105). The tappable labels set `auto` themselves.
+ */
+export const LABEL_WRAPPER_STYLE = { pointerEvents: 'none' } as const;

@@ -10,7 +10,11 @@ export const SELECT_COLOR = new Color(PALETTE.select);
 
 /** Durations (seconds) of the one-shot effects. */
 export const SWEEP_S = 0.9;
-export const PING_S = 1.5;
+/**
+ * Someone else's repair ripple (#106): 2.6 s, up from 1.5, so a glance at the base a second after it
+ * still catches it (a 3D ring on the floor is easy to miss while looking at the panel or a label).
+ */
+export const PING_S = 2.6;
 export const BURST_S = 1.0;
 
 /** A unit ring (outer radius 1) lying in the XY plane; meshes rotate it flat and scale it. */
