@@ -1,7 +1,7 @@
 # 010 — 작업 목록
 
 - 플랜: `docs/plans/010-dev-branch.md`
-- 상태: 플랜 리뷰 이관 항목만 있다. 작업 분할은 개발 리드가 플랜 승인 뒤 채운다.
+- 상태: 010-1 구현 중. 010-2 작업은 010-1 머지 뒤 채운다.
 
 ## 플랜 리뷰에서 넘어온 항목
 
@@ -37,3 +37,17 @@
 ### R3. 이미 반영된 neon 3턴 지적 (확인만)
 
 - 3(훅 변경 010-1로), 4(CODEOWNERS `scripts/**`·검사 설정), 5(릴리스 중 `dev` 경합 → `release/*` 스냅샷 브랜치)는 `03382fe`에 반영됐다. 010-1·010-2 구현이 플랜의 이 절들을 따르는지 QA가 확인한다.
+
+## 010-1 작업
+
+순차로 한 worktree(`chore/010-1-dev-foundations`)에서 했다. 테스트를 먼저 쓰고 구현했다.
+
+| #   | 작업                                                                                                          | 담당      | 완료 조건                                                                                                                                         | 테스트                                          | 상태 |
+| --- | ------------------------------------------------------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | ---- |
+| 1   | `.github/CODEOWNERS` + `AGENTS.md` "보호 경로" 목록                                                           | 개발 리드 | 두 목록이 같고 주인이 `@mzlikesb`뿐, 추적되는 루트 항목은 보호되거나 테스트의 비보호 목록에 있다                                                  | `scripts/codeowners.test.sh`                    | 완료 |
+| 2   | `codex-gate`: base `dev`는 R2 (a)·(b), 나머지 base는 지금 판정. 워크플로가 base·인라인 지적을 넘긴다          | 개발 리드 | R2 테스트 목록 전부 + 인라인 목록 없음 → pending(닫힌 쪽 실패). 옛 3인자 호출은 main 판정                                                         | `scripts/codex-gate.test.sh`                    | 완료 |
+| 3   | `pr-check` 로직을 `scripts/pr-check.sh`로 빼고 `DEV_FLOW=on` 규칙(C·R1·R1c) 추가, 리뷰 트리거                 | 개발 리드 | 꺼짐은 지금 규칙(010-1 자신 통과), 켜짐은 릴리스·dev small/large·복구 PR 규칙. 판정 스크립트는 기본 브랜치 것(처음 한 번만 PR 것)                 | `scripts/pr-check.test.sh`                      | 완료 |
+| 4   | `ci.yml` push에 `dev`, PR 트리거에 브랜치 제한 없음 확인, cleanup이 `pr-N`만 지움                             | 개발 리드 | 워크플로 파일에서 사실을 읽는 테스트 통과                                                                                                         | `scripts/workflows.test.sh`                     | 완료 |
+| 5   | `check-protection.sh`: `dev` 보호·`main` merge commit 허용 대조, `DEV_FLOW` 표시                               | 개발 리드 | 픽스처·가짜 gh로 `dev` 없음/보호 없음/값 차이/읽기 금지를 구분                                                                                    | `scripts/check-protection.test.sh`              | 완료 |
+| 6   | `guard-bash.sh`: `main` 직접 push·`main`에서 commit/push 금지 규칙의 대상에 `dev` 추가(`--auto` 조건은 그대로) | 개발 리드 | `dev`·`HEAD:dev`·`refs/heads/dev`·`main:dev` 거절, `dev-xyz` 허용, `dev` worktree에서 commit/push 거절                                            | `scripts/hooks/guard-bash.test.sh`              | 완료 |
+| 7   | `release` 라벨                                                                                                | 개발 리드 | `gh label list`에 있다                                                                                                                            | —                                               | 완료 |

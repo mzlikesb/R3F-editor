@@ -104,7 +104,8 @@ README·UI·커밋 메시지는 작품 자체로 설명한다.
 
 목표 범위: 정상 경로는 서버가 검증하고, 계정을 바꾸려는 시도는 훅이 막는다. 사용자 컴퓨터에 `mzlikesb` 토큰이 있으므로 완전한 격리는 아니다.
 
-- 브랜치 보호(main): 필수 체크 `ci`·`pr-check`·`actionlint`(게이트를 만드는 워크플로 파일을 지키는 체크, #75), 필수 상태 `codex-reviewed`, Approve 1개 필수, 새 커밋 시 기존 Approve 해제, 마지막 push도 승인 필요, `enforce_admins` 켬(`--admin` 머지·main 직접 push 거절), squash만 허용
+- 브랜치 보호(main): 필수 체크 `ci`·`pr-check`·`actionlint`(게이트를 만드는 워크플로 파일을 지키는 체크, #75), 필수 상태 `codex-reviewed`, Approve 1개 필수, 새 커밋 시 기존 Approve 해제, 마지막 push도 승인 필요, `enforce_admins` 켬(`--admin` 머지·main 직접 push 거절). 저장소 머지 방식은 squash와 merge commit 허용, rebase 끔(merge commit은 `dev → main` 릴리스 PR 전용, 플랜 010 C)
+- 브랜치 보호(dev, 통합 브랜치, 플랜 010 A): PR 필수, 필수 Approve 0, **코드 주인 리뷰 필수**(아래 보호 경로), 새 커밋 시 기존 Approve 해제, 필수 체크 `ci`·`pr-check`·`actionlint`·`codex-reviewed`, `enforce_admins` 켬, 강제 push·삭제 금지. 저장소 변수 `DEV_FLOW`가 `on`이면 `pr-check`가 dev·릴리스 규칙을 적용한다(`scripts/pr-check.sh`)
 - **승인 = 사용자의 GitHub Approve.** 에이전트 계정은 작성자라 자기 PR을 Approve할 수 없다(서버가 막음)
 - small: 에이전트가 PR을 ready로 열면서 `gh pr merge --auto --squash`로 예약한다 → 사용자가 Approve하면 체크 통과 후 자동 머지
 - large: 사용자가 Approve 후 직접 머지. 에이전트의 `gh pr merge`는 `--auto`(small만)와 `--disable-auto`만 훅이 허용한다
@@ -113,7 +114,32 @@ README·UI·커밋 메시지는 작품 자체로 설명한다.
 - small → large 전환: **auto-merge 예약을 먼저 해제한 뒤** 라벨을 바꾼다(`pr-check`가 large + 예약 켜짐을 실패로 본다)
 - **사용자는 에이전트 PR 브랜치에 직접 push하지 않는다**(웹의 "Update branch"·"Apply suggestion" 포함). 마지막 push가 `mzlikesb`면 아무도 Approve할 수 없게 된다. 실수했으면 에이전트가 브랜치를 다시 push(빈 커밋 등)해 마지막 pusher를 에이전트 계정으로 되돌린다
 - **모든 PR은 에이전트 계정으로 연다.** 사용자가 직접 연 PR은 본인 Approve가 안 되므로, 긴급할 때만 사용자가 **`enforce_admins`만** 잠시 끄고 머지한 뒤 다시 켠다. 브랜치 보호 전체를 끄지 않는다
-- 브랜치 보호 실제 값은 `scripts/check-protection.sh`로 이 절의 주장과 대조하고, 마일스톤 종료와 회고 PR마다 doc-lint가 돌린다(#60, #74)
+- 브랜치 보호 실제 값은 `scripts/check-protection.sh`로 이 절의 주장과 대조하고(`main`·`dev` 보호, 머지 방식, `DEV_FLOW` 값 표시), 마일스톤 종료와 회고 PR마다 doc-lint가 돌린다(#60, #74)
+
+### 보호 경로 (CODEOWNERS)
+
+아래 경로를 바꾸는 PR은 코드 주인(`@mzlikesb`) Approve가 있어야 머지된다(`.github/CODEOWNERS`). `dev`는 필수 Approve가 0이라, 하네스·검사·빌드 설정을 small PR로 약하게 만드는 길을 이것으로 막는다. 목록과 CODEOWNERS는 `scripts/codeowners.test.sh`가 대조한다. 루트에 새 파일이 생기면 이 목록에 넣거나 테스트의 비보호 목록에 넣는다.
+
+<!-- protected-paths:start -->
+- `/.github/`
+- `/scripts/`
+- `/AGENTS.md`
+- `/CLAUDE.md`
+- `/GEMINI.md`
+- `/.claude/`
+- `/docs/templates/`
+- `/wrangler.*`
+- `/package.json`
+- `/package-lock.json`
+- `/.nvmrc`
+- `/tsconfig*.json`
+- `/vite.config.*`
+- `/vitest.config.*`
+- `/vitest.workspace.*`
+- `/.oxlintrc*`
+- `/.prettierrc*`
+- `/.prettierignore`
+<!-- protected-paths:end -->
 
 ### 에이전트 세션 설정
 
